@@ -109,19 +109,19 @@ Unit tests for business logic and tool validation; integration tests for the API
 
 ## Roadmap status
 
+Tests are not a separate stage — per the TDD philosophy above, each stage ships its own tests in the same PR.
+
 - [x] Stage 0 — Repo bootstrap (backend skeleton, Docker Compose, health check)
 - [ ] Stage 1 — DB schema + seed data
-- [ ] Stage 2 — LLM provider abstraction (Claude + Gemini)
+- [ ] Stage 2 — LLM provider abstraction (Claude + Gemini) + LangSmith tracing wired from day one (near-free via env vars — gives trace visibility during the hardest debugging stages below)
 - [ ] Stage 3 — RAG pipeline (owner-written)
-- [ ] Stage 4 — Tools layer
-- [ ] Stage 5 — Business rules layer
+- [ ] Stage 4 — Business rules layer
+- [ ] Stage 5 — Tools layer (wraps business rules, RAG, DB)
 - [ ] Stage 6 — LangGraph agent (owner-written)
 - [ ] Stage 7 — Guardrails
-- [ ] Stage 8 — FastAPI chat endpoint (streaming)
-- [ ] Stage 9 — Frontend chat UI
-- [ ] Stage 10 — Evaluation dataset + script (owner-written)
-- [ ] Stage 11 — LangSmith + logging wiring
-- [ ] Stage 12 — Tests
-- [ ] Stage 13 — README, diagrams, demo scenarios, polish
+- [ ] Stage 8 — FastAPI chat endpoint (streaming) + trace metadata tagging (customer_id, conversation_id, intent, env, model, app_version)
+- [ ] Stage 9 — Evaluation dataset + script (owner-written) — run against the real API before the frontend exists, so agent quality is validated before UI polish
+- [ ] Stage 10 — Frontend chat UI
+- [ ] Stage 11 — README, diagrams, demo scenarios, polish
 
 Update this checklist as stages complete.
