@@ -100,10 +100,11 @@ Unit tests for business logic and tool validation; integration tests for the API
 
 ## Git workflow
 
-- **Bootstrap commits** (repo scaffold, docs, license/CI setup — the initial batch before any stage work) go straight to `main`, no PR. There's no prior state to diff against, so a PR would add noise without real review value.
-- **From Stage 1 onward, every stage is a branch + PR into `main`.** Default to one PR per roadmap stage below, merged only once CI is green. Adjust granularity when it genuinely helps:
-  - Combine stages into one PR when splitting them would be artificial (e.g. Tools layer + Business rules layer, since tools mostly wrap that logic).
-  - Split a stage into multiple smaller PRs when it's large or is one of the owner's learning-focus modules (agent graph, RAG, evaluation), where smaller reviewable diffs help more than one big drop.
+- **Every unit of work is a branch + PR into `main`, no exceptions** — including the initial bootstrap (PR #1). `main` started as a single empty root commit specifically so a PR could target it from the first change.
+- **Target ~200-300 changed lines per PR, 400 as a hard ceiling — starting with Stage 1.** This follows the Cisco/SmartBear code-review study (also cited in Google's internal practices): review defect-detection effectiveness drops sharply past ~200-400 lines of diff, because nobody reviews a bigger diff carefully. Generated/boilerplate content (Alembic migrations, framework scaffolding, lockfiles) doesn't count toward the budget — it isn't reviewed line by line. PR #1 (bootstrap) is exempt: it's foundational scaffolding with nothing to split against, not ongoing feature work.
+- **Default to one PR per roadmap stage below**, merged only once CI is green. Adjust when it genuinely helps:
+  - Combine stages into one PR when splitting them would be artificial and the combined diff still fits the budget (e.g. Business rules + Tools layer, since tools mostly wrap that logic).
+  - When a stage would blow past ~400 real lines (RAG, the agent graph, and Frontend are the likely candidates), split it into a **PR chain (stacked PRs)** instead of one big PR: PR A merges into `main`, PR B branches off A and targets A's branch (not `main`), PR C branches off B and targets B's branch, and so on — each individual PR stays reviewable, merged in order once its base has landed.
 - PR titles/descriptions should read like real engineering work: what changed, why, how it was verified (tests run, manual check) — not "Stage N done."
 - Prefer squash-merge so `main` history stays one commit per logical unit of work, matching the roadmap checklist below.
 
