@@ -1,6 +1,6 @@
 # AcmeFlow AI Sales & Support Agent
 
-Guidance for AI coding assistants (Claude Code, Gemini CLI) working in this repository. `GEMINI.md` is a symlink to this file — keep everything here, don't fork the content.
+Guidance for AI coding assistants (Claude Code, Gemini CLI) working in this repository. `GEMINI.md` just points here — keep everything in this file, don't fork the content.
 
 ## What this is
 
