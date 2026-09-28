@@ -1,5 +1,8 @@
 # AcmeFlow AI Sales & Support Agent
 
+[![CI](https://github.com/TheMutsi/ai-sales-support-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/TheMutsi/ai-sales-support-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A production-oriented AI Sales & Support Agent built for a fictional SaaS product, **AcmeFlow**. It demonstrates agent orchestration with LangGraph, retrieval-augmented generation over a product knowledge base, typed tool calling, a deterministic business-rules layer for upsell decisions, reproducible evaluation, and observability — not a chatbot wrapper around an LLM.
 
 ## Status

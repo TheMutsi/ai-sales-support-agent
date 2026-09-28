@@ -92,6 +92,12 @@ See `.env.example` for the full list. Key ones: `LLM_PROVIDER` (`anthropic` | `g
 
 Unit tests for business logic and tool validation; integration tests for the API, the agent graph, and RAG retrieval; evaluation tests run against the fixed dataset in `backend/evaluation/`. Don't chase 100% coverage — prioritize the behavior described in the spec (upsell decisions, guardrails, escalation).
 
+**Testing philosophy — spec-first, TDD where it fits:**
+- **Spec before code, per module.** Before implementing a module (agent nodes, RAG retriever, a new tool), nail down its interface first — Pydantic schemas, function signatures, expected inputs/outputs — then implement against that.
+- **TDD for deterministic code.** Business rules, pricing, eligibility, tools, and the DB layer are pure functions with clear input/output pairs — write the test first for these.
+- **Mocked-LLM tests for the graph.** LangGraph routing and state transitions should be tested with a mocked/stubbed LLM response, asserting on deterministic control flow (which node ran, what state looks like) — not on real model output.
+- **Don't force TDD onto raw LLM output.** Judging actual model output quality (is the answer correct, grounded, non-hallucinated) belongs to the evaluation suite, not unit tests — trying to unit-test non-deterministic generations produces flaky, meaningless tests.
+
 ## Roadmap status
 
 - [x] Stage 0 — Repo bootstrap (backend skeleton, Docker Compose, health check)
