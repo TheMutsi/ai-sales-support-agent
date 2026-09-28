@@ -23,7 +23,7 @@ Always explain *why*, not just *what* — the owner needs to be able to defend e
 - **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain (chat-model + embeddings abstraction only — not used as a catch-all framework), Pydantic v2, SQLAlchemy + Alembic.
 - **LLM provider abstraction:** LangChain chat models, supporting **Anthropic Claude** and **Google Gemini** interchangeably via `LLM_PROVIDER` env var. No OpenAI dependency.
 - **Embeddings:** Google `text-embedding-004` by default, behind the same swappable interface.
-- **Database:** PostgreSQL + pgvector — customers/plans, KB documents + chunks, tickets, evaluation runs.
+- **Database:** PostgreSQL + pgvector — plans, customers, subscriptions (a customer's commercial state, kept separate from identity so plan/status changes have history), KB documents + chunks, tickets, evaluation runs.
 - **Frontend:** Vite + React SPA (no SSR/routing needs) with streaming responses, activity indicators, source references, customer selector, simulated checkout/escalation results.
 - **Observability:** LangSmith tracing (graph/LLM/tool/retrieval spans + metadata) plus basic structured app logging.
 - **Packaging:** Docker Compose (backend, frontend, Postgres+pgvector), `.env.example` — never commit `.env` or real API keys.
@@ -40,10 +40,11 @@ backend/
     rag/               # loaders, chunking, ingestion.py, retriever.py [owner writes]
     tools/             # typed tool wrappers (get_customer_context, etc.)
     business/          # upsell_rules.py, pricing.py, eligibility.py  [AI writes]
-    db/                # models.py, session.py, alembic/
+    db/                # models.py, session.py, seed.py
     guardrails/        # prompt-injection handling, output validation
     schemas/           # Pydantic: Intent, CustomerContext, ToolResult, AgentState...
-  data/                 # seed KB docs, seed customers/plans
+  alembic/              # migrations (env.py wired to app.core.config)
+  data/seed/            # plans.json, customers.json (documents come from RAG ingestion, Stage 3)
   evaluation/           # dataset.jsonl, run_eval.py, metrics.py       [owner writes]
   tests/                # unit/, integration/, evaluation/
 frontend/               # Vite + React chat app                       [AI writes]
@@ -84,13 +85,24 @@ docker compose up --build
 curl http://localhost:8000/api/health
 ```
 
+Database (after `docker compose up -d db`):
+```bash
+cd backend
+alembic upgrade head        # apply migrations
+python -m app.db.seed       # load plans + sample customers/subscriptions
+```
+
 ## Environment variables
 
 See `.env.example` for the full list. Key ones: `LLM_PROVIDER` (`anthropic` | `google`), `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `DATABASE_URL`, `LANGCHAIN_API_KEY`/`LANGCHAIN_TRACING_V2` for LangSmith.
 
+The `db` service in `docker-compose.yml` publishes on host port **5433** (not 5432), to avoid colliding with a native Postgres install. `DATABASE_URL` in `.env.example` already points at 5433; containers talk to each other over the internal Docker network on the default 5432, unaffected by this.
+
 ## Testing conventions
 
-Unit tests for business logic and tool validation; integration tests for the API, the agent graph, and RAG retrieval; evaluation tests run against the fixed dataset in `backend/evaluation/`. Don't chase 100% coverage — prioritize the behavior described in the spec (upsell decisions, guardrails, escalation).
+Unit tests for business logic and tool validation; integration tests for the API, the DB layer, the agent graph, and RAG retrieval; evaluation tests run against the fixed dataset in `backend/evaluation/`. Don't chase 100% coverage — prioritize the behavior described in the spec (upsell decisions, guardrails, escalation).
+
+DB integration tests (`backend/tests/integration/test_db_*.py`) need a real Postgres with the schema already migrated — run `docker compose up -d db && alembic upgrade head` first. pgvector's column type has no SQLite equivalent, so these can't run against an in-memory DB; CI runs a `pgvector/pgvector:pg16` service container for this.
 
 **Testing philosophy — spec-first, TDD where it fits:**
 - **Spec before code, per module.** Before implementing a module (agent nodes, RAG retriever, a new tool), nail down its interface first — Pydantic schemas, function signatures, expected inputs/outputs — then implement against that.
@@ -113,7 +125,7 @@ Unit tests for business logic and tool validation; integration tests for the API
 Tests are not a separate stage — per the TDD philosophy above, each stage ships its own tests in the same PR.
 
 - [x] Stage 0 — Repo bootstrap (backend skeleton, Docker Compose, health check)
-- [ ] Stage 1 — DB schema + seed data
+- [x] Stage 1 — DB schema + seed data
 - [ ] Stage 2 — LLM provider abstraction (Claude + Gemini) + LangSmith tracing wired from day one (near-free via env vars — gives trace visibility during the hardest debugging stages below)
 - [ ] Stage 3 — RAG pipeline (owner-written)
 - [ ] Stage 4 — Business rules layer
