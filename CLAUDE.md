@@ -98,6 +98,15 @@ Unit tests for business logic and tool validation; integration tests for the API
 - **Mocked-LLM tests for the graph.** LangGraph routing and state transitions should be tested with a mocked/stubbed LLM response, asserting on deterministic control flow (which node ran, what state looks like) — not on real model output.
 - **Don't force TDD onto raw LLM output.** Judging actual model output quality (is the answer correct, grounded, non-hallucinated) belongs to the evaluation suite, not unit tests — trying to unit-test non-deterministic generations produces flaky, meaningless tests.
 
+## Git workflow
+
+- **Bootstrap commits** (repo scaffold, docs, license/CI setup — the initial batch before any stage work) go straight to `main`, no PR. There's no prior state to diff against, so a PR would add noise without real review value.
+- **From Stage 1 onward, every stage is a branch + PR into `main`.** Default to one PR per roadmap stage below, merged only once CI is green. Adjust granularity when it genuinely helps:
+  - Combine stages into one PR when splitting them would be artificial (e.g. Tools layer + Business rules layer, since tools mostly wrap that logic).
+  - Split a stage into multiple smaller PRs when it's large or is one of the owner's learning-focus modules (agent graph, RAG, evaluation), where smaller reviewable diffs help more than one big drop.
+- PR titles/descriptions should read like real engineering work: what changed, why, how it was verified (tests run, manual check) — not "Stage N done."
+- Prefer squash-merge so `main` history stays one commit per logical unit of work, matching the roadmap checklist below.
+
 ## Roadmap status
 
 - [x] Stage 0 — Repo bootstrap (backend skeleton, Docker Compose, health check)
