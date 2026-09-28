@@ -9,7 +9,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_version: str = "0.1.0"
 
-    database_url: str = "postgresql+psycopg://acmeflow:acmeflow@localhost:5432/acmeflow"
+    # Port 5433: the docker-compose `db` service maps to 5433 on the host to avoid
+    # colliding with a native Postgres install that may already own 5432.
+    database_url: str = "postgresql+psycopg://acmeflow:acmeflow@localhost:5433/acmeflow"
 
     llm_provider: str = "anthropic"
     anthropic_api_key: str | None = None

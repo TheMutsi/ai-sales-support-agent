@@ -1,0 +1,57 @@
+[
+  {
+    "name": "Ava Chen",
+    "email": "ava.chen@northlightstudio.com",
+    "company": "Northlight Studio",
+    "status": "active",
+    "plan_slug": "starter",
+    "subscription_status": "active",
+    "period_days_from_now": 20
+  },
+  {
+    "name": "Marcus Webb",
+    "email": "marcus.webb@fernridge.io",
+    "company": "Fern Ridge",
+    "status": "trial",
+    "plan_slug": "starter",
+    "subscription_status": "active",
+    "period_days_from_now": 5
+  },
+  {
+    "name": "Priya Anand",
+    "email": "priya.anand@bluecrestlogistics.com",
+    "company": "Bluecrest Logistics",
+    "status": "active",
+    "plan_slug": "pro",
+    "subscription_status": "active",
+    "period_days_from_now": 15
+  },
+  {
+    "name": "Diego Ramirez",
+    "email": "diego.ramirez@solvanmedia.com",
+    "company": "Solvan Media",
+    "status": "active",
+    "plan_slug": "enterprise",
+    "subscription_status": "active",
+    "period_days_from_now": 25
+  },
+  {
+    "name": "Helena Ostrowski",
+    "email": "helena.ostrowski@ridgeportlegal.com",
+    "company": "Ridgeport Legal",
+    "status": "active",
+    "plan_slug": "pro",
+    "subscription_status": "past_due",
+    "period_days_from_now": -3
+  },
+  {
+    "name": "Tom Baxter",
+    "email": "tom.baxter@baxterandco.com",
+    "company": "Baxter & Co",
+    "status": "churned",
+    "plan_slug": "starter",
+    "subscription_status": "canceled",
+    "period_days_from_now": -10,
+    "canceled_days_ago": 10
+  }
+]

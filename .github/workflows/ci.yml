@@ -12,6 +12,22 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: acmeflow
+          POSTGRES_PASSWORD: acmeflow
+          POSTGRES_DB: acmeflow
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U acmeflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://acmeflow:acmeflow@localhost:5433/acmeflow
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +40,9 @@ jobs:
 
       - name: Lint (ruff)
         run: ruff check .
+
+      - name: Apply migrations
+        run: alembic upgrade head
 
       - name: Test (pytest)
         run: pytest -q
