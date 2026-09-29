@@ -21,8 +21,8 @@ Always explain *why*, not just *what* — the owner needs to be able to defend e
 ## Architecture
 
 - **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain (chat-model + embeddings abstraction only — not used as a catch-all framework), Pydantic v2, SQLAlchemy + Alembic.
-- **LLM provider abstraction:** LangChain chat models, supporting **Anthropic Claude** and **Google Gemini** interchangeably via `LLM_PROVIDER` env var. No OpenAI dependency.
-- **Embeddings:** Google `text-embedding-004` by default, behind the same swappable interface.
+- **LLM provider abstraction:** LangChain chat models, supporting **Anthropic Claude**, **Google Gemini**, and **Ollama** (local, free, no API key — for offline dev) interchangeably via `LLM_PROVIDER` env var. No OpenAI dependency.
+- **Embeddings:** Google `text-embedding-004` by default, or Ollama's `nomic-embed-text` (also 768-dim, no API key) via `EMBEDDING_PROVIDER`, behind the same swappable interface.
 - **Database:** PostgreSQL + pgvector — plans, customers, subscriptions (a customer's commercial state, kept separate from identity so plan/status changes have history), KB documents + chunks, tickets, evaluation runs.
 - **Frontend:** Vite + React SPA (no SSR/routing needs) with streaming responses, activity indicators, source references, customer selector, simulated checkout/escalation results.
 - **Observability:** LangSmith tracing (graph/LLM/tool/retrieval spans + metadata) plus basic structured app logging.
@@ -94,7 +94,7 @@ python -m app.db.seed       # load plans + sample customers/subscriptions
 
 ## Environment variables
 
-See `.env.example` for the full list. Key ones: `LLM_PROVIDER` (`anthropic` | `google`), `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `DATABASE_URL`, `LANGCHAIN_API_KEY`/`LANGCHAIN_TRACING_V2` for LangSmith.
+See `.env.example` for the full list. Key ones: `LLM_PROVIDER` (`anthropic` | `google` | `ollama`), `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_MODEL`/`OLLAMA_BASE_URL` (no key needed — requires `ollama pull qwen2.5:7b-instruct` + `ollama serve` running locally), `EMBEDDING_PROVIDER` (`google` | `ollama`), `OLLAMA_EMBEDDING_MODEL` (requires `ollama pull nomic-embed-text`), `DATABASE_URL`, `LANGCHAIN_API_KEY`/`LANGCHAIN_TRACING_V2` for LangSmith.
 
 The `db` service in `docker-compose.yml` publishes on host port **5433** (not 5432), to avoid colliding with a native Postgres install. `DATABASE_URL` in `.env.example` already points at 5433; containers talk to each other over the internal Docker network on the default 5432, unaffected by this.
 
@@ -126,7 +126,7 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 
 - [x] Stage 0 — Repo bootstrap (backend skeleton, Docker Compose, health check)
 - [x] Stage 1 — DB schema + seed data
-- [ ] Stage 2 — LLM provider abstraction (Claude + Gemini) + LangSmith tracing wired from day one (near-free via env vars — gives trace visibility during the hardest debugging stages below)
+- [x] Stage 2 — LLM provider abstraction (Claude + Gemini + Ollama) + LangSmith tracing wired from day one (near-free via env vars — gives trace visibility during the hardest debugging stages below)
 - [ ] Stage 3 — RAG pipeline (owner-written)
 - [ ] Stage 4 — Business rules layer
 - [ ] Stage 5 — Tools layer (wraps business rules, RAG, DB)
