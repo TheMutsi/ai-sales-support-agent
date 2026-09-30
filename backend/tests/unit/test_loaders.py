@@ -82,7 +82,10 @@ def test_raises_on_unsupported_doc_type(tmp_path):
 def test_loads_real_seed_kb_documents():
     """Sanity check against the actual KB content, not just synthetic fixtures —
     catches the case where a real seed doc's front-matter drifts out of sync with
-    what the loader expects."""
+    what the loader expects. Lives here, not alongside the rest of this file's
+    tests, because the real KB markdown files (data/seed/kb/) are added in this
+    same PR — a version of this test in an earlier PR of the chain would run
+    against a KB directory that doesn't exist yet."""
     from app.rag.loaders import KB_DIR
 
     documents = load_documents(kb_dir=KB_DIR)
