@@ -19,4 +19,8 @@ def intent_router(state: AgentState) -> dict:
     messages = [SystemMessage(content=INTENT_ROUTER_SYSTEM_PROMPT), *state["messages"]]
     result = structured_llm.invoke(messages)
 
-    return {"intent": result.intent, "intent_confidence": result.confidence}
+    return {
+        "intent": result.intent,
+        "intent_confidence": result.confidence,
+        "safety_confidence": result.safety_confidence,
+    }

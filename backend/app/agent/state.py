@@ -36,6 +36,7 @@ class AgentState(TypedDict):
     input_blocked: bool
     intent: Intent | None
     intent_confidence: float | None
+    safety_confidence: float | None
 
     retrieved_chunks: list[RetrievedChunk]
     customer_context: CustomerContext | None

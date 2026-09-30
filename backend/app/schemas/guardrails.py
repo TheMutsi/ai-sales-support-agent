@@ -25,3 +25,13 @@ class GuardrailViolation(BaseModel):
     code: str
     severity: GuardrailSeverity
     message: str
+
+
+class SafetyJudgment(BaseModel):
+    """What `safety_judge_node` asks for — a focused second opinion, called
+    only when `intent_router`'s own `safety_confidence` came back low. Unlike
+    `IntentClassification`, this has no category to get right; it exists
+    purely to decide whether the conversation should continue."""
+
+    is_safe: bool
+    reasoning: str
