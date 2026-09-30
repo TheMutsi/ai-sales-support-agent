@@ -137,7 +137,7 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 - [x] Stage 1 — DB schema + seed data
 - [x] Stage 2 — LLM provider abstraction (Claude + Gemini + Ollama) + LangSmith tracing wired from day one (near-free via env vars — gives trace visibility during the hardest debugging stages below)
 - [x] Stage 3 — RAG pipeline (AI-written per owner's call — see "Collaboration model" above; KB loader, section/fixed-size chunking, ingestion, pgvector retrieval)
-- [ ] Stage 4 — Business rules layer
+- [x] Stage 4 — Business rules layer
 - [ ] Stage 5 — Tools layer (wraps business rules, RAG, DB)
 - [ ] Stage 6 — LangGraph agent (owner-written)
 - [ ] Stage 7 — Guardrails
