@@ -1,5 +1,11 @@
+from langgraph.graph import END
+
 from app.agent.state import AgentState
 from app.schemas.agent import Intent
+
+
+def route_after_input_guardrail(state: AgentState) -> str:
+    return END if state["input_blocked"] else "intent_router"
 
 
 def route_after_intent(state: AgentState) -> str:

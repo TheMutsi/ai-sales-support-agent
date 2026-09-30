@@ -5,12 +5,26 @@ over a `state` dict — no LLM, no DB, no graph compilation needed to exercise
 them, the same way the business-rules tests construct their inputs directly.
 """
 
-from app.agent.routing import route_after_customer_context, route_after_intent
+from langgraph.graph import END
+
+from app.agent.routing import (
+    route_after_customer_context,
+    route_after_input_guardrail,
+    route_after_intent,
+)
 from app.schemas.agent import Intent
 
 
 def _state(intent: Intent) -> dict:
     return {"intent": intent}
+
+
+def test_blocked_input_goes_straight_to_end():
+    assert route_after_input_guardrail({"input_blocked": True}) == END
+
+
+def test_clean_input_goes_to_intent_router():
+    assert route_after_input_guardrail({"input_blocked": False}) == "intent_router"
 
 
 def test_upgrade_request_goes_to_customer_context():
