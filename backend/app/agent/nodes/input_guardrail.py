@@ -19,7 +19,10 @@ from langchain_core.messages import AIMessage
 from app.agent.state import AgentState
 from app.guardrails.input_checks import flag_prompt_injection_signals
 
-_REFUSAL_MESSAGE = (
+# Shared with app/agent/nodes/safety_judge.py: both nodes produce the same
+# user-facing outcome (the request gets refused before anything else runs),
+# just via different evidence, so the wording stays consistent between them.
+REFUSAL_MESSAGE = (
     "No puedo ayudarte con esa solicitud. Si tenés una consulta sobre AcmeFlow "
     "(producto, precios, tu cuenta o soporte), contame y te ayudo con gusto."
 )
@@ -35,5 +38,5 @@ def input_guardrail_node(state: AgentState) -> dict:
     return {
         "input_blocked": True,
         "guardrail_flags": [f"injection_signal:{tag}" for tag in signals],
-        "messages": [AIMessage(content=_REFUSAL_MESSAGE)],
+        "messages": [AIMessage(content=REFUSAL_MESSAGE)],
     }

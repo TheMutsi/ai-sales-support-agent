@@ -32,7 +32,10 @@ class _FakeStructuredChatModel:
 
 def test_returns_the_classified_intent_and_confidence(monkeypatch):
     fake_response = IntentClassification(
-        intent=Intent.PRICING_QUESTION, confidence=0.87, reasoning="Asks about plan cost."
+        intent=Intent.PRICING_QUESTION,
+        confidence=0.87,
+        reasoning="Asks about plan cost.",
+        safety_confidence=0.98,
     )
     monkeypatch.setattr(
         intent_router_module,
@@ -43,4 +46,8 @@ def test_returns_the_classified_intent_and_confidence(monkeypatch):
     state = {"messages": [HumanMessage(content="cuanto sale el plan pro?")]}
     result = intent_router_module.intent_router(state)
 
-    assert result == {"intent": Intent.PRICING_QUESTION, "intent_confidence": 0.87}
+    assert result == {
+        "intent": Intent.PRICING_QUESTION,
+        "intent_confidence": 0.87,
+        "safety_confidence": 0.98,
+    }

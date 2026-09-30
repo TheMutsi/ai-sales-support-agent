@@ -11,12 +11,13 @@ from app.agent.routing import (
     route_after_customer_context,
     route_after_input_guardrail,
     route_after_intent,
+    route_after_safety_judge,
 )
 from app.schemas.agent import Intent
 
 
-def _state(intent: Intent) -> dict:
-    return {"intent": intent}
+def _state(intent: Intent, safety_confidence: float = 0.95) -> dict:
+    return {"intent": intent, "safety_confidence": safety_confidence}
 
 
 def test_blocked_input_goes_straight_to_end():
@@ -25,6 +26,29 @@ def test_blocked_input_goes_straight_to_end():
 
 def test_clean_input_goes_to_intent_router():
     assert route_after_input_guardrail({"input_blocked": False}) == "intent_router"
+
+
+def test_low_safety_confidence_goes_to_safety_judge_regardless_of_intent():
+    assert route_after_intent(_state(Intent.PRODUCT_QUESTION, safety_confidence=0.4)) == (
+        "safety_judge"
+    )
+
+
+def test_high_safety_confidence_dispatches_normally():
+    assert route_after_intent(_state(Intent.PRODUCT_QUESTION, safety_confidence=0.95)) == (
+        "retrieve_knowledge"
+    )
+
+
+def test_safety_judge_blocked_goes_straight_to_end():
+    assert route_after_safety_judge({"input_blocked": True, "intent": Intent.PRODUCT_QUESTION}) == (
+        END
+    )
+
+
+def test_safety_judge_cleared_dispatches_by_the_original_intent():
+    state = {"input_blocked": False, "intent": Intent.UPGRADE_REQUEST}
+    assert route_after_safety_judge(state) == "get_customer_context"
 
 
 def test_upgrade_request_goes_to_customer_context():

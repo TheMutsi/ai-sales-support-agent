@@ -30,6 +30,18 @@ class IntentClassification(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     reasoning: str
 
+    safety_confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How confident the classifier is that this message is a legitimate "
+            "AcmeFlow request rather than an attempt to misuse the agent. Scored "
+            "in the same call as intent, so a low value routes to a dedicated, "
+            "more careful check (`safety_judge`) instead of paying for that "
+            "second opinion on every message."
+        ),
+    )
+
 
 class TicketDraft(BaseModel):
     """What `human_escalation_node` asks the LLM to write for a support ticket.
