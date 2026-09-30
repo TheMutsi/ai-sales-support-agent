@@ -21,10 +21,14 @@ set -euo pipefail
 input="$(cat)"
 command="$(printf '%s' "$input" | jq -r '.tool_input.command // empty')"
 
-case "$command" in
-  *"gh pr create"*) ;;
-  *) exit 0 ;;
-esac
+# Anchored to the start of the command (or right after a shell separator like
+# && / ; / |), not a bare substring match: a plain `*"gh pr create"*` glob
+# also matches the phrase "gh pr create" sitting inside a quoted --title or
+# --body string (e.g. a PR description that talks about this hook), which
+# would fire on an unrelated command like `gh pr merge`.
+if [[ ! "$command" =~ (^|[\;\&\|]+)[[:space:]]*gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$) ]]; then
+  exit 0
+fi
 
 if [[ "$command" == *"SKIP_PR_SIZE_CHECK"* ]]; then
   exit 0
