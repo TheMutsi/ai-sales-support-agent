@@ -76,15 +76,21 @@ class Document(Base):
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     title: Mapped[str]
-    doc_type: Mapped[str]  # features | pricing | billing | policy | faq | security | integrations
+    doc_type: Mapped[str]  # features | billing | policy | faq | security | integrations
     product_area: Mapped[str | None]
     plan_scope: Mapped[str | None]  # plan slug this doc applies to, null = all plans
     version: Mapped[str] = mapped_column(default="1.0")
-    source: Mapped[str]
+    # Unique: the RAG ingestion pipeline (app/rag/ingestion.py) matches on this
+    # to replace a document's rows on re-ingest instead of duplicating them —
+    # the DB rejects a race between two ingestion runs instead of silently
+    # allowing duplicate documents for the same source file.
+    source: Mapped[str] = mapped_column(unique=True)
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    chunks: Mapped[list["DocumentChunk"]] = relationship(back_populates="document")
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
 
 
 class DocumentChunk(Base):
@@ -92,7 +98,7 @@ class DocumentChunk(Base):
     __table_args__ = (UniqueConstraint("document_id", "chunk_index"),)
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id"))
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
     chunk_index: Mapped[int]
     content: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
