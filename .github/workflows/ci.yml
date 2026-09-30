@@ -3,8 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+  # No `branches:` filter here on purpose: a stacked PR chain has PRs whose
+  # base is another open PR's branch, not `main` — restricting this to
+  # `branches: [main]` means every non-final PR in a chain silently never
+  # runs CI at all, not just late or cached, until it's retargeted to `main`
+  # right before merging.
   pull_request:
-    branches: [main]
 
 jobs:
   backend:
