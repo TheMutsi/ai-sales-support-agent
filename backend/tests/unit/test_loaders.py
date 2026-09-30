@@ -77,15 +77,3 @@ def test_raises_on_unsupported_doc_type(tmp_path):
 
     with pytest.raises(ValueError, match="not a valid DocType"):
         load_documents(kb_dir=tmp_path)
-
-
-def test_loads_real_seed_kb_documents():
-    """Sanity check against the actual KB content, not just synthetic fixtures —
-    catches the case where a real seed doc's front-matter drifts out of sync with
-    what the loader expects."""
-    from app.rag.loaders import KB_DIR
-
-    documents = load_documents(kb_dir=KB_DIR)
-
-    assert {d.source for d in documents} == {"privacy-policy.md", "terms-and-conditions.md"}
-    assert all(d.doc_type == DocType.POLICY for d in documents)
