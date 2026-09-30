@@ -1,12 +1,18 @@
-"""Lightweight signal-tagging for the incoming message — not a blocking filter.
+"""Signal-tagging for the incoming message.
 
-CLAUDE.md is explicit: a prompt-injection attempt should be refused and the
-agent should continue normally, without special-casing detection in a way
-that itself leaks the system prompt. So this never blocks or rewrites a
-message — it only tags known attack shapes for observability (LangSmith trace
-metadata, logs). That's useful because the Stage 6 adversarial testing showed
-the base model refusing these attempts on its own; tagging lets Stage 9's
-evaluation suite actually measure how often that holds, instead of assuming it.
+`flag_prompt_injection_signals` itself only tags known attack shapes — it
+never blocks or rewrites anything. What a caller does with those tags is its
+own call: `app/agent/nodes/input_guardrail.py` uses them to short-circuit the
+graph outright (the production-grade behavior CLAUDE.md's guardrails section
+asks for), while Stage 9's evaluation suite can use the same tags just to
+measure how often each attack shape shows up, without needing a second
+implementation of the pattern matching.
+
+Detection stays intentionally narrow — the curated shapes below, not generic
+suspicious wording — because a regex match is weaker evidence than a tool
+result. The Stage 6 adversarial testing already showed the base model
+refusing these attempts on its own; this module exists to make that refusal
+unconditional instead of trusting the model to keep doing it.
 """
 
 import re
