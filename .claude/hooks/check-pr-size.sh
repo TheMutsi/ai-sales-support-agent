@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# PreToolUse hook (Bash matcher). Blocks `gh pr create` when the diff against
+# `main` exceeds the hard ceiling documented in CLAUDE.md's "Git workflow"
+# section, so that limit can't be silently skipped under momentum.
+#
+# The budget is read out of CLAUDE.md itself (not hardcoded here) so the hook
+# and the doc can never drift apart. Escape hatch: prefix the command with
+# SKIP_PR_SIZE_CHECK=1 when the diff genuinely fits after excluding
+# generated/boilerplate content CLAUDE.md exempts (Alembic migrations,
+# lockfiles, etc.) — deliberate and visible, not silent.
+set -euo pipefail
+
+input="$(cat)"
+command="$(printf '%s' "$input" | jq -r '.tool_input.command // empty')"
+
+case "$command" in
+  *"gh pr create"*) ;;
+  *) exit 0 ;;
+esac
+
+if [[ "$command" == *"SKIP_PR_SIZE_CHECK"* ]]; then
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$repo_root"
+
+budget="$(grep -oE '[0-9]+ as a hard ceiling' CLAUDE.md 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+budget="${budget:-400}"
+
+lines="$(git diff main...HEAD --shortstat 2>/dev/null | grep -oE '[0-9]+ (insertion|deletion)s?' | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}')"
+
+if [ "$lines" -gt "$budget" ]; then
+  reason="Diff against main is ${lines} lines, over CLAUDE.md's ${budget}-line hard ceiling (Git workflow section). Split into a PR chain (stacked branches), or re-run with SKIP_PR_SIZE_CHECK=1 prefixed if this genuinely fits after excluding generated/boilerplate content CLAUDE.md exempts."
+  reason_json="$(printf '%s' "$reason" | jq -Rs .)"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":%s}}\n' "$reason_json"
+  exit 0
+fi
+
+exit 0
