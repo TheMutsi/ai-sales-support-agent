@@ -2,8 +2,10 @@
 
 `category`/`priority` are `StrEnum`s, not raw strings, specifically because
 `Ticket.category`/`Ticket.priority` are unconstrained string columns in the
-DB (app/db/models.py) — the enum is what actually enforces the allowed
-values those columns' comments document.
+DB (app/db/models.py, enforced nowhere at the DB level) — the enum is what
+constrains values passed through *this* function. It doesn't stop a future
+write path (a script, an admin endpoint) from inserting something else
+directly; that would need a DB-level check constraint.
 """
 
 import uuid

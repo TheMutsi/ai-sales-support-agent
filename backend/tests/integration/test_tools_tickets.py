@@ -5,14 +5,15 @@ import uuid
 import pytest
 from sqlalchemy.orm import Session
 
-from app.db.models import Customer, Ticket
+from app.db.models import Ticket
 from app.schemas.tools import TicketCategory, TicketPriority
 from app.tools.errors import ToolLookupError
 from app.tools.tickets import create_support_ticket
+from tests.integration.conftest import customer_by_email
 
 
 def test_persists_a_ticket_for_a_real_customer(seeded_db: Session):
-    customer = seeded_db.query(Customer).filter_by(email="ava.chen@northlightstudio.com").one()
+    customer = customer_by_email(seeded_db, "ava.chen@northlightstudio.com")
 
     receipt = create_support_ticket(
         customer.id,
@@ -30,7 +31,7 @@ def test_persists_a_ticket_for_a_real_customer(seeded_db: Session):
 
 
 def test_defaults_to_medium_priority(seeded_db: Session):
-    customer = seeded_db.query(Customer).filter_by(email="ava.chen@northlightstudio.com").one()
+    customer = customer_by_email(seeded_db, "ava.chen@northlightstudio.com")
 
     receipt = create_support_ticket(
         customer.id,
