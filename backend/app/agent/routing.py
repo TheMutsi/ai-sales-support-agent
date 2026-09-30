@@ -1,5 +1,3 @@
-from langgraph.graph import END
-
 from app.agent.state import AgentState
 from app.schemas.agent import Intent
 
@@ -13,14 +11,12 @@ def route_after_intent(state: AgentState) -> str:
         Intent.TECHNICAL_SUPPORT,
     }:
         return "retrieve_knowledge"
-    # human_escalation and unsupported — no human_escalation node yet (next PR), so
-    # these just end the graph for now instead of producing a final answer.
-    return END
+    return "human_escalation"  # human_escalation and unsupported
 
 
 def route_after_customer_context(state: AgentState) -> str:
     if state["intent"] == Intent.UPGRADE_REQUEST:
         return "business_rules"
-    # billing_question and refund_request — no response_writer/human_escalation node
-    # yet (next PR); ends the graph for now.
-    return END
+    if state["intent"] == Intent.BILLING_QUESTION:
+        return "response_writer"
+    return "human_escalation"  # refund_request — no refund tool exists, so it always escalates
