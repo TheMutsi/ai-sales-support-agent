@@ -1,0 +1,44 @@
+"""Shared state for the LangGraph agent graph.
+
+Each node returns only the keys it changes; LangGraph merges that partial
+dict onto the accumulated state between steps. `messages` needs the
+`add_messages` reducer so a turn appends to the conversation instead of
+replacing it — every other field is a plain overwrite, since within a single
+run only one node is ever responsible for setting it.
+
+Field values reuse the Pydantic contracts from `app/schemas/` (`CustomerContext`,
+`RetrievedChunk`, `UpsellDecision`, ...) instead of redefining shapes the tools
+and business layers already return.
+"""
+
+from typing import Annotated, TypedDict
+
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
+
+from app.schemas.agent import Intent
+from app.schemas.business import EligibilityResult, UpsellDecision
+from app.schemas.rag import RetrievedChunk
+from app.schemas.tools import CheckoutSession, CustomerContext, TicketReceipt
+
+
+class AgentState(TypedDict):
+    messages: Annotated[list[BaseMessage], add_messages]
+
+    customer_id: str | None
+    intent: Intent | None
+    intent_confidence: float | None
+
+    retrieved_chunks: list[RetrievedChunk]
+    customer_context: CustomerContext | None
+
+    eligibility_result: EligibilityResult | None
+    upsell_decision: UpsellDecision | None
+
+    checkout_session: CheckoutSession | None
+    ticket_receipt: TicketReceipt | None
+
+    escalated: bool
+    escalation_reason: str | None
+
+    errors: list[str]
