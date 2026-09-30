@@ -156,7 +156,7 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 - [x] Stage 4 — Business rules layer
 - [x] Stage 5 — Tools layer (wraps business rules, RAG, DB)
 - [x] Stage 6 — LangGraph agent (owner-written)
-- [ ] Stage 7 — Guardrails
+- [x] Stage 7 — Guardrails
 - [ ] Stage 8 — FastAPI chat endpoint (streaming) + trace metadata tagging (customer_id, conversation_id, intent, env, model, app_version)
 - [ ] Stage 9 — Evaluation dataset + script (owner-written) — run against the real API before the frontend exists, so agent quality is validated before UI polish
 - [ ] Stage 10 — Frontend chat UI
