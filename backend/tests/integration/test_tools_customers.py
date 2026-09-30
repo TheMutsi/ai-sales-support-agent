@@ -9,13 +9,13 @@ import uuid
 import pytest
 from sqlalchemy.orm import Session
 
-from app.db.models import Customer
 from app.tools.customers import get_customer_context
 from app.tools.errors import ToolLookupError
+from tests.integration.conftest import customer_by_email
 
 
 def test_returns_identity_and_current_subscription(seeded_db: Session):
-    customer = seeded_db.query(Customer).filter_by(email="priya.anand@bluecrestlogistics.com").one()
+    customer = customer_by_email(seeded_db, "priya.anand@bluecrestlogistics.com")
 
     context = get_customer_context(customer.id)
 

@@ -8,7 +8,7 @@ module re-deriving its own not-found message.
 
 import uuid
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.models import Customer, Plan, Subscription
 from app.schemas.tools import PlanSummary
@@ -34,9 +34,16 @@ def current_subscription(session: Session, customer_id: uuid.UUID) -> Subscripti
     explicit "is this the current one" flag (see its docstring in
     db/models.py) — a new row is added when a customer's commercial state
     changes, so the most recently started one is the current state by
-    construction."""
+    construction.
+
+    Eager-loads `.plan`: every caller of this helper immediately reads
+    `subscription.plan` (to build a `PlanSummary`, price a quote, or read a
+    slug), so leaving it lazy would turn one lookup into two queries every
+    time.
+    """
     return (
         session.query(Subscription)
+        .options(joinedload(Subscription.plan))
         .filter_by(customer_id=customer_id)
         .order_by(Subscription.started_at.desc())
         .first()

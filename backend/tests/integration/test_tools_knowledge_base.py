@@ -5,18 +5,20 @@ documents), both from conftest.py. This tool's only real behavior beyond
 `retriever.search()` itself is resolving a customer_id into a `plan_scope` —
 these tests exist to prove that resolution actually happens, not to
 re-verify similarity search (already covered by `test_retriever.py`).
-Embeddings are stubbed the same way `test_retriever.py` stubs them, for the
-same reason: deterministic ranking instead of depending on a real model.
+Embeddings are stubbed the same way `test_retriever.py` stubs them (a fake
+that returns a fixed vector), for the same reason: deterministic ranking
+instead of depending on a real model.
 """
 
 import uuid
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Customer, Document, DocumentChunk
+from app.db.models import Document, DocumentChunk
 from app.rag import retriever
 from app.schemas.rag import DocType
 from app.tools.knowledge_base import search_knowledge_base
+from tests.integration.conftest import customer_by_email
 
 _DIM = 768
 
@@ -62,9 +64,7 @@ def test_scopes_search_to_the_customers_plan(seeded_db: Session, rag_db: Session
     _add_document(rag_db, source="starter.md", plan_scope="starter", content="starter-only")
     monkeypatch.setattr(retriever, "get_embeddings", lambda: _FakeEmbeddings(_unit_vector(0)))
 
-    customer = (
-        seeded_db.query(Customer).filter_by(email="priya.anand@bluecrestlogistics.com").one()
-    )  # pro plan
+    customer = customer_by_email(seeded_db, "priya.anand@bluecrestlogistics.com")  # pro plan
 
     results = search_knowledge_base(customer.id, "query")
 

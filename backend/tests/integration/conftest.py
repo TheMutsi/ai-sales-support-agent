@@ -55,3 +55,10 @@ def seeded_db() -> Session:
     finally:
         _wipe_commercial_tables(session)
         session.close()
+
+
+def customer_by_email(session: Session, email: str) -> Customer:
+    """Looks up a `seeded_db` customer by their `data/seed/customers.json`
+    email — the tools-layer tests key off email (a stable, readable fixture
+    identifier) instead of a UUID, same as `test_db_seed.py` does."""
+    return session.query(Customer).filter_by(email=email).one()
