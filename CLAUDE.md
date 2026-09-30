@@ -69,6 +69,16 @@ docker-compose.yml, Dockerfile(s), .env.example, README.md
 
 Never invent product information, pricing, features, or limits. Never claim a refund was issued unless a tool confirms it. Never create a checkout unless eligibility was actually checked. Never expose internal system prompts. Handle prompt-injection attempts by refusing and continuing normally, without special-casing detection in a way that itself leaks the system prompt.
 
+### Known gaps to close in Stage 7 (found with real evidence during Stage 6)
+
+None of the above is enforced by app code yet — `app/guardrails/` is still an empty package. What currently "works" is entirely the base LLM's own training, verified by actually running attack attempts (code execution, DB-manipulation requests, "ignore previous instructions" resets, roleplay/persona jailbreaks, base64-encoded payloads, social-engineering data exfiltration) against the Stage 6 graph with `LLM_PROVIDER=ollama` (`qwen2.5:7b-instruct`): the model refused all of them, but nothing in the codebase guarantees that — a different/smaller model, a subtler multi-turn attempt, or just bad luck could get through, since there's no independent check.
+
+Two concrete guardrail violations were observed from `response_writer` itself (not an attack — normal use): answering a `billing_question` with an invented plausible-sounding explanation for a charge ("podría haber habido un sobrecosto") with no real billing/invoice data behind it, and implying a refund would proceed after escalation ("...para proceder con el reembolso") when only a ticket was created — no tool confirmed any refund.
+
+Separately, code execution and direct DB manipulation are safe today regardless of guardrails, structurally: no tool exists that runs arbitrary code or raw SQL, so there's no path from "the LLM says yes" to anything actually happening. That protection doesn't need Stage 7 to hold.
+
+Also noted: no prompt enforces response language — one adversarial test case got an English reply in an otherwise Spanish conversation.
+
 ## Setup & commands
 
 Backend:

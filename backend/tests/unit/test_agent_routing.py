@@ -5,8 +5,6 @@ over a `state` dict — no LLM, no DB, no graph compilation needed to exercise
 them, the same way the business-rules tests construct their inputs directly.
 """
 
-from langgraph.graph import END
-
 from app.agent.routing import route_after_customer_context, route_after_intent
 from app.schemas.agent import Intent
 
@@ -39,17 +37,21 @@ def test_technical_support_goes_to_retrieve_knowledge():
     assert route_after_intent(_state(Intent.TECHNICAL_SUPPORT)) == "retrieve_knowledge"
 
 
-def test_human_escalation_and_unsupported_end_the_graph_for_now():
-    # No human_escalation node yet — lands in a follow-up PR.
-    assert route_after_intent(_state(Intent.HUMAN_ESCALATION)) == END
-    assert route_after_intent(_state(Intent.UNSUPPORTED)) == END
+def test_human_escalation_goes_to_human_escalation():
+    assert route_after_intent(_state(Intent.HUMAN_ESCALATION)) == "human_escalation"
+
+
+def test_unsupported_goes_to_human_escalation():
+    assert route_after_intent(_state(Intent.UNSUPPORTED)) == "human_escalation"
 
 
 def test_upgrade_request_goes_to_business_rules():
     assert route_after_customer_context(_state(Intent.UPGRADE_REQUEST)) == "business_rules"
 
 
-def test_billing_and_refund_end_the_graph_for_now():
-    # No response_writer/human_escalation node yet — lands in a follow-up PR.
-    assert route_after_customer_context(_state(Intent.BILLING_QUESTION)) == END
-    assert route_after_customer_context(_state(Intent.REFUND_REQUEST)) == END
+def test_billing_question_goes_to_response_writer():
+    assert route_after_customer_context(_state(Intent.BILLING_QUESTION)) == "response_writer"
+
+
+def test_refund_request_goes_to_human_escalation():
+    assert route_after_customer_context(_state(Intent.REFUND_REQUEST)) == "human_escalation"
