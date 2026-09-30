@@ -11,8 +11,11 @@ wouldn't give them (Core Principle #3).
 
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel
+
+from app.schemas.business import PriceQuote
 
 
 class PlanSummary(BaseModel):
@@ -43,3 +46,32 @@ class CustomerContext(BaseModel):
     company: str | None
     status: str
     subscription: SubscriptionSummary | None
+
+
+class CheckoutSession(BaseModel):
+    """A simulated checkout — AcmeFlow has no real payment processor, so
+    `checkout_url` is a fake link, not something that should ever be followed."""
+
+    checkout_url: str
+    target_plan_slug: str
+    price_quote: PriceQuote
+
+
+class TicketCategory(StrEnum):
+    ESCALATION = "escalation"
+    REFUND = "refund"
+    TECHNICAL = "technical"
+    BILLING = "billing"
+    OTHER = "other"
+
+
+class TicketPriority(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class TicketReceipt(BaseModel):
+    ticket_id: uuid.UUID
+    status: str
+    created_at: datetime
