@@ -50,6 +50,17 @@ def current_subscription(session: Session, customer_id: uuid.UUID) -> Subscripti
     )
 
 
+def require_current_subscription(session: Session, customer_id: uuid.UUID) -> Subscription:
+    # Confirms the customer itself exists first, so a bad customer_id raises
+    # "no customer" rather than the more ambiguous "no subscription" — the
+    # latter would otherwise also fire for a customer that's never had one.
+    require_customer(session, customer_id)
+    subscription = current_subscription(session, customer_id)
+    if subscription is None:
+        raise ToolLookupError(f"No subscription found for customer {customer_id}")
+    return subscription
+
+
 def plan_summary(plan: Plan) -> PlanSummary:
     return PlanSummary(
         slug=plan.slug,
