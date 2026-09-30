@@ -18,6 +18,8 @@ This project is being built by the repo owner with AI guidance, not built for th
 
 Always explain *why*, not just *what* — the owner needs to be able to defend every architectural decision in an interview.
 
+The RAG pipeline (`backend/app/rag/`) is the one exception exercised so far: the owner explicitly asked for AI to write it (to reach the LangGraph agent stage sooner, their actual learning priority) instead of writing it themselves — see the Stage 3 PRs for the resulting code and its rationale.
+
 ## Architecture
 
 - **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain (chat-model + embeddings abstraction only — not used as a catch-all framework), Pydantic v2, SQLAlchemy + Alembic.
@@ -37,14 +39,14 @@ backend/
     api/              # routers: chat, customers, evaluations, health
     core/             # config, llm provider abstraction (Claude/Gemini)
     agent/            # graph.py, state.py, nodes/, prompts/        [owner writes]
-    rag/               # loaders, chunking, ingestion.py, retriever.py [owner writes]
+    rag/               # loaders, chunking, ingestion.py, retriever.py [AI writes, per owner's Stage 3 call]
     tools/             # typed tool wrappers (get_customer_context, etc.)
     business/          # upsell_rules.py, pricing.py, eligibility.py  [AI writes]
     db/                # models.py, session.py, seed.py
     guardrails/        # prompt-injection handling, output validation
     schemas/           # Pydantic: Intent, CustomerContext, ToolResult, AgentState...
   alembic/              # migrations (env.py wired to app.core.config)
-  data/seed/            # plans.json, customers.json (documents come from RAG ingestion, Stage 3)
+  data/seed/            # plans.json, customers.json, kb/*.md (markdown KB docs, loaded by app.rag.ingestion)
   evaluation/           # dataset.jsonl, run_eval.py, metrics.py       [owner writes]
   tests/                # unit/, integration/, evaluation/
 frontend/               # Vite + React chat app                       [AI writes]
@@ -90,7 +92,14 @@ Database (after `docker compose up -d db`):
 cd backend
 alembic upgrade head        # apply migrations
 python -m app.db.seed       # load plans + sample customers/subscriptions
+python -m app.rag.ingestion # embed and load the KB (backend/data/seed/kb/*.md); requires the
+                             # configured EMBEDDING_PROVIDER to be reachable (e.g. `ollama serve`)
 ```
+
+Both `db.seed` and `rag.ingestion` write to tables the integration test suite clears as part of
+its own setup/teardown (`tests/integration/test_db_seed.py`, `test_rag_ingestion.py`,
+`test_retriever.py`) — re-run the relevant command after `pytest` if you need real data in the DB
+again for manual testing.
 
 ## Environment variables
 
@@ -127,7 +136,7 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 - [x] Stage 0 — Repo bootstrap (backend skeleton, Docker Compose, health check)
 - [x] Stage 1 — DB schema + seed data
 - [x] Stage 2 — LLM provider abstraction (Claude + Gemini + Ollama) + LangSmith tracing wired from day one (near-free via env vars — gives trace visibility during the hardest debugging stages below)
-- [ ] Stage 3 — RAG pipeline (owner-written)
+- [x] Stage 3 — RAG pipeline (AI-written per owner's call — see "Collaboration model" above; KB loader, section/fixed-size chunking, ingestion, pgvector retrieval)
 - [ ] Stage 4 — Business rules layer
 - [ ] Stage 5 — Tools layer (wraps business rules, RAG, DB)
 - [ ] Stage 6 — LangGraph agent (owner-written)
