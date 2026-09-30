@@ -19,6 +19,7 @@ dependencies = [
   "langchain-ollama>=0.2",
   "langsmith>=0.1",
   "python-dotenv>=1.0",
+  "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
