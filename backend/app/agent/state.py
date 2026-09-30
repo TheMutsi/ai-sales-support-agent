@@ -9,8 +9,14 @@ run only one node is ever responsible for setting it.
 Field values reuse the Pydantic contracts from `app/schemas/` (`CustomerContext`,
 `RetrievedChunk`, `UpsellDecision`, ...) instead of redefining shapes the tools
 and business layers already return.
+
+`guardrail_flags` needs the same kind of reducer as `messages`, for the same
+reason: more than one node can contribute to it in a single run (`intent_router`
+tags prompt-injection signals, `guardrail_node` tags output violations), so a
+plain overwrite would silently drop whichever ran first.
 """
 
+from operator import add
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage
@@ -42,3 +48,4 @@ class AgentState(TypedDict):
     escalation_reason: str | None
 
     errors: list[str]
+    guardrail_flags: Annotated[list[str], add]

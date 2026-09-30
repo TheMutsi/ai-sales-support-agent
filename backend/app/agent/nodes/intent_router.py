@@ -3,6 +3,7 @@ from langchain_core.messages import SystemMessage
 from app.agent.prompts.intent_router import INTENT_ROUTER_SYSTEM_PROMPT
 from app.agent.state import AgentState
 from app.core.llm import get_chat_model
+from app.guardrails.input_checks import flag_prompt_injection_signals
 from app.schemas.agent import IntentClassification
 
 
@@ -19,4 +20,12 @@ def intent_router(state: AgentState) -> dict:
     messages = [SystemMessage(content=INTENT_ROUTER_SYSTEM_PROMPT), *state["messages"]]
     result = structured_llm.invoke(messages)
 
-    return {"intent": result.intent, "intent_confidence": result.confidence}
+    update: dict = {"intent": result.intent, "intent_confidence": result.confidence}
+
+    # Tagging only, never blocking — see app/guardrails/input_checks.py for why.
+    latest_message = str(state["messages"][-1].content)
+    injection_signals = flag_prompt_injection_signals(latest_message)
+    if injection_signals:
+        update["guardrail_flags"] = [f"injection_signal:{tag}" for tag in injection_signals]
+
+    return update
