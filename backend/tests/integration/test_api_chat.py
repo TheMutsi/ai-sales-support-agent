@@ -35,7 +35,7 @@ class _FakeGraph:
 def test_chat_streams_a_response_over_sse(monkeypatch):
     monkeypatch.setattr(chat_module, "tag_run_intent", lambda *a, **k: None)
     final_state = {
-        "messages": [HumanMessage(content="hola"), AIMessage(content="Hola! ¿En qué te ayudo?")],
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Hi! How can I help?")],
         "intent": "product_question",
         "guardrail_flags": [],
     }
@@ -47,7 +47,7 @@ def test_chat_streams_a_response_over_sse(monkeypatch):
                 {
                     "event": "on_chat_model_stream",
                     "metadata": {"langgraph_node": "response_writer"},
-                    "data": {"chunk": _FakeChunk("Hola! ¿En qué te ayudo?")},
+                    "data": {"chunk": _FakeChunk("Hi! How can I help?")},
                 },
                 {
                     "event": "on_chain_end",
@@ -61,7 +61,7 @@ def test_chat_streams_a_response_over_sse(monkeypatch):
 
     response = client.post(
         "/api/chat",
-        json={"customer_id": str(uuid.uuid4()), "messages": [{"role": "user", "content": "hola"}]},
+        json={"customer_id": str(uuid.uuid4()), "messages": [{"role": "user", "content": "hi"}]},
     )
 
     assert response.status_code == 200
@@ -75,7 +75,7 @@ def test_chat_rejects_a_request_without_a_trailing_user_message():
         "/api/chat",
         json={
             "customer_id": str(uuid.uuid4()),
-            "messages": [{"role": "assistant", "content": "hola"}],
+            "messages": [{"role": "assistant", "content": "hi"}],
         },
     )
 
@@ -85,7 +85,7 @@ def test_chat_rejects_a_request_without_a_trailing_user_message():
 def test_chat_rejects_an_invalid_customer_id():
     response = client.post(
         "/api/chat",
-        json={"customer_id": "not-a-uuid", "messages": [{"role": "user", "content": "hola"}]},
+        json={"customer_id": "not-a-uuid", "messages": [{"role": "user", "content": "hi"}]},
     )
 
     assert response.status_code == 422
