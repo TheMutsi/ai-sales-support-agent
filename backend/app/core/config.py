@@ -37,9 +37,16 @@ class Settings(BaseSettings):
     # app/db/models.py, verified against a real local call, not assumed.
     ollama_embedding_model: str = "nomic-embed-text"
 
-    langchain_tracing_v2: bool = False
-    langchain_api_key: str | None = None
-    langchain_project: str = "acmeflow-agent"
+    # Self-hosted Langfuse (see `docker-compose.yml`'s `langfuse-*` services) —
+    # not LangSmith: self-hosting LangSmith is an Enterprise-only, paid add-on,
+    # not something you can run locally for free. Public/secret key defaults
+    # here match the local-dev-only bootstrap values `docker-compose.yml`
+    # seeds the Langfuse project with, so tracing works out of the box with no
+    # manual key-copying — they're meaningless outside this local stack.
+    langfuse_tracing_enabled: bool = False
+    langfuse_public_key: str = "pk-lf-acmeflow-local"
+    langfuse_secret_key: str = "sk-lf-acmeflow-local-dev-only"
+    langfuse_host: str = "http://localhost:3000"
 
 
 @lru_cache
