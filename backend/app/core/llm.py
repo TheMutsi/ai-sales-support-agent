@@ -39,3 +39,19 @@ def get_chat_model() -> BaseChatModel:
         )
 
     raise ValueError(f"Unsupported LLM_PROVIDER: {settings.llm_provider!r}")
+
+
+def get_chat_model_name() -> str:
+    """The model id for whichever provider `LLM_PROVIDER` currently selects —
+    used to tag LangSmith traces (Stage 8) with what actually answered a
+    conversation, without duplicating the provider if/elif here."""
+    settings = get_settings()
+
+    if settings.llm_provider == "anthropic":
+        return settings.anthropic_model
+    if settings.llm_provider == "google":
+        return settings.google_model
+    if settings.llm_provider == "ollama":
+        return settings.ollama_model
+
+    raise ValueError(f"Unsupported LLM_PROVIDER: {settings.llm_provider!r}")
