@@ -12,8 +12,8 @@ def test_accepts_a_valid_request_ending_in_a_user_message():
     request = ChatRequest(
         customer_id=uuid.uuid4(),
         messages=[
-            ChatMessage(role="assistant", content="Hola, ¿en qué te ayudo?"),
-            ChatMessage(role="user", content="cuanto sale el plan pro?"),
+            ChatMessage(role="assistant", content="Hi, how can I help?"),
+            ChatMessage(role="user", content="how much is the pro plan?"),
         ],
     )
 
@@ -25,7 +25,7 @@ def test_rejects_a_request_ending_in_an_assistant_message():
     with pytest.raises(ValidationError, match="last message must be from the user"):
         ChatRequest(
             customer_id=uuid.uuid4(),
-            messages=[ChatMessage(role="assistant", content="Hola")],
+            messages=[ChatMessage(role="assistant", content="Hi")],
         )
 
 
