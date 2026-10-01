@@ -33,7 +33,6 @@ class _FakeGraph:
 
 
 def test_chat_streams_a_response_over_sse(monkeypatch):
-    monkeypatch.setattr(chat_module, "tag_run_intent", lambda *a, **k: None)
     final_state = {
         "messages": [HumanMessage(content="hi"), AIMessage(content="Hi! How can I help?")],
         "intent": "product_question",
