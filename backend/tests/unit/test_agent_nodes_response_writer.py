@@ -68,7 +68,7 @@ def test_binds_the_knowledge_base_tool_for_rag_eligible_intents(monkeypatch):
     state = {
         "customer_id": "c-1",
         "intent": Intent.PRICING_QUESTION,
-        "messages": [HumanMessage(content="cuanto sale el plan pro?")],
+        "messages": [HumanMessage(content="how much is the pro plan?")],
     }
     response_writer_module.response_writer_node(state)
 
