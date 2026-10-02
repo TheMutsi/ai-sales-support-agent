@@ -20,13 +20,18 @@ path — it's sent as a single `message` event instead.
 import json
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import nullcontext
 from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
+from langfuse import get_client
+from langfuse.langchain import CallbackHandler
 
 from app.agent.graph import graph as agent_graph
+from app.core.config import get_settings
+from app.core.llm import get_chat_model_name
 from app.schemas.chat import ChatRequest
 
 router = APIRouter()
@@ -44,25 +49,70 @@ def _build_initial_state(request: ChatRequest) -> dict:
     return {"messages": messages, "customer_id": str(request.customer_id)}
 
 
+def _build_trace_metadata(request: ChatRequest, conversation_id: uuid.UUID) -> dict:
+    settings = get_settings()
+    return {
+        "customer_id": str(request.customer_id),
+        "conversation_id": str(conversation_id),
+        "environment": settings.app_env,
+        "model": get_chat_model_name(),
+        "app_version": settings.app_version,
+        # Special keys Langfuse's LangChain integration maps onto the trace's
+        # own session/tags fields instead of generic metadata.
+        "langfuse_session_id": str(conversation_id),
+        "langfuse_tags": ["chat_endpoint"],
+    }
+
+
 async def stream_chat_turn(chat_graph, request: ChatRequest) -> AsyncIterator[str]:
+    """Drives the graph and translates its event stream into SSE.
+
+    When Langfuse tracing is enabled, the whole turn runs inside one owned
+    span (`chat_turn`) so `intent` — unknown until partway through the graph
+    run — can be patched onto it directly via `span.update(...)` the moment
+    `intent_router` classifies the message. Langfuse's LangChain integration
+    isn't a single global env-var switch the way LangSmith's was, so tracing
+    is wired per-call here rather than in `app/core/observability.py`."""
+    settings = get_settings()
     conversation_id = request.conversation_id or uuid.uuid4()
+    tracing_enabled = settings.langfuse_tracing_enabled
+
+    span_cm = (
+        get_client().start_as_current_observation(
+            as_type="span",
+            name="chat_turn",
+            metadata=_build_trace_metadata(request, conversation_id),
+        )
+        if tracing_enabled
+        else nullcontext()
+    )
+    config = {"callbacks": [CallbackHandler()]} if tracing_enabled else {}
 
     streamed_text = ""
     final_state: dict | None = None
 
-    async for event in chat_graph.astream_events(
-        _build_initial_state(request), config={}, version="v2"
-    ):
-        node = (event.get("metadata") or {}).get("langgraph_node")
+    with span_cm as span:
+        async for event in chat_graph.astream_events(
+            _build_initial_state(request), config=config, version="v2"
+        ):
+            node = (event.get("metadata") or {}).get("langgraph_node")
 
-        if event["event"] == "on_chat_model_stream" and node == "response_writer":
-            delta = event["data"]["chunk"].content
-            if delta:
-                streamed_text += delta
-                yield _format_sse("delta", {"text": delta})
+            if event["event"] == "on_chat_model_stream" and node == "response_writer":
+                delta = event["data"]["chunk"].content
+                if delta:
+                    streamed_text += delta
+                    yield _format_sse("delta", {"text": delta})
 
-        elif event["event"] == "on_chain_end" and event.get("name") == "LangGraph" and node is None:
-            final_state = event["data"]["output"]
+            elif event["event"] == "on_chain_end" and event.get("name") == "intent_router":
+                if tracing_enabled:
+                    span.update(metadata={"intent": str(event["data"]["output"]["intent"])})
+
+            elif (
+                event["event"] == "on_chain_end"
+                and event.get("name") == "LangGraph"
+                and node is None
+            ):
+                final_state = event["data"]["output"]
 
     final_text = final_state["messages"][-1].content
 
