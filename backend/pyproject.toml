@@ -17,7 +17,11 @@ dependencies = [
   "langchain-anthropic>=0.3",
   "langchain-google-genai>=2.0",
   "langchain-ollama>=0.2",
-  "langsmith>=0.1",
+  # Full `langchain` (not just langchain-core) is a deliberate, narrow
+  # exception to the "no catch-all framework" rule above: langfuse's
+  # LangChain/LangGraph CallbackHandler hard-imports it.
+  "langchain>=1.0",
+  "langfuse>=4,<5",
   "python-dotenv>=1.0",
   "pyyaml>=6.0",
 ]

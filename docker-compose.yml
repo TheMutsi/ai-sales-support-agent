@@ -22,11 +22,153 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-acmeflow}:${POSTGRES_PASSWORD:-acmeflow}@db:5432/${POSTGRES_DB:-acmeflow}
+      # Containerized backend reaches Langfuse by its service name, not
+      # localhost — LANGFUSE_HOST from .env is only correct for a backend
+      # running on the host directly (`uvicorn ... --reload`).
+      LANGFUSE_HOST: http://langfuse-web:3000
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
 
+  # Self-hosted Langfuse (observability/tracing — see CLAUDE.md's
+  # Observability section for why this replaced LangSmith). Everything below
+  # is internal-only except langfuse-web's UI on :3000 — nothing else needs
+  # host exposure since this project only traces text, no uploaded media.
+  # LANGFUSE_INIT_* bootstraps one org/project/user/API-key pair on first
+  # boot so `docker compose up` + flipping LANGFUSE_TRACING_ENABLED is the
+  # whole setup — no manual key-copying from the UI. These are local-dev-only
+  # values, not secrets worth protecting; regenerate them (e.g. via
+  # `openssl rand -hex 32`) before using this compose file anywhere not
+  # bound to localhost.
+  langfuse-worker:
+    image: docker.langfuse.com/langfuse/langfuse-worker:4
+    restart: unless-stopped
+    depends_on: &langfuse-depends-on
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+    environment: &langfuse-worker-env
+      NEXTAUTH_URL: http://localhost:3000
+      DATABASE_URL: postgresql://postgres:postgres@langfuse-postgres:5432/postgres
+      SALT: acmeflow-local-salt
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: acmeflow-local-clickhouse
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: acmeflow-local-minio
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: acmeflow-local-minio
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: 6379
+      REDIS_AUTH: acmeflow-local-redis
+
+  langfuse-web:
+    image: docker.langfuse.com/langfuse/langfuse:4
+    restart: unless-stopped
+    depends_on: *langfuse-depends-on
+    ports:
+      - "3000:3000"
+    environment:
+      <<: *langfuse-worker-env
+      NEXTAUTH_SECRET: acmeflow-local-nextauth
+      LANGFUSE_INIT_ORG_ID: acmeflow
+      LANGFUSE_INIT_ORG_NAME: AcmeFlow
+      LANGFUSE_INIT_PROJECT_ID: acmeflow-agent
+      LANGFUSE_INIT_PROJECT_NAME: acmeflow-agent
+      # Must match LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY in .env.example —
+      # this is what lets the backend trace with zero manual setup.
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-acmeflow-local
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-acmeflow-local-dev-only
+      LANGFUSE_INIT_USER_EMAIL: dev@acmeflow.local
+      LANGFUSE_INIT_USER_NAME: AcmeFlow Dev
+      LANGFUSE_INIT_USER_PASSWORD: acmeflow-local-dev
+
+  langfuse-clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:25.12
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: acmeflow-local-clickhouse
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+
+  langfuse-minio:
+    image: cgr.dev/chainguard/minio
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: acmeflow-local-minio
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+
+  langfuse-redis:
+    image: docker.io/redis:7
+    restart: unless-stopped
+    command: --requirepass acmeflow-local-redis --maxmemory-policy noeviction
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  langfuse-postgres:
+    image: docker.io/postgres:17
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+
 volumes:
   db_data:
+  langfuse_postgres_data:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:
+  langfuse_redis_data:
