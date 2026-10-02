@@ -1,9 +1,9 @@
 """Retrieval: embeds a query and returns the top-k most similar chunks from
 `document_chunks`, using pgvector's cosine-distance similarity search.
 
-This is the exact contract the `retrieve_knowledge` node in the agent graph
-(`app/agent/`) will call — keep the signature stable once it's in use elsewhere,
-since changing it later means touching the graph too.
+This is the exact contract `app/tools/knowledge_base.py` calls — keep the
+signature stable once it's in use elsewhere, since changing it later means
+touching that caller too.
 """
 
 from sqlalchemy import select

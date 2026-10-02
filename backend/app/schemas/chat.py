@@ -4,7 +4,7 @@ The endpoint is stateless on the server: the graph isn't checkpointed, so
 `messages` carries the full conversation so far, not just the latest turn —
 the same shape as the Anthropic/OpenAI chat-completions APIs. The alternative
 (a LangGraph checkpointer keyed by `conversation_id`) was considered and
-dropped: `AgentState`'s per-turn fields (`retrieved_chunks`,
+dropped: `AgentState`'s per-turn fields (`customer_context`,
 `checkout_session`, `ticket_receipt`, ...) are plain overwrites, not reducers,
 so a checkpointed run would carry stale tool output from an earlier, unrelated
 turn into one that never touched that node — e.g. a refund ticket from turn 1

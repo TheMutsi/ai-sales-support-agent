@@ -7,8 +7,8 @@ replacing it — every other field is a plain overwrite, since within a single
 run only one node is ever responsible for setting it.
 
 Field values reuse the Pydantic contracts from `app/schemas/` (`CustomerContext`,
-`RetrievedChunk`, `UpsellDecision`, ...) instead of redefining shapes the tools
-and business layers already return.
+`UpsellDecision`, ...) instead of redefining shapes the tools and business
+layers already return.
 
 `guardrail_flags` needs the same kind of reducer as `messages`, for the same
 reason: more than one node can contribute to it in a single run
@@ -25,7 +25,6 @@ from langgraph.graph.message import add_messages
 
 from app.schemas.agent import Intent
 from app.schemas.business import EligibilityResult, UpsellDecision
-from app.schemas.rag import RetrievedChunk
 from app.schemas.tools import CheckoutSession, CustomerContext, TicketReceipt
 
 
@@ -38,7 +37,6 @@ class AgentState(TypedDict):
     intent_confidence: float | None
     safety_confidence: float | None
 
-    retrieved_chunks: list[RetrievedChunk]
     customer_context: CustomerContext | None
 
     eligibility_result: EligibilityResult | None
@@ -52,3 +50,8 @@ class AgentState(TypedDict):
 
     errors: list[str]
     guardrail_flags: Annotated[list[str], add]
+
+    # How many LLM↔tool round trips `response_writer`/`knowledge_tool` have
+    # done for this turn — `route_after_response_writer` uses it to cap the
+    # loop instead of relying only on LangGraph's generic recursion limit.
+    tool_call_rounds: int
