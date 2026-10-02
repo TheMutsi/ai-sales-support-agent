@@ -3,8 +3,8 @@
 Every module in `app/rag/` communicates through these types instead of raw
 dicts/strings, per Core Principle #2 (explicit, strongly-typed state) and #3
 (strongly-typed tool inputs/outputs). This also freezes the shape `retriever.py`
-hands to the `retrieve_knowledge` node that the agent graph (`app/agent/`) will
-call, before that graph exists, so it can be built against a stable contract.
+hands to `app/tools/knowledge_base.py`, and from there to the agent graph
+(`app/agent/`), so it can be built against a stable contract.
 """
 
 import uuid

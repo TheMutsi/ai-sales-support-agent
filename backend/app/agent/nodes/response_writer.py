@@ -1,8 +1,16 @@
 from langchain_core.messages import SystemMessage
 
+from app.agent.llm_tools.knowledge_base import make_search_knowledge_base_tool
 from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
 from app.agent.state import AgentState
 from app.core.llm import get_chat_model
+from app.schemas.agent import Intent
+
+# The only intents where response_writer binds the knowledge-base tool —
+# everything else (billing/refund/upgrade/escalation) stays fully
+# deterministic, grounded only in what get_customer_context/business_rules/
+# human_escalation already put in state.
+_RAG_ELIGIBLE_INTENTS = {Intent.PRODUCT_QUESTION, Intent.PRICING_QUESTION, Intent.TECHNICAL_SUPPORT}
 
 
 def _build_context_blob(state: AgentState) -> str:
@@ -13,10 +21,6 @@ def _build_context_blob(state: AgentState) -> str:
 
     if customer_context := state.get("customer_context"):
         sections.append(f"Customer account:\n{customer_context.model_dump_json(indent=2)}")
-
-    if retrieved_chunks := state.get("retrieved_chunks"):
-        chunks_text = "\n---\n".join(chunk.content for chunk in retrieved_chunks)
-        sections.append(f"Knowledge base results:\n{chunks_text}")
 
     if eligibility_result := state.get("eligibility_result"):
         sections.append(f"Upgrade eligibility:\n{eligibility_result.model_dump_json(indent=2)}")
@@ -39,7 +43,13 @@ def response_writer_node(state: AgentState) -> dict:
     context = _build_context_blob(state)
     system_message = SystemMessage(content=RESPONSE_WRITER_SYSTEM_PROMPT.format(context=context))
 
-    llm = get_chat_model().with_retry(stop_after_attempt=3)
+    llm = get_chat_model()
+    if state.get("intent") in _RAG_ELIGIBLE_INTENTS:
+        # bind_tools must come before with_retry: RunnableRetry (what
+        # with_retry returns) has no bind_tools method of its own.
+        llm = llm.bind_tools([make_search_knowledge_base_tool(state["customer_id"])])
+    llm = llm.with_retry(stop_after_attempt=3)
+
     ai_message = llm.invoke([system_message, *state["messages"]])
 
     return {"messages": [ai_message]}

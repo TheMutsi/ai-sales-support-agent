@@ -7,8 +7,8 @@ from app.schemas.agent import Intent, TicketDraft
 from app.schemas.tools import TicketCategory
 from app.tools.tickets import create_support_ticket
 
-# Same mapping pattern as `retrieve_knowledge.py`'s `_INTENT_DOC_TYPE` — deterministic,
-# no LLM call needed since `intent` is already classified by this point in the graph.
+# Deterministic lookup, no LLM call needed since `intent` is already
+# classified by this point in the graph.
 _INTENT_TICKET_CATEGORY = {
     Intent.REFUND_REQUEST: TicketCategory.REFUND,
     Intent.TECHNICAL_SUPPORT: TicketCategory.TECHNICAL,

@@ -5,12 +5,14 @@ over a `state` dict — no LLM, no DB, no graph compilation needed to exercise
 them, the same way the business-rules tests construct their inputs directly.
 """
 
+from langchain_core.messages import AIMessage
 from langgraph.graph import END
 
 from app.agent.routing import (
     route_after_customer_context,
     route_after_input_guardrail,
     route_after_intent,
+    route_after_response_writer,
     route_after_safety_judge,
 )
 from app.schemas.agent import Intent
@@ -36,7 +38,7 @@ def test_low_safety_confidence_goes_to_safety_judge_regardless_of_intent():
 
 def test_high_safety_confidence_dispatches_normally():
     assert route_after_intent(_state(Intent.PRODUCT_QUESTION, safety_confidence=0.95)) == (
-        "retrieve_knowledge"
+        "response_writer"
     )
 
 
@@ -63,16 +65,16 @@ def test_refund_request_goes_to_customer_context():
     assert route_after_intent(_state(Intent.REFUND_REQUEST)) == "get_customer_context"
 
 
-def test_product_question_goes_to_retrieve_knowledge():
-    assert route_after_intent(_state(Intent.PRODUCT_QUESTION)) == "retrieve_knowledge"
+def test_product_question_goes_to_response_writer():
+    assert route_after_intent(_state(Intent.PRODUCT_QUESTION)) == "response_writer"
 
 
-def test_pricing_question_goes_to_retrieve_knowledge():
-    assert route_after_intent(_state(Intent.PRICING_QUESTION)) == "retrieve_knowledge"
+def test_pricing_question_goes_to_response_writer():
+    assert route_after_intent(_state(Intent.PRICING_QUESTION)) == "response_writer"
 
 
-def test_technical_support_goes_to_retrieve_knowledge():
-    assert route_after_intent(_state(Intent.TECHNICAL_SUPPORT)) == "retrieve_knowledge"
+def test_technical_support_goes_to_response_writer():
+    assert route_after_intent(_state(Intent.TECHNICAL_SUPPORT)) == "response_writer"
 
 
 def test_human_escalation_goes_to_human_escalation():
@@ -93,3 +95,28 @@ def test_billing_question_goes_to_response_writer():
 
 def test_refund_request_goes_to_human_escalation():
     assert route_after_customer_context(_state(Intent.REFUND_REQUEST)) == "human_escalation"
+
+
+def _tool_call(name: str = "search_knowledge_base_tool") -> dict:
+    return {"name": name, "args": {"query": "pricing"}, "id": "call_1"}
+
+
+def test_response_without_tool_calls_goes_to_guardrail():
+    state = {"messages": [AIMessage(content="Here's the answer.")]}
+    assert route_after_response_writer(state) == "guardrail"
+
+
+def test_response_with_tool_calls_goes_to_knowledge_tool():
+    state = {
+        "messages": [AIMessage(content="", tool_calls=[_tool_call()])],
+        "tool_call_rounds": 0,
+    }
+    assert route_after_response_writer(state) == "knowledge_tool"
+
+
+def test_tool_calls_past_the_round_cap_go_to_guardrail_anyway():
+    state = {
+        "messages": [AIMessage(content="", tool_calls=[_tool_call()])],
+        "tool_call_rounds": 2,
+    }
+    assert route_after_response_writer(state) == "guardrail"
