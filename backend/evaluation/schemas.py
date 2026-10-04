@@ -129,6 +129,8 @@ class EvalReport(BaseModel):
     run_at: datetime
     dataset: str
     base_url: str
+    # "<provider>:<model>" of the hallucination judge, None when it was skipped.
+    judge_model: str | None
     total_cases: int
     cases_fully_passed: int
     # Cases that never produced a result (transport or scoring failure). They

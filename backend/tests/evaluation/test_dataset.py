@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from evaluation.dataset import DEFAULT_DATASET_PATH, load_dataset
+from evaluation.dataset import DEFAULT_DATASET_PATH, HELDOUT_DATASET_PATH, load_dataset
 
 
 def _case_line(case_id: str) -> str:
@@ -42,3 +42,15 @@ def test_load_dataset_rejects_duplicate_ids(tmp_path: Path):
 def test_shipped_dataset_is_valid():
     cases = load_dataset(DEFAULT_DATASET_PATH)
     assert len(cases) == 50
+
+
+def test_heldout_set_does_not_overlap_the_dev_set():
+    dev = load_dataset(DEFAULT_DATASET_PATH)
+    heldout = load_dataset(HELDOUT_DATASET_PATH)
+
+    def first_messages(cases):
+        return {case.messages[0].content.lower() for case in cases}
+
+    assert len(heldout) == 16
+    assert not {case.id for case in dev} & {case.id for case in heldout}
+    assert not first_messages(dev) & first_messages(heldout)

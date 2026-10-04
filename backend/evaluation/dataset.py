@@ -13,6 +13,8 @@ from pydantic import ValidationError
 from .schemas import EvalCase
 
 DEFAULT_DATASET_PATH = Path(__file__).parent / "dataset.jsonl"
+# Never used to tune prompts or guardrails; see README "Dev and held-out sets".
+HELDOUT_DATASET_PATH = Path(__file__).parent / "heldout.jsonl"
 
 
 def load_dataset(path: Path) -> list[EvalCase]:
