@@ -6,11 +6,19 @@ from app.agent.state import AgentState
 from app.core.llm import get_chat_model
 from app.schemas.agent import Intent
 
-# The only intents where response_writer binds the knowledge-base tool —
-# everything else (billing/refund/upgrade/escalation) stays fully
-# deterministic, grounded only in what get_customer_context/business_rules/
-# human_escalation already put in state.
-_RAG_ELIGIBLE_INTENTS = {Intent.PRODUCT_QUESTION, Intent.PRICING_QUESTION, Intent.TECHNICAL_SUPPORT}
+# The intents where response_writer binds the knowledge-base tool. Billing is
+# included because general billing questions (payment methods, cancellation,
+# proration) are answered by the KB's billing documents, and without the tool
+# the model has nothing to ground them on and invents answers. The tool is
+# read-only, so account facts still come only from get_customer_context.
+# Refund, upgrade and escalation stay grounded only in what their own nodes
+# put in state.
+_RAG_ELIGIBLE_INTENTS = {
+    Intent.PRODUCT_QUESTION,
+    Intent.PRICING_QUESTION,
+    Intent.TECHNICAL_SUPPORT,
+    Intent.BILLING_QUESTION,
+}
 
 
 def _build_context_blob(state: AgentState) -> str:
