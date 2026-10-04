@@ -27,12 +27,14 @@ def make_search_knowledge_base_tool(customer_id: uuid.UUID):
 
     @tool
     def search_knowledge_base_tool(query: str, doc_type: DocType | None = None) -> str:
-        """Search AcmeFlow's knowledge base for product, pricing, billing, or
-        technical documentation. Call this when you need a specific fact you
-        don't already have from the conversation so far — don't call it for
-        greetings or questions you can already answer. `doc_type` narrows the
-        search when you know the category (features, billing, policy, faq,
-        security, integrations); leave it unset otherwise."""
+        """Search AcmeFlow's knowledge base. Call this when you need a specific
+        fact you don't already have from the conversation so far — don't call
+        it for greetings or questions you can already answer.
+
+        `doc_type` optionally narrows the search and must be exactly one of:
+        features, billing, policy, faq, security, integrations. There is no
+        separate category for pricing, plans or troubleshooting; leave
+        `doc_type` unset whenever you are not sure which category applies."""
         chunks = search_knowledge_base(customer_id, query, doc_type=doc_type)
         if not chunks:
             return "No relevant knowledge base results found."
