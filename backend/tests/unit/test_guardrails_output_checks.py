@@ -120,3 +120,36 @@ def test_run_output_guardrails_returns_empty_for_a_clean_response():
         run_output_guardrails(state, "AcmeFlow soporta hasta 10 integraciones en el plan Pro.")
         == []
     )
+
+
+def test_lookup_claim_without_any_search_is_blocked():
+    violations = run_output_guardrails(
+        {"tool_call_rounds": 0},
+        "I checked our documentation, and the Starter plan includes SSO.",
+    )
+    assert [v.code for v in violations] == ["unverified_lookup_claim"]
+    assert violations[0].severity == GuardrailSeverity.BLOCK
+
+
+def test_lookup_claim_after_a_real_search_is_allowed():
+    violations = run_output_guardrails(
+        {"tool_call_rounds": 1},
+        "Based on our documentation, SSO is available on the Enterprise plan only.",
+    )
+    assert violations == []
+
+
+def test_account_or_ticket_review_claims_are_not_lookup_claims():
+    """Regression: a bare "I've checked/reviewed" matched replies about the
+    customer's account or ticket (grounded in other tools) and replaced
+    correct answers with the fallback."""
+    violations = run_output_guardrails(
+        {"tool_call_rounds": 0},
+        "I've reviewed your request and checked your account; ticket created for you.",
+    )
+    assert "unverified_lookup_claim" not in [v.code for v in violations]
+
+
+def test_answer_without_a_lookup_claim_is_not_flagged_even_without_a_search():
+    violations = run_output_guardrails({"tool_call_rounds": 0}, "Hi! How can I help you today?")
+    assert violations == []

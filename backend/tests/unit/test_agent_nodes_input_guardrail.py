@@ -3,7 +3,7 @@ purely from the regex signals in app/guardrails/input_checks.py."""
 
 from langchain_core.messages import HumanMessage
 
-from app.agent.nodes.input_guardrail import input_guardrail_node
+from app.agent.nodes.input_guardrail import REFUSAL_MESSAGE, input_guardrail_node
 
 
 def test_does_not_block_a_direct_legitimate_message():
@@ -27,4 +27,4 @@ def test_blocks_and_tags_an_injection_attempt():
     assert "injection_signal:instruction_override" in result["guardrail_flags"]
     assert "injection_signal:code_execution_attempt" in result["guardrail_flags"]
     assert len(result["messages"]) == 1
-    assert "no puedo ayudarte" in result["messages"][0].content.lower()
+    assert result["messages"][0].content == REFUSAL_MESSAGE
