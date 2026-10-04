@@ -22,6 +22,9 @@ Boundaries that are easy to get wrong:
   classify what they are asking for.
 - A question about how billing or refunds work is billing_question; refund_request
   is only an explicit request for money back.
+- A hypothetical ("if I do X, would I get money back?") asks how the policy
+  works, so it is billing_question. It becomes refund_request only when
+  the customer asks for a refund of a charge they already paid.
 
 Use the full conversation history for context, not just the last message.
 If the message is ambiguous, lower your confidence instead of guessing a category.
