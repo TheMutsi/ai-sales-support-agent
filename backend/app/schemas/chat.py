@@ -1,4 +1,5 @@
-"""Request contract for `POST /api/chat` (Stage 8).
+"""Wire contracts for `POST /api/chat`: the request body and the summary
+carried by the final SSE `done` event.
 
 The endpoint is stateless on the server: the graph isn't checkpointed, so
 `messages` carries the full conversation so far, not just the latest turn —
@@ -23,6 +24,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.agent import Intent
+
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
@@ -39,3 +42,25 @@ class ChatRequest(BaseModel):
         if self.messages[-1].role != "user":
             raise ValueError("The last message must be from the user — nothing to respond to.")
         return self
+
+
+class ChatTurnSummary(BaseModel):
+    """Payload of the SSE `done` event that closes every chat turn.
+
+    Exposes the structural outcome of the graph run (routing decision,
+    guardrail activity, escalation, eligibility) so clients don't have to
+    infer it from the response text. Every field is read from state the
+    graph's own nodes set deterministically. Defined once here so the
+    endpoint that emits it and any client that parses it (e.g. the
+    evaluation runner) share a single, validated contract.
+    """
+
+    conversation_id: uuid.UUID
+    intent: Intent | None = None
+    guardrail_flags: list[str] = Field(default_factory=list)
+    ticket_created: bool = False
+    escalated: bool = False
+    # Only computed for `upgrade_request` (business_rules_node); `None` means
+    # "not evaluated", which is different from "evaluated and not eligible".
+    upgrade_eligible: bool | None = None
+    tool_call_rounds: int = 0
