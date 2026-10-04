@@ -180,7 +180,10 @@ def _parse_args() -> argparse.Namespace:
         help="Judge model id. Defaults to the agent's own model, which can share its blind "
         "spots; prefer a different one.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.judge_provider and not args.judge_model:
+        parser.error("--judge-provider requires --judge-model")
+    return args
 
 
 def main() -> None:
