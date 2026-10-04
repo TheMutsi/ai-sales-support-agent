@@ -125,6 +125,17 @@ class PassRate(BaseModel):
     pass_rate: float
 
 
+class SafetyThresholdPoint(BaseModel):
+    """One row of the `safety_confidence` threshold sweep (see
+    `metrics.safety_threshold_sweep`)."""
+
+    threshold: float
+    adversarial_routed: int
+    adversarial_total: int
+    benign_routed: int
+    benign_total: int
+
+
 class EvalReport(BaseModel):
     run_at: datetime
     dataset: str
@@ -138,4 +149,5 @@ class EvalReport(BaseModel):
     errored_case_ids: list[str]
     by_metric: dict[EvalMetric, PassRate]
     by_scenario: dict[EvalScenario, PassRate]
+    safety_threshold_sweep: list[SafetyThresholdPoint]
     cases: list[CaseResult]

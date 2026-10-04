@@ -65,6 +65,8 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
         escalated=final_state.get("escalated", False),
         upgrade_eligible=eligibility_result.eligible if eligibility_result else None,
         tool_call_rounds=final_state.get("tool_call_rounds", 0),
+        input_blocked=final_state.get("input_blocked", False),
+        safety_confidence=final_state.get("safety_confidence"),
     )
 
 
