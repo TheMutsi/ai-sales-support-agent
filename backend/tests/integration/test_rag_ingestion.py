@@ -31,7 +31,7 @@ def test_ingest_persists_documents_and_chunks(rag_db: Session):
     written = ingestion.ingest(rag_db)
 
     assert written == rag_db.query(DocumentChunk).count()
-    assert rag_db.query(Document).count() == 2  # privacy-policy.md, terms-and-conditions.md
+    assert rag_db.query(Document).count() == 7  # all files under data/seed/kb/
 
 
 def test_ingest_links_chunks_to_their_document(rag_db: Session):
@@ -49,5 +49,5 @@ def test_ingest_is_idempotent_on_source(rag_db: Session):
 
     ingestion.ingest(rag_db)
 
-    assert rag_db.query(Document).count() == 2
+    assert rag_db.query(Document).count() == 7
     assert rag_db.query(DocumentChunk).count() == first_chunk_count

@@ -90,5 +90,20 @@ def test_loads_real_seed_kb_documents():
 
     documents = load_documents(kb_dir=KB_DIR)
 
-    assert {d.source for d in documents} == {"privacy-policy.md", "terms-and-conditions.md"}
-    assert all(d.doc_type == DocType.POLICY for d in documents)
+    assert {d.source for d in documents} == {
+        "billing-and-cancellation.md",
+        "faq.md",
+        "features.md",
+        "integrations.md",
+        "privacy-policy.md",
+        "security.md",
+        "terms-and-conditions.md",
+    }
+    assert {d.doc_type for d in documents} == {
+        DocType.BILLING,
+        DocType.FAQ,
+        DocType.FEATURES,
+        DocType.INTEGRATIONS,
+        DocType.POLICY,
+        DocType.SECURITY,
+    }
