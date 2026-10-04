@@ -47,8 +47,8 @@ def _dispatch_by_intent(state: AgentState) -> str:
 
 
 def route_after_response_writer(state: AgentState) -> str:
-    """`response_writer` only has a tool bound for the three RAG-eligible
-    intents above, so `tool_calls` is only ever non-empty on that path —
+    """`response_writer` only has a tool bound for the RAG-eligible intents
+    (see `_RAG_ELIGIBLE_INTENTS`), so `tool_calls` is only non-empty there —
     every other intent's response has nothing to check here and goes
     straight to `guardrail`, same as before this node could loop."""
     last_message = state["messages"][-1]

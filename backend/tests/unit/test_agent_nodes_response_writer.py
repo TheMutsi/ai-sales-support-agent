@@ -4,6 +4,7 @@ pattern as `test_agent_nodes_intent_router.py`)."""
 
 import uuid
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.nodes import response_writer as response_writer_module
@@ -57,7 +58,16 @@ def test_node_returns_the_llms_message_appended_to_state(monkeypatch):
     assert result == {"messages": [fake_reply]}
 
 
-def test_binds_the_knowledge_base_tool_for_rag_eligible_intents(monkeypatch):
+@pytest.mark.parametrize(
+    "intent",
+    [
+        Intent.PRODUCT_QUESTION,
+        Intent.PRICING_QUESTION,
+        Intent.TECHNICAL_SUPPORT,
+        Intent.BILLING_QUESTION,
+    ],
+)
+def test_binds_the_knowledge_base_tool_for_rag_eligible_intents(monkeypatch, intent):
     fake_reply = AIMessage(content="It's $49/month.")
     fake_model = _FakeChatModel(fake_reply)
     monkeypatch.setattr(response_writer_module, "get_chat_model", lambda: fake_model)
@@ -67,7 +77,7 @@ def test_binds_the_knowledge_base_tool_for_rag_eligible_intents(monkeypatch):
 
     state = {
         "customer_id": "c-1",
-        "intent": Intent.PRICING_QUESTION,
+        "intent": intent,
         "messages": [HumanMessage(content="how much is the pro plan?")],
     }
     response_writer_module.response_writer_node(state)
@@ -82,8 +92,8 @@ def test_does_not_bind_a_tool_for_non_rag_intents(monkeypatch):
 
     state = {
         "customer_id": "c-1",
-        "intent": Intent.BILLING_QUESTION,
-        "messages": [HumanMessage(content="why was I charged twice?")],
+        "intent": Intent.REFUND_REQUEST,
+        "messages": [HumanMessage(content="I want my money back.")],
     }
     response_writer_module.response_writer_node(state)
 
