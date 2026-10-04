@@ -47,3 +47,12 @@ def test_blocks_a_message_judged_unsafe(monkeypatch):
     assert result["input_blocked"] is True
     assert result["guardrail_flags"] == ["semantic_unsafe_message"]
     assert len(result["messages"]) == 1
+
+
+def test_router_and_judge_share_one_misuse_definition():
+    from app.agent.prompts.intent_router import INTENT_ROUTER_SYSTEM_PROMPT
+    from app.agent.prompts.safety_judge import SAFETY_JUDGE_SYSTEM_PROMPT
+    from app.agent.prompts.safety_policy import MISUSE_DEFINITION
+
+    assert MISUSE_DEFINITION in INTENT_ROUTER_SYSTEM_PROMPT
+    assert MISUSE_DEFINITION in SAFETY_JUDGE_SYSTEM_PROMPT
