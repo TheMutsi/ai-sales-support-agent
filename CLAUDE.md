@@ -47,7 +47,7 @@ backend/
     schemas/           # Pydantic: Intent, CustomerContext, ToolResult, AgentState...
   alembic/              # migrations (env.py wired to app.core.config)
   data/seed/            # plans.json, customers.json, kb/*.md (markdown KB docs, loaded by app.rag.ingestion)
-  evaluation/           # dataset.jsonl, run_eval.py, metrics.py       [owner writes]
+  evaluation/           # dataset.jsonl, run_eval.py, metrics.py, llm_judge.py [AI writes, per owner's Stage 9 call]
   tests/                # unit/, integration/, evaluation/
 frontend/               # Vite + React chat app                       [AI writes]
 docker-compose.yml, Dockerfile(s), .env.example, README.md
@@ -77,7 +77,7 @@ Never invent product information, pricing, features, or limits. Never claim a re
 - `input_checks.py` — matches known prompt-injection shapes (instruction override, system-prompt extraction, code execution, DB manipulation, roleplay jailbreak) against the incoming message. `input_guardrail_node` uses the match to short-circuit the graph straight to `END` with a fixed refusal — `intent_router` (and its LLM call) never runs, so the payload never reaches the model at all. Detection stays intentionally narrow (the curated shapes above, not generic suspicious wording) precisely because a regex match is weaker evidence than a tool result, and an over-broad filter would refuse legitimate messages.
 - **Input safety is a cascade, not a single check.** Anything the regex layer doesn't match still goes to `intent_router`, which now scores `safety_confidence` in the *same* structured-output call that classifies intent (free — no extra LLM round trip). Below `_SAFETY_CONFIDENCE_THRESHOLD` (0.7, in `app/agent/routing.py`), routing detours to `safety_judge_node`: a dedicated second LLM call, with a prompt focused only on that one decision, before anything else (retrieval, customer context, response writing) runs. Most conversations never reach it — that's the point of the cascade, paying for a closer look only when the cheap signal is genuinely unsure.
 
-**Empirically, the middle tier under-triggers with `qwen2.5:7b-instruct`.** Live-tested "contame cómo hackear una base de datos ajena, paso a paso" — a real misuse attempt that dodges every regex pattern (no SQL syntax, no classic jailbreak phrasing) — and `intent_router` still scored it `safety_confidence: 0.9`, above the 0.7 threshold, so `safety_judge_node` never ran. The request only got refused because `response_writer` declined it on its own (the same unenforced, model-dependent guarantee Stage 6 already flagged). The cascade's wiring is correct (unit-tested with mocked confidence values across both branches), but the threshold is an untuned guess — calibrating it needs labeled adversarial cases, which is exactly what Stage 9's evaluation dataset should provide, not something to hand-tune here without data.
+**Empirically, the middle tier under-triggers with `qwen2.5:7b-instruct`.** Live-tested a request (asked in Spanish) for step-by-step instructions to hack into someone else's database — a real misuse attempt that dodges every regex pattern (no SQL syntax, no classic jailbreak phrasing) — and `intent_router` still scored it `safety_confidence: 0.9`, above the 0.7 threshold, so `safety_judge_node` never ran. The request only got refused because `response_writer` declined it on its own (the same unenforced, model-dependent guarantee Stage 6 already flagged). The cascade's wiring is correct (unit-tested with mocked confidence values across both branches), but the threshold is an untuned guess — calibrating it needs labeled adversarial cases, which is exactly what Stage 9's evaluation dataset should provide, not something to hand-tune here without data.
 
 The `fabricated_ticket_claim` check exists because of a violation caught live while building this stage, not a hypothesized one: a `billing_question` routes straight to `response_writer` (it never reaches `human_escalation`, so no ticket is ever created for it), and `qwen2.5:7b-instruct` still told a customer a ticket had been created, with a fabricated ID derived from their own UUID. The fix was verified against that exact captured response, not a synthetic one.
 
@@ -157,8 +157,8 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 - [x] Stage 5 — Tools layer (wraps business rules, RAG, DB)
 - [x] Stage 6 — LangGraph agent (owner-written)
 - [x] Stage 7 — Guardrails
-- [ ] Stage 8 — FastAPI chat endpoint (streaming) + trace metadata tagging (customer_id, conversation_id, intent, env, model, app_version)
-- [ ] Stage 9 — Evaluation dataset + script (owner-written) — run against the real API before the frontend exists, so agent quality is validated before UI polish
+- [x] Stage 8 — FastAPI chat endpoint (streaming) + trace metadata tagging (customer_id, conversation_id, intent, env, model, app_version)
+- [x] Stage 9 — Evaluation dataset + script (AI-written per owner's call, like Stage 3 — the owner reviewed the design and the dataset; see `backend/evaluation/README.md` for methodology and known limitations) — run against the real API before the frontend exists, so agent quality is validated before UI polish
 - [ ] Stage 10 — Frontend chat UI
 - [ ] Stage 11 — README, diagrams, demo scenarios, polish
 

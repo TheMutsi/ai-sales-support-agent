@@ -27,3 +27,6 @@ frontend/.env*.local
 # IDE
 .vscode/
 .idea/
+
+# Local evaluation run output
+backend/evaluation/results/
