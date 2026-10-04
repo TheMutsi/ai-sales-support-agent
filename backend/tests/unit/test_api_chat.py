@@ -307,3 +307,29 @@ async def test_done_event_reports_upgrade_eligibility_when_business_rules_ran():
     events = await _collect(chat_module.stream_chat_turn(graph, _request()))
 
     assert events[-1]["data"]["upgrade_eligible"] is False
+
+
+class _FailingGraph:
+    """Emits the given events, then raises — e.g. a tool error escaping the
+    graph midway through a streamed answer."""
+
+    def __init__(self, events_before_failure: list[dict]):
+        self._events = events_before_failure
+
+    async def astream_events(self, initial_state, config, version):
+        for event in self._events:
+            yield event
+        raise RuntimeError("tool exploded")
+
+
+@pytest.mark.asyncio
+async def test_a_failing_graph_ends_the_stream_with_an_error_event_and_no_done():
+    graph = _FailingGraph([_chat_model_stream_event("response_writer", "Partial ")])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    assert [e["event"] for e in events] == ["delta", "error"]
+    error = events[-1]["data"]
+    assert uuid.UUID(error["conversation_id"])
+    # Internal details stay in the server log, never on the wire.
+    assert "tool exploded" not in error["message"]
