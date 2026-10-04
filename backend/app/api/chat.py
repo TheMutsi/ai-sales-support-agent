@@ -15,9 +15,13 @@ event carrying the corrected text. A blocked *input* never reaches
 `response_writer` at all (the refusal is attached directly as an `AIMessage`
 by `input_guardrail_node`/`safety_judge_node`), so nothing streams for that
 path — it's sent as a single `message` event instead.
+
+If the graph run fails, the stream ends with an `error` event (and no
+`done`), so clients can tell a failed turn from a dropped connection.
 """
 
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import nullcontext
@@ -33,6 +37,8 @@ from app.agent.graph import graph as agent_graph
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
 from app.schemas.chat import ChatRequest, ChatTurnSummary
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -104,28 +110,42 @@ async def stream_chat_turn(chat_graph, request: ChatRequest) -> AsyncIterator[st
     streamed_text = ""
     final_state: dict | None = None
 
-    with span_cm as span:
-        async for event in chat_graph.astream_events(
-            _build_initial_state(request), config=config, version="v2"
-        ):
-            node = (event.get("metadata") or {}).get("langgraph_node")
-
-            if event["event"] == "on_chat_model_stream" and node == "response_writer":
-                delta = event["data"]["chunk"].content
-                if delta:
-                    streamed_text += delta
-                    yield _format_sse("delta", {"text": delta})
-
-            elif event["event"] == "on_chain_end" and event.get("name") == "intent_router":
-                if tracing_enabled:
-                    span.update(metadata={"intent": str(event["data"]["output"]["intent"])})
-
-            elif (
-                event["event"] == "on_chain_end"
-                and event.get("name") == "LangGraph"
-                and node is None
+    # The exception is caught outside the span so Langfuse still records the
+    # span as failed, while the client gets an explicit `error` event instead
+    # of a stream that just stops. Details go to the server log, not the wire.
+    try:
+        with span_cm as span:
+            async for event in chat_graph.astream_events(
+                _build_initial_state(request), config=config, version="v2"
             ):
-                final_state = event["data"]["output"]
+                node = (event.get("metadata") or {}).get("langgraph_node")
+
+                if event["event"] == "on_chat_model_stream" and node == "response_writer":
+                    delta = event["data"]["chunk"].content
+                    if delta:
+                        streamed_text += delta
+                        yield _format_sse("delta", {"text": delta})
+
+                elif event["event"] == "on_chain_end" and event.get("name") == "intent_router":
+                    if tracing_enabled:
+                        span.update(metadata={"intent": str(event["data"]["output"]["intent"])})
+
+                elif (
+                    event["event"] == "on_chain_end"
+                    and event.get("name") == "LangGraph"
+                    and node is None
+                ):
+                    final_state = event["data"]["output"]
+    except Exception:
+        logger.exception("chat turn failed (conversation_id=%s)", conversation_id)
+        yield _format_sse(
+            "error",
+            {
+                "conversation_id": str(conversation_id),
+                "message": "The assistant could not complete this response. Please try again.",
+            },
+        )
+        return
 
     final_text = final_state["messages"][-1].content
 
