@@ -18,9 +18,12 @@ from app.schemas.guardrails import GuardrailSeverity
 
 logger = logging.getLogger(__name__)
 
+# Deliberately promises nothing: no ticket exists on this path, so saying a
+# human will follow up would be the same kind of unbacked claim the output
+# checks exist to block.
 _FALLBACK_MESSAGE = (
-    "No puedo confirmar ese resultado todavía — un agente humano lo va a revisar "
-    "y te va a contactar con la información correcta."
+    "I can't confirm that information right now. If you'd like, ask to talk to "
+    "a person and I'll connect you with our support team."
 )
 
 

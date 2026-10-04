@@ -35,10 +35,27 @@ _TICKET_CREATION_CLAIM_PATTERN = re.compile(
 )
 
 # Catches a specific ticket number/ID cited in either word order ("ticket
-# number is #123" or "el número de ticket es 123") — when `ticket_receipt`
+# number is #123" or "123 is your ticket number") — when `ticket_receipt`
 # is None there's no real number to cite, so this alone is unconditional.
 _TICKET_NUMBER_CLAIM_PATTERN = re.compile(
     r"(ticket|caso)\D{0,25}\d{3,}|\d{3,}\D{0,25}(ticket|caso)",
+    re.IGNORECASE,
+)
+
+
+# Claims of having consulted the knowledge base. Spanish alternatives are kept
+# alongside English, like the patterns above, because the agent replies in
+# the customer's language.
+# Requires an explicit documentation/knowledge-base object: a bare "I've
+# checked" also covers legitimate statements about the customer's account or
+# a ticket, which come from other tools and must not be blocked.
+_LOOKUP_CLAIM_PATTERN = re.compile(
+    r"((checked|searched|looked (it )?up in|reviewed|consulted) (in )?(our|the|acmeflow'?s?) "
+    r"(documentation|docs|knowledge base)|"
+    r"(based on|according to|per) (the information (in|from) )?(our|the|acmeflow'?s?) "
+    r"(documentation|docs|knowledge base)|"
+    r"(revis[eé]|consult[eé]|busqu[eé]) (en )?(la|nuestra) (documentaci[oó]n|base de conocimiento)|"
+    r"seg[uú]n (la|nuestra) (documentaci[oó]n|base de conocimiento))",
     re.IGNORECASE,
 )
 
@@ -110,6 +127,24 @@ def check_fabricated_ticket_claim(
     return None
 
 
+def check_unverified_lookup_claim(
+    state: AgentState, response_text: str
+) -> GuardrailViolation | None:
+    """Found by the evaluation suite: the model answered "I checked our
+    documentation, and the Starter plan includes SSO" (false: SSO is
+    Enterprise-only) without having called the knowledge base tool at all.
+    `tool_call_rounds` is the graph's own record of whether a search ran, so a
+    claim of having consulted the documentation with zero rounds is false by
+    construction, and the content it vouches for is ungrounded."""
+    if state.get("tool_call_rounds", 0) == 0 and _LOOKUP_CLAIM_PATTERN.search(response_text):
+        return GuardrailViolation(
+            code="unverified_lookup_claim",
+            severity=GuardrailSeverity.BLOCK,
+            message="Response claims to have consulted the documentation, but no search ran.",
+        )
+    return None
+
+
 def check_unverified_billing_explanation(
     state: AgentState, response_text: str
 ) -> GuardrailViolation | None:
@@ -132,6 +167,7 @@ _ALL_CHECKS = (
     check_unconfirmed_refund_claim,
     check_checkout_without_eligibility,
     check_fabricated_ticket_claim,
+    check_unverified_lookup_claim,
     check_system_prompt_leak,
     check_unverified_billing_explanation,
 )
