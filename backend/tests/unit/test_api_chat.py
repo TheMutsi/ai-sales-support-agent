@@ -10,13 +10,16 @@ from a real self-hosted Langfuse instance during manual verification.
 
 import json
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.api import chat as chat_module
 from app.core.config import Settings
+from app.schemas.business import EligibilityResult
 from app.schemas.chat import ChatMessage, ChatRequest
+from app.schemas.tools import TicketReceipt
 
 
 class _FakeChunk:
@@ -249,3 +252,58 @@ def test_build_trace_metadata_includes_the_expected_fields(monkeypatch):
         "langfuse_session_id": str(conversation_id),
         "langfuse_tags": ["chat_endpoint"],
     }
+
+
+@pytest.mark.asyncio
+async def test_done_event_reports_no_ticket_and_no_eligibility_by_default():
+    """Most intents never touch `human_escalation_node`/`business_rules_node`
+    at all — `ticket_receipt`/`eligibility_result` should read as "didn't
+    happen" (`False`/`None`), not raise, when those keys are simply absent."""
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="It's $49 per month.")],
+        "intent": "pricing_question",
+        "guardrail_flags": [],
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    done = events[-1]["data"]
+    assert done["ticket_created"] is False
+    assert done["upgrade_eligible"] is None
+    assert done["tool_call_rounds"] == 0
+
+
+@pytest.mark.asyncio
+async def test_done_event_reports_ticket_created_and_tool_call_rounds():
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="A ticket was created.")],
+        "intent": "refund_request",
+        "guardrail_flags": [],
+        "ticket_receipt": TicketReceipt(
+            ticket_id=uuid.uuid4(), status="open", created_at=datetime.now(UTC)
+        ),
+        "tool_call_rounds": 2,
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    done = events[-1]["data"]
+    assert done["ticket_created"] is True
+    assert done["tool_call_rounds"] == 2
+
+
+@pytest.mark.asyncio
+async def test_done_event_reports_upgrade_eligibility_when_business_rules_ran():
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="You're on an active plan.")],
+        "intent": "upgrade_request",
+        "guardrail_flags": [],
+        "eligibility_result": EligibilityResult(eligible=False, reason="Subscription is past_due."),
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    assert events[-1]["data"]["upgrade_eligible"] is False

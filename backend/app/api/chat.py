@@ -32,7 +32,7 @@ from langfuse.langchain import CallbackHandler
 from app.agent.graph import graph as agent_graph
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
-from app.schemas.chat import ChatRequest
+from app.schemas.chat import ChatRequest, ChatTurnSummary
 
 router = APIRouter()
 
@@ -47,6 +47,19 @@ def _build_initial_state(request: ChatRequest) -> dict:
         for m in request.messages
     ]
     return {"messages": messages, "customer_id": str(request.customer_id)}
+
+
+def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSummary:
+    eligibility_result = final_state.get("eligibility_result")
+    return ChatTurnSummary(
+        conversation_id=conversation_id,
+        intent=final_state.get("intent"),
+        guardrail_flags=final_state.get("guardrail_flags", []),
+        ticket_created=final_state.get("ticket_receipt") is not None,
+        escalated=final_state.get("escalated", False),
+        upgrade_eligible=eligibility_result.eligible if eligibility_result else None,
+        tool_call_rounds=final_state.get("tool_call_rounds", 0),
+    )
 
 
 def _build_trace_metadata(request: ChatRequest, conversation_id: uuid.UUID) -> dict:
@@ -121,14 +134,8 @@ async def stream_chat_turn(chat_graph, request: ChatRequest) -> AsyncIterator[st
     elif final_text != streamed_text:
         yield _format_sse("correction", {"text": final_text})
 
-    yield _format_sse(
-        "done",
-        {
-            "conversation_id": str(conversation_id),
-            "intent": final_state.get("intent"),
-            "guardrail_flags": final_state.get("guardrail_flags", []),
-        },
-    )
+    summary = _summarize_turn(final_state, conversation_id)
+    yield _format_sse("done", summary.model_dump(mode="json"))
 
 
 @router.post("/chat")
