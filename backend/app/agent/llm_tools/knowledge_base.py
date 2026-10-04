@@ -14,28 +14,31 @@ import uuid
 
 from langchain_core.tools import tool
 
-from app.schemas.rag import DocType
 from app.tools.knowledge_base import search_knowledge_base
 
 
 def make_search_knowledge_base_tool(customer_id: uuid.UUID):
     """Builds a `search_knowledge_base` tool closed over `customer_id`. The
     LLM must never be able to choose whose plan scope a search applies to —
-    it only ever sees `query`/`doc_type`, never the customer identity — so
+    it only ever sees `query`, never the customer identity — so
     `customer_id` comes from the graph's own state at bind time, not from an
-    argument the model fills in."""
+    argument the model fills in.
+
+    The retriever's `doc_type` filter is deliberately not exposed either. The
+    evaluation suite found the model guessing the category wrong (SSO under
+    `integrations`, API limits under `billing`), and the filter then excluded
+    the one document holding the answer. Unfiltered, the right chunk ranked
+    first for every one of those queries, so the model gets no filter to
+    misuse."""
 
     @tool
-    def search_knowledge_base_tool(query: str, doc_type: DocType | None = None) -> str:
-        """Search AcmeFlow's knowledge base. Call this when you need a specific
-        fact you don't already have from the conversation so far — don't call
-        it for greetings or questions you can already answer.
-
-        `doc_type` optionally narrows the search and must be exactly one of:
-        features, billing, policy, faq, security, integrations. There is no
-        separate category for pricing, plans or troubleshooting; leave
-        `doc_type` unset whenever you are not sure which category applies."""
-        chunks = search_knowledge_base(customer_id, query, doc_type=doc_type)
+    def search_knowledge_base_tool(query: str) -> str:
+        """Search AcmeFlow's knowledge base (features, billing, policies, FAQ,
+        security, integrations) with a natural-language query. Call this when
+        you need a specific fact you don't already have from the conversation
+        so far — don't call it for greetings or questions you can already
+        answer."""
+        chunks = search_knowledge_base(customer_id, query)
         if not chunks:
             return "No relevant knowledge base results found."
         return "\n---\n".join(chunk.content for chunk in chunks)

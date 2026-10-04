@@ -2,8 +2,8 @@
 LLM requested, and feeds the results back as `ToolMessage`s — the other half
 of the LLM↔tool loop `route_after_response_writer` drives.
 
-Arguments come from the model, so they can be invalid (e.g. a `doc_type`
-outside the enum). That is the model's mistake, not a system failure: it is
+Arguments come from the model, so they can be invalid (e.g. a missing
+`query`). That is the model's mistake, not a system failure: it is
 returned to the model as an error `ToolMessage` it can correct on the next
 round (still bounded by `_MAX_TOOL_CALL_ROUNDS`), instead of crashing the
 whole turn. Anything else the tool raises (database, embeddings) is a real

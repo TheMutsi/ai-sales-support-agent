@@ -60,10 +60,10 @@ def test_increments_the_round_counter_from_its_current_value(monkeypatch):
 
 
 def test_invalid_arguments_become_an_error_tool_message_instead_of_raising(monkeypatch):
-    """Regression for a crash found by the evaluation suite: the model asked
-    for `doc_type="pricing"`, which is not a `DocType`, and the validation
-    error escaped the graph and cut the HTTP stream. The real tool is used so
-    its own argument validation runs; retrieval must never be reached."""
+    """Regression for a crash found by the evaluation suite: a tool call with
+    invalid arguments raised a validation error that escaped the graph and cut
+    the HTTP stream. The real tool is used so its own argument validation
+    runs; retrieval must never be reached."""
 
     def fail_if_called(*args, **kwargs):
         raise AssertionError("retrieval must not run with invalid arguments")
@@ -79,7 +79,7 @@ def test_invalid_arguments_become_an_error_tool_message_instead_of_raising(monke
         tool_calls=[
             {
                 "name": "search_knowledge_base_tool",
-                "args": {"query": "pro plan price", "doc_type": "pricing"},
+                "args": {"doc_type": "pricing"},
                 "id": "c1",
             }
         ],
@@ -91,7 +91,7 @@ def test_invalid_arguments_become_an_error_tool_message_instead_of_raising(monke
     tool_message = result["messages"][0]
     assert tool_message.status == "error"
     assert tool_message.tool_call_id == "c1"
-    assert "doc_type" in tool_message.content
+    assert "query" in tool_message.content
     assert result["tool_call_rounds"] == 1
 
 
