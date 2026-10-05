@@ -142,6 +142,8 @@ class EvalReport(BaseModel):
     base_url: str
     # "<provider>:<model>" of the hallucination judge, None when it was skipped.
     judge_model: str | None
+    # Set only by the `langfuse` backend: the dataset run this report mirrors.
+    langfuse_run_url: str | None = None
     total_cases: int
     cases_fully_passed: int
     # Cases that never produced a result (transport or scoring failure). They
