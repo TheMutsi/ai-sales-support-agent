@@ -57,6 +57,12 @@ def _build_initial_state(request: ChatRequest) -> dict:
 
 def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSummary:
     eligibility_result = final_state.get("eligibility_result")
+    # The raw classifier score is an oracle for whoever is probing the input
+    # filter (rephrase until it goes up), so production clients never get it;
+    # it stays in the traces. Outside production the evaluation suite needs it.
+    safety_confidence = (
+        None if get_settings().app_env == "production" else final_state.get("safety_confidence")
+    )
     return ChatTurnSummary(
         conversation_id=conversation_id,
         intent=final_state.get("intent"),
@@ -66,7 +72,7 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
         upgrade_eligible=eligibility_result.eligible if eligibility_result else None,
         tool_call_rounds=final_state.get("tool_call_rounds", 0),
         input_blocked=final_state.get("input_blocked", False),
-        safety_confidence=final_state.get("safety_confidence"),
+        safety_confidence=safety_confidence,
     )
 
 

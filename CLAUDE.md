@@ -47,7 +47,7 @@ backend/
     schemas/           # Pydantic: Intent, CustomerContext, ToolResult, AgentState...
   alembic/              # migrations (env.py wired to app.core.config)
   data/seed/            # plans.json, customers.json, kb/*.md (markdown KB docs, loaded by app.rag.ingestion)
-  evaluation/           # dataset.jsonl, run_eval.py, metrics.py, llm_judge.py [AI writes, per owner's Stage 9 call]
+  evaluation/           # dataset.jsonl (dev), heldout.jsonl, run_eval.py, metrics.py, llm_judge.py [AI writes, per owner's Stage 9 call]
   tests/                # unit/, integration/, evaluation/
 frontend/               # Vite + React chat app                       [AI writes]
 docker-compose.yml, Dockerfile(s), .env.example, README.md

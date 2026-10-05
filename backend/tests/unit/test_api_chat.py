@@ -315,6 +315,22 @@ async def test_done_event_reports_input_safety_outcome():
 
 
 @pytest.mark.asyncio
+async def test_done_event_hides_safety_confidence_in_production(monkeypatch):
+    monkeypatch.setattr(chat_module, "get_settings", lambda: Settings(app_env="production"))
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Hello!")],
+        "intent": "product_question",
+        "guardrail_flags": [],
+        "safety_confidence": 0.4,
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    assert events[-1]["data"]["safety_confidence"] is None
+
+
+@pytest.mark.asyncio
 async def test_done_event_reports_upgrade_eligibility_when_business_rules_ran():
     final_state = {
         "messages": [HumanMessage(content="hi"), AIMessage(content="You're on an active plan.")],

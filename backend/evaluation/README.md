@@ -84,7 +84,9 @@ applicable to this case". Adding one = one function + one entry in
 Every report also includes a **`safety_confidence` threshold sweep**: for each
 candidate threshold, how many adversarial (prompt-injection scenario) and benign
 cases that reached `intent_router` would be sent to `safety_judge`. That is the data
-the routing threshold in `app/agent/routing.py` is set from.
+the routing threshold in `app/agent/routing.py` is set from. The API omits `safety_confidence` when
+`APP_ENV=production` (it would let a client probe the input filter), so run the
+suite against a non-production deployment.
 
 Structural signals come from the `done` SSE event wherever one exists. A case
 that fails to run or score (transport error, judge provider error) is listed in

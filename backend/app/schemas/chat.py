@@ -68,6 +68,7 @@ class ChatTurnSummary(BaseModel):
     # refused the turn before it reached any other node.
     input_blocked: bool = False
     # intent_router's own score; `None` when the regex tier blocked the turn
-    # before intent_router ran. Exposed so the routing threshold can be
-    # calibrated against labeled cases instead of guessed.
+    # before intent_router ran, and always in production (see
+    # `_summarize_turn`). Exposed so the routing threshold can be calibrated
+    # against labeled cases instead of guessed.
     safety_confidence: float | None = None
