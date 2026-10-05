@@ -20,6 +20,23 @@ _RAG_ELIGIBLE_INTENTS = {
     Intent.BILLING_QUESTION,
 }
 
+# These three reach response_writer with nothing gathered by earlier nodes, so
+# a first reply that doesn't search can only be ungrounded or empty. The eval
+# suite caught qwen2.5 doing both about half the time on a direct probe
+# (empty message, or "let me search" with no tool call). Billing is left out:
+# it can be answered from the customer context alone.
+_SEARCH_REQUIRED_INTENTS = {
+    Intent.PRODUCT_QUESTION,
+    Intent.PRICING_QUESTION,
+    Intent.TECHNICAL_SUPPORT,
+}
+# Appended to the system prompt for the single retry, the portable equivalent
+# of `tool_choice="required"`, which Ollama does not support.
+_SEARCH_REQUIRED_REMINDER = (
+    "You have not searched the knowledge base in this turn and the context has no "
+    "AcmeFlow facts. Call the search tool now instead of replying."
+)
+
 
 def _build_context_blob(state: AgentState) -> str:
     """Serializes whatever earlier nodes gathered into text the LLM can ground
@@ -59,5 +76,13 @@ def response_writer_node(state: AgentState) -> dict:
     llm = llm.with_retry(stop_after_attempt=3)
 
     ai_message = llm.invoke([system_message, *state["messages"]])
+
+    if (
+        state.get("intent") in _SEARCH_REQUIRED_INTENTS
+        and state.get("tool_call_rounds", 0) == 0
+        and not ai_message.tool_calls
+    ):
+        reminder = SystemMessage(content=f"{system_message.content}\n\n{_SEARCH_REQUIRED_REMINDER}")
+        ai_message = llm.invoke([reminder, *state["messages"]])
 
     return {"messages": [ai_message]}

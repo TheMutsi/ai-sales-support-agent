@@ -25,6 +25,7 @@ _INJECTION_SIGNAL_PATTERNS: dict[str, re.Pattern[str]] = {
     ),
     "system_prompt_extraction": re.compile(
         r"(system prompt|your instructions|repeat (your|the) prompt|reveal .*(prompt|instructions)|"
+        r"(rules|instructions) you (were|have been) given|"
         r"prompt del sistema|tus instrucciones)",
         re.IGNORECASE,
     ),
