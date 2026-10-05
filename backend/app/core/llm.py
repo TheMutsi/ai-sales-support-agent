@@ -13,7 +13,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 
-from app.core.config import get_settings
+from app.core.config import LLMProvider, get_settings
 
 
 @lru_cache
@@ -22,7 +22,7 @@ def get_chat_model() -> BaseChatModel:
     return create_chat_model(settings.llm_provider, get_chat_model_name())
 
 
-def create_chat_model(provider: str, model: str) -> BaseChatModel:
+def create_chat_model(provider: LLMProvider, model: str) -> BaseChatModel:
     """Builds a chat model for an explicit provider/model pair. The app always
     goes through `get_chat_model()`; this exists for callers that need a model
     other than the configured one, e.g. the evaluation suite's judge, which
@@ -38,7 +38,7 @@ def create_chat_model(provider: str, model: str) -> BaseChatModel:
     if provider == "ollama":
         return ChatOllama(model=model, base_url=settings.ollama_base_url)
 
-    raise ValueError(f"Unsupported LLM_PROVIDER: {provider!r}")
+    raise ValueError(f"Unsupported LLM provider: {provider!r}")
 
 
 def get_chat_model_name() -> str:
@@ -54,4 +54,4 @@ def get_chat_model_name() -> str:
     if settings.llm_provider == "ollama":
         return settings.ollama_model
 
-    raise ValueError(f"Unsupported LLM_PROVIDER: {settings.llm_provider!r}")
+    raise ValueError(f"Unsupported LLM provider: {settings.llm_provider!r}")

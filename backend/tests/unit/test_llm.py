@@ -9,6 +9,7 @@ import pytest
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
+from pydantic import ValidationError
 
 from app.core import llm
 from app.core.config import Settings
@@ -69,8 +70,21 @@ def test_returns_chat_ollama_for_ollama_provider(monkeypatch):
     assert isinstance(model, ChatOllama)
 
 
-def test_raises_on_unsupported_provider(monkeypatch):
-    monkeypatch.setattr(llm, "get_settings", lambda: Settings(llm_provider="openai"))
+def test_settings_reject_an_unsupported_provider():
+    with pytest.raises(ValidationError, match="llm_provider"):
+        Settings(llm_provider="openai")
 
-    with pytest.raises(ValueError, match="Unsupported LLM_PROVIDER"):
-        llm.get_chat_model()
+
+def test_create_chat_model_uses_the_requested_model(monkeypatch):
+    """The eval judge builds a model other than the configured one."""
+    monkeypatch.setattr(llm, "get_settings", lambda: Settings(llm_provider="ollama"))
+
+    model = llm.create_chat_model("ollama", "llama3")
+
+    assert isinstance(model, ChatOllama)
+    assert model.model == "llama3"
+
+
+def test_create_chat_model_raises_on_an_unsupported_provider():
+    with pytest.raises(ValueError, match="Unsupported LLM provider"):
+        llm.create_chat_model("openai", "gpt")

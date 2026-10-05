@@ -22,12 +22,13 @@ import uuid
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import get_args
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core.config import LLMProvider, get_settings
 from app.core.llm import create_chat_model, get_chat_model_name
 from app.core.observability import configure_langfuse
 from app.db.models import Customer
@@ -172,6 +173,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--judge-provider",
         default=None,
+        choices=get_args(LLMProvider),
         help="Provider for the judge model (default: LLM_PROVIDER).",
     )
     parser.add_argument(
