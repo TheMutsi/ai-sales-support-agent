@@ -9,6 +9,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+from app.schemas.agent import Intent
+
 
 class GuardrailSeverity(StrEnum):
     """BLOCK: the claim is falsifiable from state alone, so the response gets
@@ -19,6 +21,20 @@ class GuardrailSeverity(StrEnum):
 
     BLOCK = "block"
     FLAG = "flag"
+
+
+class OutputCheckContext(BaseModel):
+    """What the output checks need to know about the turn, and nothing more.
+
+    `guardrail_node` builds it from the graph state, so the checks depend on
+    this contract instead of on the agent package (whose nodes call them)."""
+
+    intent: Intent | None = None
+    ticket_created: bool = False
+    checkout_created: bool = False
+    tool_call_rounds: int = 0
+    # Instructions that must never appear verbatim in a reply.
+    protected_prompt: str = ""
 
 
 class GuardrailViolation(BaseModel):

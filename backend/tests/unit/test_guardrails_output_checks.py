@@ -13,12 +13,12 @@ from app.guardrails.output_checks import (
     run_output_guardrails,
 )
 from app.schemas.agent import Intent
-from app.schemas.guardrails import GuardrailSeverity
+from app.schemas.guardrails import GuardrailSeverity, OutputCheckContext
 
 
 def test_flags_refund_confirmation_language_in_spanish():
     violation = check_unconfirmed_refund_claim(
-        {}, "Tu reembolso será procesado en las próximas 48 horas."
+        OutputCheckContext(), "Tu reembolso será procesado en las próximas 48 horas."
     )
     assert violation is not None
     assert violation.severity == GuardrailSeverity.BLOCK
@@ -26,33 +26,36 @@ def test_flags_refund_confirmation_language_in_spanish():
 
 
 def test_flags_refund_confirmation_language_in_english():
-    violation = check_unconfirmed_refund_claim({}, "Your refund has been approved.")
+    violation = check_unconfirmed_refund_claim(
+        OutputCheckContext(), "Your refund has been approved."
+    )
     assert violation is not None
 
 
 def test_does_not_flag_a_response_that_only_mentions_a_ticket():
     violation = check_unconfirmed_refund_claim(
-        {}, "Creé el ticket #123 para tu solicitud de reembolso, un agente te va a contactar."
+        OutputCheckContext(),
+        "Creé el ticket #123 para tu solicitud de reembolso, un agente te va a contactar.",
     )
     assert violation is None
 
 
 def test_flags_checkout_link_without_a_checkout_session():
     violation = check_checkout_without_eligibility(
-        {"checkout_session": None}, "Podés confirmar acá: https://acmeflow.test/checkout/abc"
+        OutputCheckContext(), "Podés confirmar acá: https://acmeflow.test/checkout/abc"
     )
     assert violation is not None
     assert violation.severity == GuardrailSeverity.BLOCK
 
 
 def test_does_not_flag_a_response_with_no_checkout_link():
-    violation = check_checkout_without_eligibility({"checkout_session": None}, "Claro, te explico.")
+    violation = check_checkout_without_eligibility(OutputCheckContext(), "Claro, te explico.")
     assert violation is None
 
 
 def test_flags_fabricated_ticket_claim_without_a_ticket_receipt():
     violation = check_fabricated_ticket_claim(
-        {"ticket_receipt": None},
+        OutputCheckContext(),
         "He creado un ticket de soporte para revisar esto. El ID de su ticket es 8906-6906.",
     )
     assert violation is not None
@@ -61,32 +64,31 @@ def test_flags_fabricated_ticket_claim_without_a_ticket_receipt():
 
 
 def test_does_not_flag_ticket_claim_when_a_ticket_was_really_created():
-    from uuid import uuid4
-
-    from app.schemas.tools import TicketReceipt
-
-    ticket = TicketReceipt(ticket_id=uuid4(), status="open", created_at="2026-01-01T00:00:00")
     violation = check_fabricated_ticket_claim(
-        {"ticket_receipt": ticket}, "He creado un ticket de soporte, el ID es el indicado arriba."
+        OutputCheckContext(ticket_created=True),
+        "He creado un ticket de soporte, el ID es el indicado arriba.",
     )
     assert violation is None
 
 
-def test_flags_verbatim_system_prompt_leak():
-    from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
+_PROTECTED = OutputCheckContext(
+    protected_prompt="You are a test assistant with secret rules.\n\nMore instructions."
+)
 
-    leaked_text = RESPONSE_WRITER_SYSTEM_PROMPT.split("\n\n")[0]
-    violation = check_system_prompt_leak({}, f"Mis instrucciones son: {leaked_text}")
+
+def test_flags_verbatim_system_prompt_leak():
+    violation = check_system_prompt_leak(
+        _PROTECTED, "My instructions are: You are a test assistant with secret rules."
+    )
     assert violation is not None
 
 
 def test_does_not_flag_unrelated_text_as_a_leak():
-    violation = check_system_prompt_leak({}, "Claro, te ayudo con eso.")
-    assert violation is None
+    assert check_system_prompt_leak(_PROTECTED, "Sure, I can help with that.") is None
 
 
 def test_flags_billing_speculation_only_for_billing_question():
-    state = {"intent": Intent.BILLING_QUESTION}
+    state = OutputCheckContext(intent=Intent.BILLING_QUESTION)
     violation = check_unverified_billing_explanation(
         state, "Podría haber habido un sobrecosto en tu último ciclo de facturación."
     )
@@ -95,7 +97,7 @@ def test_flags_billing_speculation_only_for_billing_question():
 
 
 def test_does_not_flag_billing_speculation_for_other_intents():
-    state = {"intent": Intent.PRODUCT_QUESTION}
+    state = OutputCheckContext(intent=Intent.PRODUCT_QUESTION)
     violation = check_unverified_billing_explanation(
         state, "Podría haber habido un sobrecosto en tu último ciclo de facturación."
     )
@@ -103,7 +105,7 @@ def test_does_not_flag_billing_speculation_for_other_intents():
 
 
 def test_run_output_guardrails_collects_every_violation():
-    state = {"intent": Intent.BILLING_QUESTION, "checkout_session": None}
+    state = OutputCheckContext(intent=Intent.BILLING_QUESTION)
     response_text = (
         "Tu reembolso será aprobado y podría haber habido un sobrecosto en tu facturación."
     )
@@ -115,7 +117,7 @@ def test_run_output_guardrails_collects_every_violation():
 
 
 def test_run_output_guardrails_returns_empty_for_a_clean_response():
-    state = {"intent": Intent.PRODUCT_QUESTION, "checkout_session": None}
+    state = OutputCheckContext(intent=Intent.PRODUCT_QUESTION)
     assert (
         run_output_guardrails(state, "AcmeFlow soporta hasta 10 integraciones en el plan Pro.")
         == []
@@ -124,7 +126,7 @@ def test_run_output_guardrails_returns_empty_for_a_clean_response():
 
 def test_lookup_claim_without_any_search_is_blocked():
     violations = run_output_guardrails(
-        {"tool_call_rounds": 0},
+        OutputCheckContext(tool_call_rounds=0),
         "I checked our documentation, and the Starter plan includes SSO.",
     )
     assert [v.code for v in violations] == ["unverified_lookup_claim"]
@@ -133,7 +135,7 @@ def test_lookup_claim_without_any_search_is_blocked():
 
 def test_lookup_claim_after_a_real_search_is_allowed():
     violations = run_output_guardrails(
-        {"tool_call_rounds": 1},
+        OutputCheckContext(tool_call_rounds=1),
         "Based on our documentation, SSO is available on the Enterprise plan only.",
     )
     assert violations == []
@@ -144,14 +146,16 @@ def test_account_or_ticket_review_claims_are_not_lookup_claims():
     customer's account or ticket (grounded in other tools) and replaced
     correct answers with the fallback."""
     violations = run_output_guardrails(
-        {"tool_call_rounds": 0},
+        OutputCheckContext(tool_call_rounds=0),
         "I've reviewed your request and checked your account; ticket created for you.",
     )
     assert "unverified_lookup_claim" not in [v.code for v in violations]
 
 
 def test_answer_without_a_lookup_claim_is_not_flagged_even_without_a_search():
-    violations = run_output_guardrails({"tool_call_rounds": 0}, "Hi! How can I help you today?")
+    violations = run_output_guardrails(
+        OutputCheckContext(tool_call_rounds=0), "Hi! How can I help you today?"
+    )
     assert violations == []
 
 
@@ -161,7 +165,9 @@ def test_billing_history_claims_are_blocked():
         "I checked your last three invoices and everything looks correct.",
         "Revisé tus últimas facturas y no hay cargos duplicados.",
     ):
-        codes = [v.code for v in run_output_guardrails({"tool_call_rounds": 0}, text)]
+        codes = [
+            v.code for v in run_output_guardrails(OutputCheckContext(tool_call_rounds=0), text)
+        ]
         assert codes == ["fabricated_billing_history_claim"], text
 
 
@@ -171,7 +177,7 @@ def test_denying_access_to_billing_history_is_not_a_claim():
         "I haven't checked your invoices; a person from billing can review them.",
         "I've checked your subscription: you're on the Pro plan.",
     ):
-        assert run_output_guardrails({"tool_call_rounds": 0}, text) == [], text
+        assert run_output_guardrails(OutputCheckContext(tool_call_rounds=0), text) == [], text
 
 
 def test_raw_tool_call_text_is_blocked():
@@ -180,10 +186,10 @@ def test_raw_tool_call_text_is_blocked():
         "Let's check the policy.\n\nsearch_knowledge_base_tool\n"
         "searching for refund policy for downgrades..."
     )
-    codes = [v.code for v in run_output_guardrails({"tool_call_rounds": 0}, text)]
+    codes = [v.code for v in run_output_guardrails(OutputCheckContext(tool_call_rounds=0), text)]
     assert codes == ["internal_tool_text"]
 
 
 def test_plain_mentions_of_a_tool_are_not_tool_text():
     text = "Our Zapier integration is a no-code tool for connecting AcmeFlow to other apps."
-    assert run_output_guardrails({"tool_call_rounds": 0}, text) == []
+    assert run_output_guardrails(OutputCheckContext(tool_call_rounds=0), text) == []

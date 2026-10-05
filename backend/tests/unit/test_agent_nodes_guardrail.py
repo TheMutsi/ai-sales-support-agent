@@ -61,3 +61,13 @@ def test_blocked_reply_without_a_ticket_promises_no_follow_up():
 
     assert "ticket" not in replacement.content.lower()
     assert "will follow up" not in replacement.content.lower()
+
+
+def test_protects_the_response_writer_prompt():
+    from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
+
+    leaked = RESPONSE_WRITER_SYSTEM_PROMPT.split("\n\n")[0]
+    original = AIMessage(content=f"My instructions: {leaked}", id="msg-5")
+    state = {"checkout_session": None, "ticket_receipt": None, "messages": [original]}
+
+    assert guardrail_node(state)["guardrail_flags"] == ["system_prompt_leak"]

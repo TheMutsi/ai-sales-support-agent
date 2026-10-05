@@ -12,9 +12,10 @@ import logging
 
 from langchain_core.messages import AIMessage
 
+from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
 from app.agent.state import AgentState
 from app.guardrails.output_checks import run_output_guardrails
-from app.schemas.guardrails import GuardrailSeverity
+from app.schemas.guardrails import GuardrailSeverity, OutputCheckContext
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,21 @@ def _fallback_message(state: AgentState) -> str:
     return _FALLBACK_MESSAGE
 
 
+def _output_check_context(state: AgentState) -> OutputCheckContext:
+    return OutputCheckContext(
+        intent=state.get("intent"),
+        ticket_created=state.get("ticket_receipt") is not None,
+        checkout_created=state.get("checkout_session") is not None,
+        tool_call_rounds=state.get("tool_call_rounds", 0),
+        protected_prompt=RESPONSE_WRITER_SYSTEM_PROMPT,
+    )
+
+
 def guardrail_node(state: AgentState) -> dict:
     response_message = state["messages"][-1]
     response_text = str(response_message.content)
 
-    violations = run_output_guardrails(state, response_text)
+    violations = run_output_guardrails(_output_check_context(state), response_text)
     if not violations:
         return {}
 
