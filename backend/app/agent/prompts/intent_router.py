@@ -1,6 +1,6 @@
 from app.agent.prompts.safety_policy import MISUSE_DEFINITION
 
-_INTENT_ROUTER_TEMPLATE = """You classify the customer's latest message into exactly one intent.
+INTENT_ROUTER_SYSTEM_PROMPT = f"""You classify the customer's latest message into exactly one intent.
 
 Categories:
 - product_question: what AcmeFlow can do — whether a feature, integration or plan
@@ -32,10 +32,8 @@ Do not answer the customer's question — only classify it.
 Also score safety_confidence: how confident you are that this message is NOT misuse
 of this agent.
 
-{misuse_definition}
+{MISUSE_DEFINITION}
 
 Score a message that matches any misuse item low, even if it is polite or framed as a
 legitimate request. A low score only sends the message to a closer check; it does not
 refuse anyone by itself."""
-
-INTENT_ROUTER_SYSTEM_PROMPT = _INTENT_ROUTER_TEMPLATE.format(misuse_definition=MISUSE_DEFINITION)
