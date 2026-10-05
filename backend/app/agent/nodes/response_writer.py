@@ -5,6 +5,7 @@ from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
 from app.agent.state import AgentState
 from app.core.llm import get_chat_model
 from app.schemas.agent import Intent
+from app.schemas.tools import PlanSummary
 
 # The intents where response_writer binds the knowledge-base tool. Billing is
 # included because general billing questions (payment methods, cancellation,
@@ -20,14 +21,13 @@ _RAG_ELIGIBLE_INTENTS = {
     Intent.BILLING_QUESTION,
 }
 
-# These three reach response_writer with nothing gathered by earlier nodes, so
+# These two reach response_writer with nothing gathered by earlier nodes, so
 # a first reply that doesn't search can only be ungrounded or empty. The eval
 # suite caught qwen2.5 doing both about half the time on a direct probe
-# (empty message, or "let me search" with no tool call). Billing is left out:
-# it can be answered from the customer context alone.
+# (empty message, or "let me search" with no tool call). Billing and pricing
+# are left out: they arrive with the customer context or the plan catalog.
 _SEARCH_REQUIRED_INTENTS = {
     Intent.PRODUCT_QUESTION,
-    Intent.PRICING_QUESTION,
     Intent.TECHNICAL_SUPPORT,
 }
 # Appended to the system prompt for the single retry, the portable equivalent
@@ -53,6 +53,9 @@ def _build_context_blob(state: AgentState) -> str:
     if upsell_decision := state.get("upsell_decision"):
         sections.append(f"Upsell recommendation:\n{upsell_decision.model_dump_json(indent=2)}")
 
+    if plan_catalog := state.get("plan_catalog"):
+        sections.append(f"Plan catalog (list prices):\n{_format_plan_catalog(plan_catalog)}")
+
     if checkout_session := state.get("checkout_session"):
         sections.append(f"Checkout created:\n{checkout_session.model_dump_json(indent=2)}")
 
@@ -61,6 +64,21 @@ def _build_context_blob(state: AgentState) -> str:
 
     return (
         "\n\n".join(sections) if sections else "No additional data was retrieved for this request."
+    )
+
+
+def _format_plan_catalog(plans: list[PlanSummary]) -> str:
+    """Prices pre-formatted in dollars: converting cents is arithmetic, and
+    arithmetic is not left to the model."""
+
+    def limit(value: int | None) -> str:
+        return "unlimited" if value is None else str(value)
+
+    return "\n".join(
+        f"- {plan.name}: ${plan.price_cents / 100:,.2f}, billed {plan.billing_period}"
+        f"; seats: {limit(plan.seat_limit)}; API calls per month: {limit(plan.api_call_limit)}"
+        f"; features: {', '.join(plan.features)}"
+        for plan in plans
     )
 
 

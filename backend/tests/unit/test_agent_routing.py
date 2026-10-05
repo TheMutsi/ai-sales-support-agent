@@ -85,8 +85,8 @@ def test_product_question_goes_to_response_writer():
     assert route_after_intent(_state(Intent.PRODUCT_QUESTION)) == "response_writer"
 
 
-def test_pricing_question_goes_to_response_writer():
-    assert route_after_intent(_state(Intent.PRICING_QUESTION)) == "response_writer"
+def test_pricing_question_loads_the_plan_catalog_first():
+    assert route_after_intent(_state(Intent.PRICING_QUESTION)) == "get_plan_catalog"
 
 
 def test_technical_support_goes_to_response_writer():

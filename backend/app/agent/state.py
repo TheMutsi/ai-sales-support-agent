@@ -25,7 +25,7 @@ from langgraph.graph.message import add_messages
 
 from app.schemas.agent import Intent
 from app.schemas.business import EligibilityResult, UpsellDecision
-from app.schemas.tools import CheckoutSession, CustomerContext, TicketReceipt
+from app.schemas.tools import CheckoutSession, CustomerContext, PlanSummary, TicketReceipt
 
 
 class AgentState(TypedDict):
@@ -38,6 +38,7 @@ class AgentState(TypedDict):
     safety_confidence: float | None
 
     customer_context: CustomerContext | None
+    plan_catalog: list[PlanSummary] | None
 
     eligibility_result: EligibilityResult | None
     upsell_decision: UpsellDecision | None
