@@ -45,7 +45,15 @@ def test_high_safety_confidence_dispatches_normally():
 def test_a_typical_unsure_score_still_gets_a_second_look():
     """Regression: qwen2.5 scores nearly everything 0.9 or 1.0, so the old 0.7
     threshold let regex-evading misuse attempts scored 0.9 skip safety_judge."""
-    assert route_after_intent(_state(Intent.UNSUPPORTED, safety_confidence=0.9)) == (
+    assert route_after_intent(_state(Intent.PRODUCT_QUESTION, safety_confidence=0.9)) == (
+        "safety_judge"
+    )
+
+
+def test_unsupported_gets_a_second_look_even_with_full_safety_confidence():
+    """Regression: phishing and other-customers'-data requests were scored
+    0.95-1.0, classified unsupported, and opened a support ticket."""
+    assert route_after_intent(_state(Intent.UNSUPPORTED, safety_confidence=1.0)) == (
         "safety_judge"
     )
 
@@ -89,8 +97,9 @@ def test_human_escalation_goes_to_human_escalation():
     assert route_after_intent(_state(Intent.HUMAN_ESCALATION)) == "human_escalation"
 
 
-def test_unsupported_goes_to_human_escalation():
-    assert route_after_intent(_state(Intent.UNSUPPORTED)) == "human_escalation"
+def test_unsupported_cleared_by_safety_judge_goes_to_human_escalation():
+    state = {"input_blocked": False, "intent": Intent.UNSUPPORTED}
+    assert route_after_safety_judge(state) == "human_escalation"
 
 
 def test_upgrade_request_goes_to_business_rules():

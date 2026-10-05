@@ -25,7 +25,15 @@ def route_after_input_guardrail(state: AgentState) -> str:
 
 
 def route_after_intent(state: AgentState) -> str:
-    if state["safety_confidence"] < _SAFETY_CONFIDENCE_THRESHOLD:
+    # `unsupported` always gets the second look, whatever the score: it is the
+    # residual class misuse lands in when it isn't a recognizable support
+    # request, and its route opens a support ticket, a side effect. The eval
+    # dev set caught phishing and other-customer-data requests scored 0.95-1.0,
+    # classified unsupported, that safety_judge blocks in isolation.
+    if (
+        state["safety_confidence"] < _SAFETY_CONFIDENCE_THRESHOLD
+        or state["intent"] == Intent.UNSUPPORTED
+    ):
         return "safety_judge"
     return _dispatch_by_intent(state)
 

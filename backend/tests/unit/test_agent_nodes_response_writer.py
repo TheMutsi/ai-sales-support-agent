@@ -98,3 +98,71 @@ def test_does_not_bind_a_tool_for_non_rag_intents(monkeypatch):
     response_writer_module.response_writer_node(state)
 
     assert fake_model.bound_tools is None
+
+
+class _ScriptedChatModel(_FakeChatModel):
+    """Returns the scripted replies in order and records each prompt."""
+
+    def __init__(self, *responses: AIMessage):
+        super().__init__(responses[0])
+        self._responses = list(responses)
+        self.prompts: list[list] = []
+
+    def invoke(self, messages):
+        self.prompts.append(messages)
+        return self._responses[len(self.prompts) - 1]
+
+
+def _search_call() -> AIMessage:
+    return AIMessage(
+        content="",
+        tool_calls=[{"name": "search_knowledge_base_tool", "args": {"query": "sso"}, "id": "1"}],
+    )
+
+
+def _run_writer(monkeypatch, model, intent, tool_call_rounds=0) -> dict:
+    monkeypatch.setattr(response_writer_module, "get_chat_model", lambda: model)
+    monkeypatch.setattr(
+        response_writer_module, "make_search_knowledge_base_tool", lambda customer_id: "fake-tool"
+    )
+    state = {
+        "customer_id": "c-1",
+        "intent": intent,
+        "tool_call_rounds": tool_call_rounds,
+        "messages": [HumanMessage(content="How do I set up SSO?")],
+    }
+    return response_writer_module.response_writer_node(state)
+
+
+def test_retries_once_with_a_reminder_when_a_kb_intent_skips_the_search(monkeypatch):
+    model = _ScriptedChatModel(AIMessage(content=""), _search_call())
+
+    result = _run_writer(monkeypatch, model, Intent.TECHNICAL_SUPPORT)
+
+    assert result["messages"][0].tool_calls
+    assert len(model.prompts) == 2
+    assert "Call the search tool now" in model.prompts[1][0].content
+
+
+def test_keeps_the_retry_reply_even_if_it_still_does_not_search(monkeypatch):
+    model = _ScriptedChatModel(AIMessage(content=""), AIMessage(content="No info."))
+
+    result = _run_writer(monkeypatch, model, Intent.PRODUCT_QUESTION)
+
+    assert result["messages"][0].content == "No info."
+    assert len(model.prompts) == 2
+
+
+@pytest.mark.parametrize(
+    ("intent", "tool_call_rounds"),
+    [
+        (Intent.BILLING_QUESTION, 0),  # answerable from customer context
+        (Intent.TECHNICAL_SUPPORT, 1),  # already searched this turn
+    ],
+)
+def test_does_not_retry_when_a_search_is_not_required(monkeypatch, intent, tool_call_rounds):
+    model = _ScriptedChatModel(AIMessage(content="Here is the answer."))
+
+    _run_writer(monkeypatch, model, intent, tool_call_rounds)
+
+    assert len(model.prompts) == 1
