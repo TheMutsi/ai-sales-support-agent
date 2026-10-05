@@ -1,20 +1,28 @@
 """Unit tests for the deterministic evaluators in `evaluation/metrics.py`.
 Pure functions over a case and a turn: no server, database or LLM needed."""
 
+import json
 import uuid
+
+import pytest
 
 from app.schemas.chat import ChatTurnSummary
 from evaluation.metrics import (
+    compare_to_baseline,
     evaluate_answer_correctness,
     evaluate_escalation,
     evaluate_hallucination_substring,
     evaluate_input_blocked,
     evaluate_intent_accuracy,
     evaluate_upgrade_eligibility,
+    load_baseline_outcomes,
+    mcnemar_exact_p,
+    pass_hat_k,
     pass_rates_by_metric,
     pass_rates_by_scenario,
     safety_threshold_sweep,
     score_case,
+    wilson_interval,
 )
 from evaluation.schemas import (
     CaseResult,
@@ -265,3 +273,73 @@ def test_safety_sweep_ignores_cases_blocked_before_intent_router():
     (point,) = safety_threshold_sweep(results, [0.7])
 
     assert point.adversarial_total == 0
+
+
+# --- reliability and paired comparison ---
+
+
+def _result(case_id: str, passed: bool, trial: int = 1) -> CaseResult:
+    return CaseResult(
+        case_id=case_id,
+        scenario=EvalScenario.PRODUCT_QUESTION,
+        trial=trial,
+        response_text="",
+        summary=_turn().summary,
+        metrics=[MetricResult(metric=EvalMetric.INTENT_ACCURACY, passed=passed)],
+    )
+
+
+def test_wilson_interval_matches_the_known_value_and_stays_in_bounds():
+    low, high = wilson_interval(50, 55)
+    assert (round(low, 3), round(high, 3)) == (0.804, 0.961)
+    assert wilson_interval(0, 0) == (0.0, 1.0)
+    assert wilson_interval(3, 3)[1] == 1.0
+
+
+def test_pass_hat_k_requires_every_trial_to_pass():
+    results = [
+        _result("a", True, 1),
+        _result("a", True, 2),
+        _result("b", True, 1),
+        _result("b", False, 2),
+    ]
+    rate = pass_hat_k(results)
+    assert (rate.n, rate.pass_rate) == (2, 0.5)
+    # Per-trial metric rates still count every trial.
+    assert pass_rates_by_metric(results)[EvalMetric.INTENT_ACCURACY].n == 4
+
+
+def test_mcnemar_exact_p():
+    assert mcnemar_exact_p(5, 2) == pytest.approx(0.453, abs=1e-3)
+    assert mcnemar_exact_p(0, 0) == 1.0
+    assert mcnemar_exact_p(10, 0) < 0.01
+
+
+def test_compare_to_baseline_pairs_cases_present_in_both(tmp_path):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {"case_id": "a", "passed": False},
+                    {"case_id": "b", "passed": True},
+                    {"case_id": "gone", "passed": True},
+                ]
+            }
+        )
+    )
+    current = [_result("a", True), _result("b", False), _result("new", True)]
+
+    comparison = compare_to_baseline(current, load_baseline_outcomes(baseline), "baseline")
+
+    assert comparison.cases_compared == 2
+    assert (comparison.fixed, comparison.broke) == (["a"], ["b"])
+    assert comparison.mcnemar_p == 1.0
+
+
+def test_a_report_without_per_case_outcomes_is_rejected_clearly(tmp_path):
+    old_report = tmp_path / "old.json"
+    old_report.write_text(json.dumps({"cases": [{"id": "a", "pass": True}]}))
+
+    with pytest.raises(ValueError, match="cannot be a baseline"):
+        load_baseline_outcomes(old_report)

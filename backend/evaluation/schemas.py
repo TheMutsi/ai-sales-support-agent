@@ -108,6 +108,8 @@ class MetricResult(BaseModel):
 class CaseResult(BaseModel):
     case_id: str
     scenario: EvalScenario
+    # 1-based; a case run with `--trials k` has k results, one per trial.
+    trial: int = 1
     response_text: str
     # Kept whole (not just the conversation id) so a failure can be diagnosed
     # from the report alone, e.g. whether the knowledge base tool ever ran.
@@ -123,6 +125,10 @@ class CaseResult(BaseModel):
 class PassRate(BaseModel):
     n: int
     pass_rate: float
+    # Wilson 95% interval: unlike the normal approximation it stays inside
+    # [0, 1] and is honest at the small n these metrics have.
+    ci_low: float
+    ci_high: float
 
 
 class SafetyThresholdPoint(BaseModel):
@@ -136,20 +142,39 @@ class SafetyThresholdPoint(BaseModel):
     benign_total: int
 
 
+class BaselineComparison(BaseModel):
+    """Paired, case-by-case comparison against an earlier report. A case
+    counts as passed when it passed every trial in that run."""
+
+    baseline: str
+    cases_compared: int
+    fixed: list[str]
+    broke: list[str]
+    # Exact two-sided McNemar test on the discordant cases: the probability
+    # of a fixed/broke split at least this lopsided if nothing had changed.
+    mcnemar_p: float
+
+
 class EvalReport(BaseModel):
     run_at: datetime
     dataset: str
     base_url: str
     # "<provider>:<model>" of the hallucination judge, None when it was skipped.
     judge_model: str | None
-    # Set only by the `langfuse` backend: the dataset run this report mirrors.
-    langfuse_run_url: str | None = None
+    # Set only by the `langfuse` backend: one dataset run per trial.
+    langfuse_run_urls: list[str] = Field(default_factory=list)
+    trials: int = 1
     total_cases: int
+    # Cases that passed every trial; with one trial, simply cases that passed.
     cases_fully_passed: int
+    # The share of cases passing all `trials` runs (tau-bench's pass^k), the
+    # reliability number: a case that passes 2 of 3 times is not reliable.
+    pass_hat_k: PassRate
     # Cases that never produced a result (transport or scoring failure). They
     # are excluded from every rate above, so they must be reported explicitly.
     errored_case_ids: list[str]
     by_metric: dict[EvalMetric, PassRate]
     by_scenario: dict[EvalScenario, PassRate]
     safety_threshold_sweep: list[SafetyThresholdPoint]
+    baseline_comparison: BaselineComparison | None = None
     cases: list[CaseResult]

@@ -13,10 +13,14 @@ Retrieval quality and tool selection are not scored: neither is observable
 through the HTTP API, and they are not approximated from text.
 """
 
+import json
+import math
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
+from pathlib import Path
 
 from .schemas import (
+    BaselineComparison,
     CaseResult,
     ChatTurn,
     EvalCase,
@@ -140,8 +144,75 @@ def score_case(
     )
 
 
+def wilson_interval(passed: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    if n == 0:
+        return (0.0, 1.0)
+    p = passed / n
+    denominator = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denominator
+    half_width = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denominator
+    return (max(0.0, center - half_width), min(1.0, center + half_width))
+
+
 def _pass_rate(outcomes: list[bool]) -> PassRate:
-    return PassRate(n=len(outcomes), pass_rate=round(sum(outcomes) / len(outcomes), 3))
+    """With several trials per case the outcomes are not independent, so the
+    interval on a per-trial rate is narrower than it should be; `pass_hat_k`
+    is computed over cases and does not have that problem."""
+    low, high = wilson_interval(sum(outcomes), len(outcomes))
+    return PassRate(
+        n=len(outcomes),
+        pass_rate=round(sum(outcomes) / len(outcomes), 3) if outcomes else 0.0,
+        ci_low=round(low, 3),
+        ci_high=round(high, 3),
+    )
+
+
+def passed_every_trial(results: Iterable[CaseResult]) -> dict[str, bool]:
+    outcomes: defaultdict[str, bool] = defaultdict(lambda: True)
+    for result in results:
+        outcomes[result.case_id] &= result.passed
+    return dict(outcomes)
+
+
+def pass_hat_k(results: Iterable[CaseResult]) -> PassRate:
+    return _pass_rate(list(passed_every_trial(results).values()))
+
+
+def mcnemar_exact_p(fixed: int, broke: int) -> float:
+    discordant = fixed + broke
+    if discordant == 0:
+        return 1.0
+    tail = sum(math.comb(discordant, i) for i in range(min(fixed, broke) + 1))
+    return min(1.0, 2 * tail / 2**discordant)
+
+
+def load_baseline_outcomes(path: Path) -> dict[str, bool]:
+    """Reads only `case_id`/`passed` from a report, so any report that has
+    those two fields works as a baseline, including ones from before trials
+    existed. Reports older than that fail with a clear message."""
+    outcomes: defaultdict[str, bool] = defaultdict(lambda: True)
+    try:
+        for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+            outcomes[case["case_id"]] &= case["passed"]
+    except KeyError as exc:
+        raise ValueError(f"{path}: no per-case {exc} field, cannot be a baseline") from exc
+    return dict(outcomes)
+
+
+def compare_to_baseline(
+    results: Iterable[CaseResult], baseline: dict[str, bool], baseline_name: str
+) -> BaselineComparison:
+    current = passed_every_trial(results)
+    common = sorted(current.keys() & baseline.keys())
+    fixed = [case_id for case_id in common if current[case_id] and not baseline[case_id]]
+    broke = [case_id for case_id in common if baseline[case_id] and not current[case_id]]
+    return BaselineComparison(
+        baseline=baseline_name,
+        cases_compared=len(common),
+        fixed=fixed,
+        broke=broke,
+        mcnemar_p=round(mcnemar_exact_p(len(fixed), len(broke)), 3),
+    )
 
 
 def pass_rates_by_metric(results: Iterable[CaseResult]) -> dict[EvalMetric, PassRate]:
