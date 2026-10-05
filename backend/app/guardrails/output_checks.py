@@ -59,6 +59,23 @@ _LOOKUP_CLAIM_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# First-person claims of having looked at the customer's billing records. No
+# tool exposes invoices, charges or payment history (`CustomerContext` only
+# carries the current subscription), so any such claim is fabricated.
+_BILLING_HISTORY_CLAIM_PATTERN = re.compile(
+    r"(\bi('ve| have)? (checked|reviewed|looked (at|into|over)|gone through|went through|"
+    r"verified|examined) (your |the )?(\w+ ){0,3}"
+    r"(invoices?|billing history|payment history|charges|transactions|statements?)|"
+    r"(revis[eé]|he revisado|verifiqu[eé]|he verificado) (tus|sus|la|las|el) "
+    r"(\w+ ){0,2}(facturas?|cargos|historial de (pagos|facturaci[oó]n)))",
+    re.IGNORECASE,
+)
+
+# Raw tool-call syntax written into the reply text instead of a real tool
+# call: snake_case tool identifiers (`search_knowledge_base_tool`) or
+# `tool_call(s)`. A customer never has a reason to see either.
+_INTERNAL_TOOL_TEXT_PATTERN = re.compile(r"\b([a-z]+_)+tool\b|\btool_calls?\b")
+
 
 def check_unconfirmed_refund_claim(
     state: AgentState, response_text: str
@@ -145,6 +162,35 @@ def check_unverified_lookup_claim(
     return None
 
 
+def check_fabricated_billing_history_claim(
+    state: AgentState, response_text: str
+) -> GuardrailViolation | None:
+    """Found by the evaluation suite: asked to check a double charge, the
+    model said it had reviewed the customer's invoices. No tool can read
+    invoices, so the claim and anything it concludes from them are invented."""
+    if _BILLING_HISTORY_CLAIM_PATTERN.search(response_text):
+        return GuardrailViolation(
+            code="fabricated_billing_history_claim",
+            severity=GuardrailSeverity.BLOCK,
+            message="Response claims to have reviewed billing records no tool can access.",
+        )
+    return None
+
+
+def check_internal_tool_text(state: AgentState, response_text: str) -> GuardrailViolation | None:
+    """Found by the evaluation suite: on a path with no tool bound, the model
+    wrote `search_knowledge_base_tool` and a fake "searching..." step into its
+    reply. That narrates a search that never ran, so it is blocked like the
+    other unbacked claims rather than shown to the customer."""
+    if _INTERNAL_TOOL_TEXT_PATTERN.search(response_text):
+        return GuardrailViolation(
+            code="internal_tool_text",
+            severity=GuardrailSeverity.BLOCK,
+            message="Response contains raw tool-call text instead of an answer.",
+        )
+    return None
+
+
 def check_unverified_billing_explanation(
     state: AgentState, response_text: str
 ) -> GuardrailViolation | None:
@@ -168,6 +214,8 @@ _ALL_CHECKS = (
     check_checkout_without_eligibility,
     check_fabricated_ticket_claim,
     check_unverified_lookup_claim,
+    check_fabricated_billing_history_claim,
+    check_internal_tool_text,
     check_system_prompt_leak,
     check_unverified_billing_explanation,
 )

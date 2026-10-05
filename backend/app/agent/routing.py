@@ -5,9 +5,13 @@ from app.schemas.agent import Intent
 
 # Below this, intent_router's own safety_confidence (scored in the same call
 # as intent, so it's free) isn't enough on its own — route to safety_judge
-# for a dedicated second opinion instead of dispatching on a guess. Most
-# messages score well above this and skip that extra LLM call entirely.
-_SAFETY_CONFIDENCE_THRESHOLD = 0.7
+# for a dedicated second opinion instead of dispatching on a guess.
+# Calibrated on the evaluation dev set (qwen2.5:7b-instruct), not guessed: the
+# router scores almost every message 0.9 or 1.0, so 0.7 sent only 4 of 6
+# regex-evading attempts to the judge; 0.95 sent all 6, and 2 of 44 legitimate
+# messages (the judge then allowed both). One sample with clustered scores,
+# so re-check it with `run_eval`'s threshold sweep after any model change.
+_SAFETY_CONFIDENCE_THRESHOLD = 0.95
 
 # How many LLM↔tool round trips `response_writer` can take in one turn before
 # `route_after_response_writer` forces it to `guardrail` regardless of

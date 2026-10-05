@@ -37,3 +37,27 @@ def test_flag_only_violation_keeps_the_original_message():
 
     assert result["guardrail_flags"] == ["unverified_billing_explanation"]
     assert "messages" not in result
+
+
+def test_blocked_reply_keeps_the_real_ticket_id_in_the_fallback():
+    from uuid import uuid4
+
+    from app.schemas.tools import TicketReceipt
+
+    ticket = TicketReceipt(ticket_id=uuid4(), status="open", created_at="2026-01-01T00:00:00")
+    original = AIMessage(content="Your refund has been approved.", id="msg-3")
+    state = {"checkout_session": None, "ticket_receipt": ticket, "messages": [original]}
+
+    replacement = guardrail_node(state)["messages"][0]
+
+    assert str(ticket.ticket_id) in replacement.content
+
+
+def test_blocked_reply_without_a_ticket_promises_no_follow_up():
+    original = AIMessage(content="Your refund has been approved.", id="msg-4")
+    state = {"checkout_session": None, "ticket_receipt": None, "messages": [original]}
+
+    replacement = guardrail_node(state)["messages"][0]
+
+    assert "ticket" not in replacement.content.lower()
+    assert "will follow up" not in replacement.content.lower()
