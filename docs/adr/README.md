@@ -18,6 +18,11 @@ links back to it.
 | [0003](0003-layering-and-dependency-direction.md) | Layering and dependency direction between packages | Accepted |
 | [0004](0004-provider-agnostic-llm-and-embeddings.md) | Provider-agnostic chat models and embeddings behind factories | Accepted |
 | [0005](0005-postgres-pgvector-for-rag.md) | Postgres + pgvector as the only datastore, with per-doc-type chunking | Accepted |
+| [0006](0006-llm-driven-knowledge-base-search.md) | Knowledge-base search is the one tool the LLM calls itself | Accepted |
+| [0007](0007-input-safety-cascade.md) | Input safety is a three-tier cascade | Accepted |
+| [0008](0008-deterministic-output-guardrails.md) | Output guardrails are deterministic checks against state | Accepted |
+| [0009](0009-stateless-chat-api.md) | The chat API is stateless; the client resends the conversation | Accepted |
+| [0010](0010-stream-then-correct.md) | Stream tokens live, and correct afterwards if a guardrail rewrites the answer | Accepted |
 
 ## Writing a new one
 
