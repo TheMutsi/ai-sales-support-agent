@@ -15,16 +15,40 @@ alembic upgrade head && python -m app.db.seed && python -m app.rag.ingestion
 uvicorn app.main:app &                      # in another terminal
 python -m evaluation.run_eval --judge-model llama3       # dev set, judged by another model
 python -m evaluation.run_eval --dataset evaluation/heldout.jsonl --judge-model llama3
-python -m evaluation.run_eval --no-llm-judge --no-langfuse   # fast, offline scoring only
+python -m evaluation.run_eval --no-llm-judge                 # fast, offline scoring only
+python -m evaluation.run_eval --backend langfuse --judge-model llama3   # as a Langfuse experiment
 ```
 
 Reports go to `evaluation/results/<timestamp>.json` unless `--out` is given. Without
 `--judge-model`, the judge is the agent's own model (see Known limitations).
 
-If Langfuse tracing is enabled, each metric is also pushed as a score
-(`eval.<metric>`) on the case's session (`conversation_id`), visible under the
-trace/session in the Langfuse UI. These are API-pushed scores, **not** entries in
-Langfuse's "Evaluators" tab (that tab configures server-side judges in the UI).
+### Two backends: `local` and `langfuse`
+
+Both run the same cases through the same evaluators and write the same JSON report.
+
+- **`local`** (default) touches nothing but the API and the database. It is the
+  inner loop while changing a prompt or a node.
+- **`langfuse`** runs the suite as a Langfuse **dataset experiment**
+  (`langfuse_experiment.py`). Each JSONL file is upserted as a dataset
+  (`acmeflow-eval/dataset`, `acmeflow-eval/heldout`) under deterministic item ids,
+  so the files stay the source of truth and editing a case updates its item.
+  Each invocation is a dataset run named `<git sha>[-dirty] <agent model> <timestamp>`.
+  Every metric is a boolean score on the run's item, and `pass_rate.<metric>` plus
+  `cases_fully_passed_rate` are scores on the run itself. In the Langfuse UI,
+  *Experiments* puts two runs side by side: pass rate per metric, and how many
+  cases flipped up or down.
+
+Which Langfuse instance a run lands in is only a matter of `LANGFUSE_HOST` and the
+keys: the local Docker one while developing, or a shared one for runs meant to be
+compared over time (e.g. from CI). The code path is the same.
+
+Each case uses a `conversation_id` chosen by the runner, so the experiment item and
+the agent's own trace (`chat_turn`, emitted by the API when its
+`LANGFUSE_TRACING_ENABLED` is on) share a Langfuse session: from a failing item,
+the session shows the full graph run that produced it.
+
+Cases removed from a JSONL file are not run any more, but their old items stay in
+the Langfuse dataset; archive them in the UI if they get in the way.
 
 ## Dataset
 
@@ -59,7 +83,8 @@ any is missing.
 | `metrics.py` | Pure deterministic evaluators and pass-rate aggregation |
 | `llm_judge.py` | The one evaluator that calls a model |
 | `chat_client.py` | `/api/chat` client: SSE parsing into a typed `ChatTurn` |
-| `run_eval.py` | Orchestration: customer lookup, run loop, Langfuse publishing, report |
+| `run_eval.py` | Orchestration: customer lookup, backend choice, run loop, report |
+| `langfuse_experiment.py` | `langfuse` backend: dataset sync, experiment task/evaluators, run scores |
 
 `evaluation` depends on `app` (it reuses `Intent`, `ChatMessage` and the
 `ChatTurnSummary` contract of the `done` event), never the other way around.

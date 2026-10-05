@@ -6,17 +6,25 @@ server (`uvicorn app.main:app`) and a seeded database are required. The only
 direct database access is resolving the dataset's customer emails to ids,
 done once up front so a missing customer fails the run before it starts.
 
-When Langfuse tracing is enabled, each metric is also published as a score
-on the turn's Langfuse session (`conversation_id`). Publishing is
-best-effort: the local JSON report is the source of truth.
+Two backends run the same cases through the same evaluators:
+
+- `local` (default): no Langfuse at all. The fast loop while developing.
+- `langfuse`: the run is a Langfuse dataset experiment (see
+  `langfuse_experiment.py`), comparable run by run in the Langfuse UI. Which
+  Langfuse instance it lands in (the local Docker one, or a shared one) is
+  decided by the `LANGFUSE_*` settings alone.
+
+Both write the same JSON report.
 
 Usage:
     python -m evaluation.run_eval
     python -m evaluation.run_eval --dataset evaluation/heldout.jsonl --judge-model llama3
-    python -m evaluation.run_eval --no-llm-judge --no-langfuse
+    python -m evaluation.run_eval --backend langfuse --judge-model llama3
+    python -m evaluation.run_eval --no-llm-judge
 """
 
 import argparse
+import subprocess
 import sys
 import uuid
 from collections.abc import Iterable, Sequence
@@ -36,6 +44,7 @@ from app.db.session import SessionLocal
 
 from .chat_client import run_chat_turn
 from .dataset import DEFAULT_DATASET_PATH, load_dataset
+from .langfuse_experiment import LangfuseExperimentRunner, dataset_name_for
 from .llm_judge import make_hallucination_judge
 from .metrics import (
     DEFAULT_EVALUATORS,
@@ -61,38 +70,11 @@ def resolve_customer_ids(session: Session, emails: Iterable[str]) -> dict[str, u
     return resolved
 
 
-class LangfuseScorePublisher:
-    """Publishes every metric of a case as a boolean score on the Langfuse
-    session of the turn that produced it."""
-
-    def __init__(self) -> None:
-        from langfuse import get_client
-
-        # The Langfuse SDK reads its keys from the process environment, which
-        # `configure_langfuse()` populates from `Settings`.
-        configure_langfuse()
-        self._client = get_client()
-
-    def publish(self, result: CaseResult) -> None:
-        for metric_result in result.metrics:
-            self._client.create_score(
-                session_id=str(result.summary.conversation_id),
-                name=f"eval.{metric_result.metric.value}",
-                value=1.0 if metric_result.passed else 0.0,
-                data_type="BOOLEAN",
-                comment=f"[{result.case_id}] {metric_result.detail}",
-            )
-
-    def flush(self) -> None:
-        self._client.flush()
-
-
 def run_suite(
     cases: Sequence[EvalCase],
     customer_ids: dict[str, uuid.UUID],
     base_url: str,
     evaluators: Sequence[Evaluator],
-    publisher: LangfuseScorePublisher | None = None,
 ) -> tuple[list[CaseResult], list[str]]:
     """Runs every case and returns `(results, errored_case_ids)`. A failing
     case is recorded and skipped; it never aborts the rest of the run."""
@@ -111,12 +93,63 @@ def run_suite(
 
             results.append(result)
             _print_case_result(result)
-            if publisher is not None:
-                try:
-                    publisher.publish(result)
-                except Exception as exc:  # noqa: BLE001 - best-effort side channel.
-                    print(f"[{case.id}] Langfuse publish failed: {exc}", file=sys.stderr)
     return results, errored
+
+
+def run_langfuse_experiment(
+    cases: Sequence[EvalCase],
+    customer_ids: dict[str, uuid.UUID],
+    base_url: str,
+    evaluators: Sequence[Evaluator],
+    dataset: Path,
+    judge_model: str | None,
+) -> tuple[list[CaseResult], list[str], str | None]:
+    from langfuse import get_client
+
+    # The Langfuse SDK reads its keys from the process environment, which
+    # `configure_langfuse()` populates from `Settings`.
+    configure_langfuse()
+    client = get_client()
+    if not client.auth_check():
+        raise SystemExit(f"Langfuse rejected the configured keys ({get_settings().langfuse_host})")
+
+    revision = _git_revision()
+    # The agent model is read from this process's settings: the server is
+    # assumed to share the same `.env`, as it does in every documented setup.
+    agent_model = f"{get_settings().llm_provider}:{get_chat_model_name()}"
+    run_name = f"{revision} {agent_model} {datetime.now(UTC):%Y-%m-%dT%H:%M:%SZ}"
+    metadata = {
+        "git_revision": revision,
+        "agent_model": agent_model,
+        "judge_model": judge_model or "skipped",
+        "base_url": base_url,
+    }
+    try:
+        with httpx.Client() as http:
+            runner = LangfuseExperimentRunner(client, http, base_url, customer_ids, evaluators)
+            results, errored, run_url = runner.run(
+                cases, dataset_name_for(dataset), run_name, metadata
+            )
+    finally:
+        client.flush()
+    for result in results:
+        _print_case_result(result)
+    return results, errored, run_url
+
+
+def _git_revision() -> str:
+    """Short commit hash, suffixed `-dirty` when the working tree has
+    uncommitted changes: a run on edited prompts must not pass for the commit."""
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return f"{sha}-dirty" if dirty else sha
 
 
 def build_report(
@@ -125,12 +158,14 @@ def build_report(
     dataset: Path,
     base_url: str,
     judge_model: str | None,
+    langfuse_run_url: str | None = None,
 ) -> EvalReport:
     return EvalReport(
         run_at=datetime.now(UTC),
         dataset=str(dataset),
         base_url=base_url,
         judge_model=judge_model,
+        langfuse_run_url=langfuse_run_url,
         total_cases=len(results),
         cases_fully_passed=sum(result.passed for result in results),
         errored_case_ids=errored_case_ids,
@@ -161,6 +196,8 @@ def _print_summary(report: EvalReport, out_path: Path) -> None:
             f"  < {point.threshold:.2f}: {point.adversarial_routed}/{point.adversarial_total}"
             f" / {point.benign_routed}/{point.benign_total}"
         )
+    if report.langfuse_run_url:
+        print(f"Langfuse run: {report.langfuse_run_url}")
     print(f"Report written to {out_path}")
 
 
@@ -170,9 +207,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument(
-        "--no-langfuse",
-        action="store_true",
-        help="Do not publish scores to Langfuse, even if tracing is enabled.",
+        "--backend",
+        choices=("local", "langfuse"),
+        default="local",
+        help="local: JSON report only. langfuse: also run as a Langfuse dataset experiment.",
     )
     parser.add_argument(
         "--no-llm-judge",
@@ -210,17 +248,16 @@ def main() -> None:
         model = args.judge_model or get_chat_model_name()
         evaluators.append(make_hallucination_judge(create_chat_model(provider, model)))
         judge_model = f"{provider}:{model}"
-    publisher = (
-        LangfuseScorePublisher()
-        if get_settings().langfuse_tracing_enabled and not args.no_langfuse
-        else None
-    )
 
-    results, errored = run_suite(cases, customer_ids, args.base_url, evaluators, publisher)
-    if publisher is not None:
-        publisher.flush()
+    run_url: str | None = None
+    if args.backend == "langfuse":
+        results, errored, run_url = run_langfuse_experiment(
+            cases, customer_ids, args.base_url, evaluators, args.dataset, judge_model
+        )
+    else:
+        results, errored = run_suite(cases, customer_ids, args.base_url, evaluators)
 
-    report = build_report(results, errored, args.dataset, args.base_url, judge_model)
+    report = build_report(results, errored, args.dataset, args.base_url, judge_model, run_url)
     out_path = args.out or _DEFAULT_RESULTS_DIR / f"{report.run_at:%Y%m%dT%H%M%SZ}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
