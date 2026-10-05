@@ -102,7 +102,7 @@ def evaluate_answer_correctness(case: EvalCase, turn: ChatTurn) -> MetricResult 
 
 def evaluate_hallucination_substring(case: EvalCase, turn: ChatTurn) -> MetricResult | None:
     """Cheap first pass. Negation-blind by design ("we are not X" contains
-    "X"); `llm_judge.evaluate_hallucination_llm_judge` is the semantic check."""
+    "X"); `llm_judge.make_hallucination_judge` builds the semantic check."""
     if not case.must_not_include:
         return None
     found = _terms_present(turn.response_text, case.must_not_include)

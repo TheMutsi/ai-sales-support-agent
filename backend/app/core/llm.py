@@ -13,32 +13,32 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 
-from app.core.config import get_settings
+from app.core.config import LLMProvider, get_settings
 
 
 @lru_cache
 def get_chat_model() -> BaseChatModel:
     settings = get_settings()
+    return create_chat_model(settings.llm_provider, get_chat_model_name())
 
-    if settings.llm_provider == "anthropic":
-        return ChatAnthropic(
-            model=settings.anthropic_model,
-            anthropic_api_key=settings.anthropic_api_key,
-        )
 
-    if settings.llm_provider == "google":
-        return ChatGoogleGenerativeAI(
-            model=settings.google_model,
-            google_api_key=settings.google_api_key,
-        )
+def create_chat_model(provider: LLMProvider, model: str) -> BaseChatModel:
+    """Builds a chat model for an explicit provider/model pair. The app always
+    goes through `get_chat_model()`; this exists for callers that need a model
+    other than the configured one, e.g. the evaluation suite's judge, which
+    should not be the same model as the agent it grades."""
+    settings = get_settings()
 
-    if settings.llm_provider == "ollama":
-        return ChatOllama(
-            model=settings.ollama_model,
-            base_url=settings.ollama_base_url,
-        )
+    if provider == "anthropic":
+        return ChatAnthropic(model=model, anthropic_api_key=settings.anthropic_api_key)
 
-    raise ValueError(f"Unsupported LLM_PROVIDER: {settings.llm_provider!r}")
+    if provider == "google":
+        return ChatGoogleGenerativeAI(model=model, google_api_key=settings.google_api_key)
+
+    if provider == "ollama":
+        return ChatOllama(model=model, base_url=settings.ollama_base_url)
+
+    raise ValueError(f"Unsupported LLM provider: {provider!r}")
 
 
 def get_chat_model_name() -> str:
@@ -54,4 +54,4 @@ def get_chat_model_name() -> str:
     if settings.llm_provider == "ollama":
         return settings.ollama_model
 
-    raise ValueError(f"Unsupported LLM_PROVIDER: {settings.llm_provider!r}")
+    raise ValueError(f"Unsupported LLM provider: {settings.llm_provider!r}")

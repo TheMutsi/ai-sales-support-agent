@@ -12,6 +12,7 @@ best-effort: the local JSON report is the source of truth.
 
 Usage:
     python -m evaluation.run_eval
+    python -m evaluation.run_eval --dataset evaluation/heldout.jsonl --judge-model llama3
     python -m evaluation.run_eval --no-llm-judge --no-langfuse
 """
 
@@ -21,19 +22,21 @@ import uuid
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import get_args
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core.config import LLMProvider, get_settings
+from app.core.llm import create_chat_model, get_chat_model_name
 from app.core.observability import configure_langfuse
 from app.db.models import Customer
 from app.db.session import SessionLocal
 
 from .chat_client import run_chat_turn
 from .dataset import DEFAULT_DATASET_PATH, load_dataset
-from .llm_judge import evaluate_hallucination_llm_judge
+from .llm_judge import make_hallucination_judge
 from .metrics import (
     DEFAULT_EVALUATORS,
     Evaluator,
@@ -115,12 +118,17 @@ def run_suite(
 
 
 def build_report(
-    results: list[CaseResult], errored_case_ids: list[str], dataset: Path, base_url: str
+    results: list[CaseResult],
+    errored_case_ids: list[str],
+    dataset: Path,
+    base_url: str,
+    judge_model: str | None,
 ) -> EvalReport:
     return EvalReport(
         run_at=datetime.now(UTC),
         dataset=str(dataset),
         base_url=base_url,
+        judge_model=judge_model,
         total_cases=len(results),
         cases_fully_passed=sum(result.passed for result in results),
         errored_case_ids=errored_case_ids,
@@ -139,6 +147,7 @@ def _print_case_result(result: CaseResult) -> None:
 
 def _print_summary(report: EvalReport, out_path: Path) -> None:
     print(f"\nRan {report.total_cases} cases, {report.cases_fully_passed} fully passed.")
+    print(f"Judge: {report.judge_model or 'skipped'}")
     if report.errored_case_ids:
         print(f"Errored (excluded from all rates): {report.errored_case_ids}")
     for metric, rate in report.by_metric.items():
@@ -161,7 +170,22 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip the LLM-judge hallucination check (one extra model call per case).",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--judge-provider",
+        default=None,
+        choices=get_args(LLMProvider),
+        help="Provider for the judge model (default: LLM_PROVIDER).",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default=None,
+        help="Judge model id. Defaults to the agent's own model, which can share its blind "
+        "spots; prefer a different one.",
+    )
+    args = parser.parse_args()
+    if args.judge_provider and not args.judge_model:
+        parser.error("--judge-provider requires --judge-model")
+    return args
 
 
 def main() -> None:
@@ -171,8 +195,12 @@ def main() -> None:
         customer_ids = resolve_customer_ids(session, (case.customer_email for case in cases))
 
     evaluators: list[Evaluator] = list(DEFAULT_EVALUATORS)
+    judge_model: str | None = None
     if not args.no_llm_judge:
-        evaluators.append(evaluate_hallucination_llm_judge)
+        provider = args.judge_provider or get_settings().llm_provider
+        model = args.judge_model or get_chat_model_name()
+        evaluators.append(make_hallucination_judge(create_chat_model(provider, model)))
+        judge_model = f"{provider}:{model}"
     publisher = (
         LangfuseScorePublisher()
         if get_settings().langfuse_tracing_enabled and not args.no_langfuse
@@ -183,7 +211,7 @@ def main() -> None:
     if publisher is not None:
         publisher.flush()
 
-    report = build_report(results, errored, args.dataset, args.base_url)
+    report = build_report(results, errored, args.dataset, args.base_url, judge_model)
     out_path = args.out or _DEFAULT_RESULTS_DIR / f"{report.run_at:%Y%m%dT%H%M%SZ}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
