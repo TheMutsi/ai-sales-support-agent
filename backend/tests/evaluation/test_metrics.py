@@ -13,9 +13,17 @@ from evaluation.metrics import (
     evaluate_upgrade_eligibility,
     pass_rates_by_metric,
     pass_rates_by_scenario,
+    safety_threshold_sweep,
     score_case,
 )
-from evaluation.schemas import ChatTurn, EvalCase, EvalMetric, EvalScenario, MetricResult
+from evaluation.schemas import (
+    CaseResult,
+    ChatTurn,
+    EvalCase,
+    EvalMetric,
+    EvalScenario,
+    MetricResult,
+)
 
 
 def _case(**overrides) -> EvalCase:
@@ -63,14 +71,21 @@ def test_input_blocked_passes_by_default():
     assert result.passed is True
 
 
-def test_input_blocked_passes_when_expected_and_flagged():
+def test_input_blocked_passes_when_expected_and_blocked():
     case = _case(expected_input_blocked=True)
-    turn = _turn(guardrail_flags=["injection_signal:instruction_override"])
+    turn = _turn(input_blocked=True, guardrail_flags=["injection_signal:instruction_override"])
+    assert evaluate_input_blocked(case, turn).passed is True
+
+
+def test_input_blocked_counts_a_safety_judge_refusal():
+    """The cascade's second tier blocks without any regex flag."""
+    case = _case(expected_input_blocked=True)
+    turn = _turn(input_blocked=True, guardrail_flags=["semantic_unsafe_message"])
     assert evaluate_input_blocked(case, turn).passed is True
 
 
 def test_input_blocked_fails_when_blocked_unexpectedly():
-    turn = _turn(guardrail_flags=["injection_signal:instruction_override"])
+    turn = _turn(input_blocked=True)
     assert evaluate_input_blocked(_case(), turn).passed is False
 
 
@@ -214,3 +229,39 @@ def test_pass_rates_aggregate_by_metric_and_scenario():
     by_scenario = pass_rates_by_scenario([passing, failing])
     assert by_scenario[EvalScenario.PRODUCT_QUESTION].pass_rate == 1.0
     assert by_scenario[EvalScenario.REFUND_REQUEST].pass_rate == 0.0
+
+
+# --- safety_threshold_sweep ---
+
+
+def _scored(scenario: EvalScenario, safety_confidence: float | None) -> CaseResult:
+    return CaseResult(
+        case_id="c",
+        scenario=scenario,
+        response_text="",
+        summary=ChatTurnSummary(conversation_id=uuid.uuid4(), safety_confidence=safety_confidence),
+        metrics=[],
+    )
+
+
+def test_safety_sweep_counts_cases_below_each_threshold():
+    results = [
+        _scored(EvalScenario.PROMPT_INJECTION, 0.6),
+        _scored(EvalScenario.PROMPT_INJECTION, 0.9),
+        _scored(EvalScenario.PRODUCT_QUESTION, 0.85),
+        _scored(EvalScenario.BILLING_QUESTION, 1.0),
+    ]
+
+    low, high = safety_threshold_sweep(results, [0.7, 0.95])
+
+    assert (low.adversarial_routed, low.adversarial_total) == (1, 2)
+    assert (low.benign_routed, low.benign_total) == (0, 2)
+    assert (high.adversarial_routed, high.benign_routed) == (2, 1)
+
+
+def test_safety_sweep_ignores_cases_blocked_before_intent_router():
+    results = [_scored(EvalScenario.PROMPT_INJECTION, None)]
+
+    (point,) = safety_threshold_sweep(results, [0.7])
+
+    assert point.adversarial_total == 0

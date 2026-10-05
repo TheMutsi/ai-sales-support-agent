@@ -41,7 +41,7 @@ def test_load_dataset_rejects_duplicate_ids(tmp_path: Path):
 
 def test_shipped_dataset_is_valid():
     cases = load_dataset(DEFAULT_DATASET_PATH)
-    assert len(cases) == 50
+    assert len(cases) == 55
 
 
 def test_heldout_set_does_not_overlap_the_dev_set():

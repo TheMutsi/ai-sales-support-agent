@@ -272,6 +272,8 @@ async def test_done_event_reports_no_ticket_and_no_eligibility_by_default():
     assert done["ticket_created"] is False
     assert done["upgrade_eligible"] is None
     assert done["tool_call_rounds"] == 0
+    assert done["input_blocked"] is False
+    assert done["safety_confidence"] is None
 
 
 @pytest.mark.asyncio
@@ -292,6 +294,40 @@ async def test_done_event_reports_ticket_created_and_tool_call_rounds():
     done = events[-1]["data"]
     assert done["ticket_created"] is True
     assert done["tool_call_rounds"] == 2
+
+
+@pytest.mark.asyncio
+async def test_done_event_reports_input_safety_outcome():
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="I can't help with that.")],
+        "intent": "unsupported",
+        "guardrail_flags": ["semantic_unsafe_message"],
+        "input_blocked": True,
+        "safety_confidence": 0.4,
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    done = events[-1]["data"]
+    assert done["input_blocked"] is True
+    assert done["safety_confidence"] == 0.4
+
+
+@pytest.mark.asyncio
+async def test_done_event_hides_safety_confidence_in_production(monkeypatch):
+    monkeypatch.setattr(chat_module, "get_settings", lambda: Settings(app_env="production"))
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Hello!")],
+        "intent": "product_question",
+        "guardrail_flags": [],
+        "safety_confidence": 0.4,
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    assert events[-1]["data"]["safety_confidence"] is None
 
 
 @pytest.mark.asyncio

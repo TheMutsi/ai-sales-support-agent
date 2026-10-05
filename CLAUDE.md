@@ -47,7 +47,7 @@ backend/
     schemas/           # Pydantic: Intent, CustomerContext, ToolResult, AgentState...
   alembic/              # migrations (env.py wired to app.core.config)
   data/seed/            # plans.json, customers.json, kb/*.md (markdown KB docs, loaded by app.rag.ingestion)
-  evaluation/           # dataset.jsonl, run_eval.py, metrics.py, llm_judge.py [AI writes, per owner's Stage 9 call]
+  evaluation/           # dataset.jsonl (dev), heldout.jsonl, run_eval.py, metrics.py, llm_judge.py [AI writes, per owner's Stage 9 call]
   tests/                # unit/, integration/, evaluation/
 frontend/               # Vite + React chat app                       [AI writes]
 docker-compose.yml, Dockerfile(s), .env.example, README.md
@@ -78,6 +78,8 @@ Never invent product information, pricing, features, or limits. Never claim a re
 - **Input safety is a cascade, not a single check.** Anything the regex layer doesn't match still goes to `intent_router`, which now scores `safety_confidence` in the *same* structured-output call that classifies intent (free — no extra LLM round trip). Below `_SAFETY_CONFIDENCE_THRESHOLD` (0.7, in `app/agent/routing.py`), routing detours to `safety_judge_node`: a dedicated second LLM call, with a prompt focused only on that one decision, before anything else (retrieval, customer context, response writing) runs. Most conversations never reach it — that's the point of the cascade, paying for a closer look only when the cheap signal is genuinely unsure.
 
 **Empirically, the middle tier under-triggers with `qwen2.5:7b-instruct`.** Live-tested a request (asked in Spanish) for step-by-step instructions to hack into someone else's database — a real misuse attempt that dodges every regex pattern (no SQL syntax, no classic jailbreak phrasing) — and `intent_router` still scored it `safety_confidence: 0.9`, above the 0.7 threshold, so `safety_judge_node` never ran. The request only got refused because `response_writer` declined it on its own (the same unenforced, model-dependent guarantee Stage 6 already flagged). The cascade's wiring is correct (unit-tested with mocked confidence values across both branches), but the threshold is an untuned guess — calibrating it needs labeled adversarial cases, which is exactly what Stage 9's evaluation dataset should provide, not something to hand-tune here without data.
+
+**Calibrated after Stage 9.** With labeled adversarial cases in the dev set, the threshold sweep showed the problem was not the threshold: both LLM tiers scored every regex-evading attempt as safe, because their definition of unsafe was too narrow (and leaned hard towards "safe"). `intent_router` and `safety_judge` now share one `MISUSE_DEFINITION` (`app/agent/prompts/safety_policy.py`), and the threshold moved from 0.7 to 0.95 based on the sweep. Result on the dev set: 3 of 6 such attempts refused end to end (was 0 of 6), no legitimate message refused. Numbers and caveats live in `backend/evaluation/README.md`.
 
 The `fabricated_ticket_claim` check exists because of a violation caught live while building this stage, not a hypothesized one: a `billing_question` routes straight to `response_writer` (it never reaches `human_escalation`, so no ticket is ever created for it), and `qwen2.5:7b-instruct` still told a customer a ticket had been created, with a fabricated ID derived from their own UUID. The fix was verified against that exact captured response, not a synthetic one.
 

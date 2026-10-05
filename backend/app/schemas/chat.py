@@ -64,3 +64,11 @@ class ChatTurnSummary(BaseModel):
     # "not evaluated", which is different from "evaluated and not eligible".
     upgrade_eligible: bool | None = None
     tool_call_rounds: int = 0
+    # True when either input-safety tier (regex pre-filter or safety_judge)
+    # refused the turn before it reached any other node.
+    input_blocked: bool = False
+    # intent_router's own score; `None` when the regex tier blocked the turn
+    # before intent_router ran, and always in production (see
+    # `_summarize_turn`). Exposed so the routing threshold can be calibrated
+    # against labeled cases instead of guessed.
+    safety_confidence: float | None = None
