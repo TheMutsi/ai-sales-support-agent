@@ -2,7 +2,6 @@
 added in Stage 8. No network call: it only reads `Settings`, same as
 `get_chat_model()`'s own provider branch in `test_llm.py`."""
 
-import pytest
 
 from app.core import llm
 from app.core.config import Settings
@@ -37,9 +36,3 @@ def test_returns_ollama_model_for_ollama_provider(monkeypatch):
 
     assert llm.get_chat_model_name() == "qwen2.5:7b-instruct"
 
-
-def test_raises_on_unsupported_provider(monkeypatch):
-    monkeypatch.setattr(llm, "get_settings", lambda: Settings(llm_provider="openai"))
-
-    with pytest.raises(ValueError, match="Unsupported LLM_PROVIDER"):
-        llm.get_chat_model_name()

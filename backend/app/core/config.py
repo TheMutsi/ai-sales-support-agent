@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -9,6 +10,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # from `backend/`, the app from the repo root, or Docker (which doesn't use this at
 # all — it injects .env as real process env vars via docker-compose's `env_file`).
 _ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+
+
+# The chat-model providers `app.core.llm` can build. A typo in LLM_PROVIDER
+# fails when settings load, not on the first chat request.
+LLMProvider = Literal["anthropic", "google", "ollama"]
 
 
 class Settings(BaseSettings):
@@ -21,7 +27,7 @@ class Settings(BaseSettings):
     # colliding with a native Postgres install that may already own 5432.
     database_url: str = "postgresql+psycopg://acmeflow:acmeflow@localhost:5433/acmeflow"
 
-    llm_provider: str = "anthropic"
+    llm_provider: LLMProvider = "anthropic"
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
     google_api_key: str | None = None
