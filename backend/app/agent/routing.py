@@ -45,11 +45,12 @@ def route_after_safety_judge(state: AgentState) -> str:
 def _dispatch_by_intent(state: AgentState) -> str:
     if state["intent"] in {Intent.UPGRADE_REQUEST, Intent.BILLING_QUESTION, Intent.REFUND_REQUEST}:
         return "get_customer_context"
-    if state["intent"] in {
-        Intent.PRODUCT_QUESTION,
-        Intent.PRICING_QUESTION,
-        Intent.TECHNICAL_SUPPORT,
-    }:
+    if state["intent"] == Intent.PRICING_QUESTION:
+        # Prices live only in the plans table, so they are loaded
+        # deterministically before the answer; the KB tool stays bound for
+        # pricing policy (discounts, quotes) the catalog doesn't cover.
+        return "get_plan_catalog"
+    if state["intent"] in {Intent.PRODUCT_QUESTION, Intent.TECHNICAL_SUPPORT}:
         # No deterministic prefetch here (that was `retrieve_knowledge`,
         # removed): for these three intents `response_writer` binds the
         # knowledge-base search as a real tool call and the LLM decides

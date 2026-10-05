@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.nodes import response_writer as response_writer_module
 from app.schemas.agent import Intent
-from app.schemas.tools import TicketReceipt
+from app.schemas.tools import PlanSummary, TicketReceipt
 
 
 class _FakeChatModel:
@@ -44,6 +44,25 @@ def test_context_blob_includes_populated_fields_only():
 
     assert "Support ticket created" in blob
     assert "Customer account" not in blob
+
+
+def test_context_blob_lists_plan_prices_in_dollars():
+    catalog = [
+        PlanSummary(
+            slug="enterprise",
+            name="Enterprise",
+            price_cents=49900,
+            billing_period="monthly",
+            seat_limit=None,
+            api_call_limit=None,
+            features=["sso"],
+        )
+    ]
+
+    blob = response_writer_module._build_context_blob({"plan_catalog": catalog})
+
+    assert "Plan catalog (list prices)" in blob
+    assert "Enterprise: $499.00, billed monthly; seats: unlimited" in blob
 
 
 def test_node_returns_the_llms_message_appended_to_state(monkeypatch):
@@ -157,6 +176,7 @@ def test_keeps_the_retry_reply_even_if_it_still_does_not_search(monkeypatch):
     ("intent", "tool_call_rounds"),
     [
         (Intent.BILLING_QUESTION, 0),  # answerable from customer context
+        (Intent.PRICING_QUESTION, 0),  # arrives with the plan catalog
         (Intent.TECHNICAL_SUPPORT, 1),  # already searched this turn
     ],
 )
