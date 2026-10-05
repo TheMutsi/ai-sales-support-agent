@@ -50,6 +50,33 @@ the session shows the full graph run that produced it.
 Cases removed from a JSONL file are not run any more, but their old items stay in
 the Langfuse dataset; archive them in the UI if they get in the way.
 
+### Measuring progress: trials, intervals, paired comparison
+
+One run of 55 cases is one noisy sample (see Known limitations), so a change in a
+single percentage says little. Three flags make a comparison defensible:
+
+```bash
+python -m evaluation.run_eval --trials 3 --baseline evaluation/results/<before>.json
+```
+
+- **`--trials k`** runs every case k times. `pass^k` is the share of cases that pass
+  **all** k trials (the reliability measure from tau-bench): a customer-facing agent
+  that answers a question right 2 times out of 3 is not reliable. Per-metric rates
+  are computed over all trials.
+- **Every rate carries a Wilson 95% interval.** With small n it stays honest where
+  the normal approximation gives intervals that are too narrow.
+  Per-trial rates with k > 1 are not independent, so their intervals are optimistic;
+  `pass^k` is computed over cases and is not.
+- **`--baseline`** compares case by case against an earlier report: which cases were
+  **fixed**, which **broke**, and an exact McNemar p-value on those discordant
+  cases. Comparing the same cases pairwise is more sensitive than comparing two
+  percentages. Only `case_id`/`passed` are read, so older reports work as baselines.
+
+As a rule of thumb at this dataset size, only differences of roughly 15 points or
+more are distinguishable from noise. Smaller changes need more cases, more trials,
+or a targeted probe of the mechanism (e.g. running the one failing node 10 times)
+before they count as evidence.
+
 ## Dataset
 
 Each line is an `EvalCase` (`evaluation/schemas.py`): scenario, customer,
