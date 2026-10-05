@@ -18,7 +18,7 @@ from app.agent.routing import (
 from app.schemas.agent import Intent
 
 
-def _state(intent: Intent, safety_confidence: float = 0.95) -> dict:
+def _state(intent: Intent, safety_confidence: float = 1.0) -> dict:
     return {"intent": intent, "safety_confidence": safety_confidence}
 
 
@@ -37,8 +37,16 @@ def test_low_safety_confidence_goes_to_safety_judge_regardless_of_intent():
 
 
 def test_high_safety_confidence_dispatches_normally():
-    assert route_after_intent(_state(Intent.PRODUCT_QUESTION, safety_confidence=0.95)) == (
+    assert route_after_intent(_state(Intent.PRODUCT_QUESTION, safety_confidence=1.0)) == (
         "response_writer"
+    )
+
+
+def test_a_typical_unsure_score_still_gets_a_second_look():
+    """Regression: qwen2.5 scores nearly everything 0.9 or 1.0, so the old 0.7
+    threshold let regex-evading misuse attempts scored 0.9 skip safety_judge."""
+    assert route_after_intent(_state(Intent.UNSUPPORTED, safety_confidence=0.9)) == (
+        "safety_judge"
     )
 
 
