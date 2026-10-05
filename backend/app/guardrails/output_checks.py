@@ -1,17 +1,15 @@
 """Deterministic, tool-grounded checks run on `response_writer`'s output.
 
 These aren't an LLM judging another LLM's answer — each check is a plain
-function comparing the response text against what the graph's `state` actually
+function comparing the response text against what the turn's context actually
 confirms, the same "let code decide a fact a tool can compute" principle
 (CLAUDE.md #1) applied to guardrails instead of business rules.
 """
 
 import re
 
-from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
-from app.agent.state import AgentState
 from app.schemas.agent import Intent
-from app.schemas.guardrails import GuardrailSeverity, GuardrailViolation
+from app.schemas.guardrails import GuardrailSeverity, GuardrailViolation, OutputCheckContext
 
 _REFUND_CONFIRMATION_PATTERN = re.compile(
     r"(reembolso|devoluci[oó]n (de (tu|su) dinero)?|refund).{0,40}"
@@ -78,7 +76,7 @@ _INTERNAL_TOOL_TEXT_PATTERN = re.compile(r"\b([a-z]+_)+tool\b|\btool_calls?\b")
 
 
 def check_unconfirmed_refund_claim(
-    state: AgentState, response_text: str
+    context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
     """No tool in `app/tools/` can issue a refund — every `refund_request` ends
     at `human_escalation`, which only creates a ticket. So any text reading as a
@@ -94,12 +92,12 @@ def check_unconfirmed_refund_claim(
 
 
 def check_checkout_without_eligibility(
-    state: AgentState, response_text: str
+    context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
     """A checkout link is only legitimate once `business_rules_node` has run
     eligibility and `checkout_session` holds a real one — anything else is an
     invented link, which the CLAUDE.md guardrails section rules out explicitly."""
-    if _CHECKOUT_LINK_PATTERN.search(response_text) and state.get("checkout_session") is None:
+    if _CHECKOUT_LINK_PATTERN.search(response_text) and not context.checkout_created:
         return GuardrailViolation(
             code="checkout_without_eligibility",
             severity=GuardrailSeverity.BLOCK,
@@ -108,11 +106,13 @@ def check_checkout_without_eligibility(
     return None
 
 
-def check_system_prompt_leak(state: AgentState, response_text: str) -> GuardrailViolation | None:
+def check_system_prompt_leak(
+    context: OutputCheckContext, response_text: str
+) -> GuardrailViolation | None:
     """Crude but reliable: the system prompt is a fixed string we own, so if a
     meaningful chunk of it shows up verbatim in the answer, the model leaked it
     rather than happening to agree with its content."""
-    prompt_body = RESPONSE_WRITER_SYSTEM_PROMPT.split("\n\n")[0]
+    prompt_body = context.protected_prompt.split("\n\n")[0]
     if prompt_body and prompt_body in response_text:
         return GuardrailViolation(
             code="system_prompt_leak",
@@ -123,7 +123,7 @@ def check_system_prompt_leak(state: AgentState, response_text: str) -> Guardrail
 
 
 def check_fabricated_ticket_claim(
-    state: AgentState, response_text: str
+    context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
     """Found live during Stage 6 verification, not hypothesized: a
     `billing_question` routes straight to `response_writer` (no ticket is ever
@@ -132,20 +132,20 @@ def check_fabricated_ticket_claim(
     from their own UUID. `create_support_ticket` is the only thing that can
     make `ticket_receipt` non-`None`, so this is exactly as falsifiable as the
     refund check above."""
-    if state.get("ticket_receipt") is None and (
+    if not context.ticket_created and (
         _TICKET_CREATION_CLAIM_PATTERN.search(response_text)
         or _TICKET_NUMBER_CLAIM_PATTERN.search(response_text)
     ):
         return GuardrailViolation(
             code="fabricated_ticket_claim",
             severity=GuardrailSeverity.BLOCK,
-            message="Response claims a support ticket was created, but none exists in state.",
+            message="Response claims a support ticket was created, but no ticket exists.",
         )
     return None
 
 
 def check_unverified_lookup_claim(
-    state: AgentState, response_text: str
+    context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
     """Found by the evaluation suite: the model answered "I checked our
     documentation, and the Starter plan includes SSO" (false: SSO is
@@ -153,7 +153,7 @@ def check_unverified_lookup_claim(
     `tool_call_rounds` is the graph's own record of whether a search ran, so a
     claim of having consulted the documentation with zero rounds is false by
     construction, and the content it vouches for is ungrounded."""
-    if state.get("tool_call_rounds", 0) == 0 and _LOOKUP_CLAIM_PATTERN.search(response_text):
+    if context.tool_call_rounds == 0 and _LOOKUP_CLAIM_PATTERN.search(response_text):
         return GuardrailViolation(
             code="unverified_lookup_claim",
             severity=GuardrailSeverity.BLOCK,
@@ -163,7 +163,7 @@ def check_unverified_lookup_claim(
 
 
 def check_fabricated_billing_history_claim(
-    state: AgentState, response_text: str
+    context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
     """Found by the evaluation suite: asked to check a double charge, the
     model said it had reviewed the customer's invoices. No tool can read
@@ -177,7 +177,9 @@ def check_fabricated_billing_history_claim(
     return None
 
 
-def check_internal_tool_text(state: AgentState, response_text: str) -> GuardrailViolation | None:
+def check_internal_tool_text(
+    context: OutputCheckContext, response_text: str
+) -> GuardrailViolation | None:
     """Found by the evaluation suite: on a path with no tool bound, the model
     wrote `search_knowledge_base_tool` and a fake "searching..." step into its
     reply. That narrates a search that never ran, so it is blocked like the
@@ -192,13 +194,13 @@ def check_internal_tool_text(state: AgentState, response_text: str) -> Guardrail
 
 
 def check_unverified_billing_explanation(
-    state: AgentState, response_text: str
+    context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
     """Speculative language about *why* a charge happened ("podria haber...")
     is a softer signal than the other checks — legitimate hedging can look
     similar, so this only flags for Stage 9's evaluation dataset instead of
     rewriting a real answer on a heuristic that can false-positive."""
-    if state.get("intent") == Intent.BILLING_QUESTION and _BILLING_SPECULATION_PATTERN.search(
+    if context.intent == Intent.BILLING_QUESTION and _BILLING_SPECULATION_PATTERN.search(
         response_text
     ):
         return GuardrailViolation(
@@ -221,5 +223,7 @@ _ALL_CHECKS = (
 )
 
 
-def run_output_guardrails(state: AgentState, response_text: str) -> list[GuardrailViolation]:
-    return [v for check in _ALL_CHECKS if (v := check(state, response_text)) is not None]
+def run_output_guardrails(
+    context: OutputCheckContext, response_text: str
+) -> list[GuardrailViolation]:
+    return [v for check in _ALL_CHECKS if (v := check(context, response_text)) is not None]
