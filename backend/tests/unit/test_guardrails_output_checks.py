@@ -153,3 +153,37 @@ def test_account_or_ticket_review_claims_are_not_lookup_claims():
 def test_answer_without_a_lookup_claim_is_not_flagged_even_without_a_search():
     violations = run_output_guardrails({"tool_call_rounds": 0}, "Hi! How can I help you today?")
     assert violations == []
+
+
+def test_billing_history_claims_are_blocked():
+    for text in (
+        "I've reviewed your invoices and there is a duplicate charge from May.",
+        "I checked your last three invoices and everything looks correct.",
+        "Revisé tus últimas facturas y no hay cargos duplicados.",
+    ):
+        codes = [v.code for v in run_output_guardrails({"tool_call_rounds": 0}, text)]
+        assert codes == ["fabricated_billing_history_claim"], text
+
+
+def test_denying_access_to_billing_history_is_not_a_claim():
+    for text in (
+        "I don't have access to your invoices, so I can't check them for a double charge.",
+        "I haven't checked your invoices; a person from billing can review them.",
+        "I've checked your subscription: you're on the Pro plan.",
+    ):
+        assert run_output_guardrails({"tool_call_rounds": 0}, text) == [], text
+
+
+def test_raw_tool_call_text_is_blocked():
+    """Captured from the evaluation suite (billing-005)."""
+    text = (
+        "Let's check the policy.\n\nsearch_knowledge_base_tool\n"
+        "searching for refund policy for downgrades..."
+    )
+    codes = [v.code for v in run_output_guardrails({"tool_call_rounds": 0}, text)]
+    assert codes == ["internal_tool_text"]
+
+
+def test_plain_mentions_of_a_tool_are_not_tool_text():
+    text = "Our Zapier integration is a no-code tool for connecting AcmeFlow to other apps."
+    assert run_output_guardrails({"tool_call_rounds": 0}, text) == []

@@ -18,13 +18,25 @@ from app.schemas.guardrails import GuardrailSeverity
 
 logger = logging.getLogger(__name__)
 
-# Deliberately promises nothing: no ticket exists on this path, so saying a
-# human will follow up would be the same kind of unbacked claim the output
-# checks exist to block.
+# Deliberately promises nothing: with no ticket, saying a human will follow
+# up would be the same kind of unbacked claim the output checks exist to block.
 _FALLBACK_MESSAGE = (
     "I can't confirm that information right now. If you'd like, ask to talk to "
     "a person and I'll connect you with our support team."
 )
+
+# When `human_escalation` did create a ticket, the blocked reply was the one
+# place the customer would have learned that; the fallback must keep it.
+_FALLBACK_WITH_TICKET_MESSAGE = (
+    "I can't confirm that information right now, but I've created support ticket "
+    "{ticket_id} and a person from our support team will follow up with you."
+)
+
+
+def _fallback_message(state: AgentState) -> str:
+    if ticket_receipt := state.get("ticket_receipt"):
+        return _FALLBACK_WITH_TICKET_MESSAGE.format(ticket_id=ticket_receipt.ticket_id)
+    return _FALLBACK_MESSAGE
 
 
 def guardrail_node(state: AgentState) -> dict:
@@ -49,6 +61,6 @@ def guardrail_node(state: AgentState) -> dict:
         # Replacing (not appending): reusing the same message id makes
         # `add_messages` overwrite the blocked content in place, so the
         # unverified claim never sits in conversation history either.
-        update["messages"] = [AIMessage(content=_FALLBACK_MESSAGE, id=response_message.id)]
+        update["messages"] = [AIMessage(content=_fallback_message(state), id=response_message.id)]
 
     return update
