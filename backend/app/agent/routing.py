@@ -1,5 +1,8 @@
+from typing import Literal
+
 from langgraph.graph import END
 
+from app.agent.names import Node
 from app.agent.state import AgentState
 from app.schemas.agent import Intent
 
@@ -20,11 +23,19 @@ _SAFETY_CONFIDENCE_THRESHOLD = 0.95
 _MAX_TOOL_CALL_ROUNDS = 2
 
 
-def route_after_input_guardrail(state: AgentState) -> str:
-    return END if state["input_blocked"] else "intent_router"
+def route_after_input_guardrail(state: AgentState) -> Literal["__end__", Node.INTENT_ROUTER]:
+    return END if state["input_blocked"] else Node.INTENT_ROUTER
 
 
-def route_after_intent(state: AgentState) -> str:
+def route_after_intent(
+    state: AgentState,
+) -> Literal[
+    Node.GET_CUSTOMER_CONTEXT,
+    Node.GET_PLAN_CATALOG,
+    Node.RESPONSE_WRITER,
+    Node.HUMAN_ESCALATION,
+    Node.SAFETY_JUDGE,
+]:
     # `unsupported` always gets the second look, whatever the score: it is the
     # residual class misuse lands in when it isn't a recognizable support
     # request, and its route opens a support ticket, a side effect. The eval
@@ -34,32 +45,46 @@ def route_after_intent(state: AgentState) -> str:
         state["safety_confidence"] < _SAFETY_CONFIDENCE_THRESHOLD
         or state["intent"] == Intent.UNSUPPORTED
     ):
-        return "safety_judge"
+        return Node.SAFETY_JUDGE
     return _dispatch_by_intent(state)
 
 
-def route_after_safety_judge(state: AgentState) -> str:
+def route_after_safety_judge(
+    state: AgentState,
+) -> Literal[
+    Node.GET_CUSTOMER_CONTEXT,
+    Node.GET_PLAN_CATALOG,
+    Node.RESPONSE_WRITER,
+    Node.HUMAN_ESCALATION,
+    "__end__",
+]:
     return END if state["input_blocked"] else _dispatch_by_intent(state)
 
 
-def _dispatch_by_intent(state: AgentState) -> str:
+def _dispatch_by_intent(
+    state: AgentState,
+) -> Literal[
+    Node.GET_CUSTOMER_CONTEXT, Node.GET_PLAN_CATALOG, Node.RESPONSE_WRITER, Node.HUMAN_ESCALATION
+]:
     if state["intent"] in {Intent.UPGRADE_REQUEST, Intent.BILLING_QUESTION, Intent.REFUND_REQUEST}:
-        return "get_customer_context"
+        return Node.GET_CUSTOMER_CONTEXT
     if state["intent"] == Intent.PRICING_QUESTION:
         # Prices live only in the plans table, so they are loaded
         # deterministically before the answer; the KB tool stays bound for
         # pricing policy (discounts, quotes) the catalog doesn't cover.
-        return "get_plan_catalog"
+        return Node.GET_PLAN_CATALOG
     if state["intent"] in {Intent.PRODUCT_QUESTION, Intent.TECHNICAL_SUPPORT}:
         # No deterministic prefetch here (that was `retrieve_knowledge`,
         # removed): for these three intents `response_writer` binds the
         # knowledge-base search as a real tool call and the LLM decides
         # whether/how to use it, instead of the graph always fetching first.
-        return "response_writer"
-    return "human_escalation"  # human_escalation and unsupported
+        return Node.RESPONSE_WRITER
+    return Node.HUMAN_ESCALATION  # human_escalation and unsupported
 
 
-def route_after_response_writer(state: AgentState) -> str:
+def route_after_response_writer(
+    state: AgentState,
+) -> Literal[Node.KNOWLEDGE_TOOL, Node.GUARDRAIL]:
     """`response_writer` only has a tool bound for the RAG-eligible intents
     (see `_RAG_ELIGIBLE_INTENTS`), so `tool_calls` is only non-empty there —
     every other intent's response has nothing to check here and goes
@@ -67,13 +92,15 @@ def route_after_response_writer(state: AgentState) -> str:
     last_message = state["messages"][-1]
     tool_calls = getattr(last_message, "tool_calls", None)
     if tool_calls and state.get("tool_call_rounds", 0) < _MAX_TOOL_CALL_ROUNDS:
-        return "knowledge_tool"
-    return "guardrail"
+        return Node.KNOWLEDGE_TOOL
+    return Node.GUARDRAIL
 
 
-def route_after_customer_context(state: AgentState) -> str:
+def route_after_customer_context(
+    state: AgentState,
+) -> Literal[Node.BUSINESS_RULES, Node.RESPONSE_WRITER, Node.HUMAN_ESCALATION]:
     if state["intent"] == Intent.UPGRADE_REQUEST:
-        return "business_rules"
+        return Node.BUSINESS_RULES
     if state["intent"] == Intent.BILLING_QUESTION:
-        return "response_writer"
-    return "human_escalation"  # refund_request — no refund tool exists, so it always escalates
+        return Node.RESPONSE_WRITER
+    return Node.HUMAN_ESCALATION  # refund_request — no refund tool exists, so it always escalates

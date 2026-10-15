@@ -53,9 +53,7 @@ def test_a_typical_unsure_score_still_gets_a_second_look():
 def test_unsupported_gets_a_second_look_even_with_full_safety_confidence():
     """Regression: phishing and other-customers'-data requests were scored
     0.95-1.0, classified unsupported, and opened a support ticket."""
-    assert route_after_intent(_state(Intent.UNSUPPORTED, safety_confidence=1.0)) == (
-        "safety_judge"
-    )
+    assert route_after_intent(_state(Intent.UNSUPPORTED, safety_confidence=1.0)) == ("safety_judge")
 
 
 def test_safety_judge_blocked_goes_straight_to_end():
@@ -137,3 +135,20 @@ def test_tool_calls_past_the_round_cap_go_to_guardrail_anyway():
         "tool_call_rounds": 2,
     }
     assert route_after_response_writer(state) == "guardrail"
+
+
+def test_compiled_graph_exposes_every_conditional_destination():
+    """The `Literal` return types give LangGraph the destinations, so the
+    drawn graph has the real edges (not just nodes) and every routing target
+    is a registered node."""
+    from app.agent.graph import build_graph
+    from app.agent.names import Node
+
+    drawn = build_graph().get_graph()
+    nodes = {n for n in drawn.nodes} - {"__start__", "__end__"}
+    assert nodes == {n.value for n in Node}
+    edges = {(e.source, e.target) for e in drawn.edges}
+    assert ("response_writer", "knowledge_tool") in edges
+    assert ("response_writer", "guardrail") in edges
+    assert ("intent_router", "safety_judge") in edges
+    assert ("input_guardrail", "__end__") in edges
