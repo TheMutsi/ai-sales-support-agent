@@ -29,7 +29,7 @@ from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langfuse import get_client
 from langfuse.langchain import CallbackHandler
 
@@ -37,6 +37,7 @@ from app.agent.graph import graph as agent_graph
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
 from app.schemas.chat import ChatRequest, ChatTurnSummary
+from app.schemas.rag import SourceReference
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,22 @@ def _build_initial_state(request: ChatRequest) -> dict:
     return {"messages": messages, "customer_id": str(request.customer_id)}
 
 
+def _collect_sources(messages: list) -> list[SourceReference]:
+    """Sources from every knowledge-base search this turn, deduplicated across
+    rounds, in the order they were first retrieved. Only this turn's messages
+    can carry artifacts: the request's own history is plain user/assistant
+    text (ADR 0009), so no earlier turn's sources can leak in."""
+    sources: dict[str, SourceReference] = {}
+    for message in messages:
+        if isinstance(message, ToolMessage) and isinstance(message.artifact, list):
+            for source in message.artifact:
+                sources.setdefault(source.source, source)
+    return list(sources.values())
+
+
 def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSummary:
     eligibility_result = final_state.get("eligibility_result")
+    ticket_receipt = final_state.get("ticket_receipt")
     # The raw classifier score is an oracle for whoever is probing the input
     # filter (rephrase until it goes up), so production clients never get it;
     # it stays in the traces. Outside production the evaluation suite needs it.
@@ -67,12 +82,15 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
         conversation_id=conversation_id,
         intent=final_state.get("intent"),
         guardrail_flags=final_state.get("guardrail_flags", []),
-        ticket_created=final_state.get("ticket_receipt") is not None,
+        ticket_created=ticket_receipt is not None,
         escalated=final_state.get("escalated", False),
         upgrade_eligible=eligibility_result.eligible if eligibility_result else None,
         tool_call_rounds=final_state.get("tool_call_rounds", 0),
         input_blocked=final_state.get("input_blocked", False),
         safety_confidence=safety_confidence,
+        sources=_collect_sources(final_state.get("messages", [])),
+        checkout=final_state.get("checkout_session"),
+        ticket_id=ticket_receipt.ticket_id if ticket_receipt else None,
     )
 
 

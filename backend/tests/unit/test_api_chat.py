@@ -13,13 +13,14 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.api import chat as chat_module
 from app.core.config import Settings
-from app.schemas.business import EligibilityResult
+from app.schemas.business import EligibilityResult, PriceQuote
 from app.schemas.chat import ChatMessage, ChatRequest
-from app.schemas.tools import TicketReceipt
+from app.schemas.rag import SourceReference
+from app.schemas.tools import CheckoutSession, TicketReceipt
 
 
 class _FakeChunk:
@@ -369,3 +370,74 @@ async def test_a_failing_graph_ends_the_stream_with_an_error_event_and_no_done()
     assert uuid.UUID(error["conversation_id"])
     # Internal details stay in the server log, never on the wire.
     assert "tool exploded" not in error["message"]
+
+
+@pytest.mark.asyncio
+async def test_done_event_lists_the_sources_the_knowledge_base_search_returned():
+    refunds = SourceReference(title="Refund policy", doc_type="policy", source="policy/refunds.md")
+    final_state = {
+        "messages": [
+            HumanMessage(content="hi"),
+            AIMessage(content="", tool_calls=[{"name": "t", "args": {}, "id": "c1"}]),
+            ToolMessage(content="text", tool_call_id="c1", artifact=[refunds]),
+            AIMessage(content="Refunds take 5 days."),
+        ],
+        "intent": "billing_question",
+        "guardrail_flags": [],
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    assert events[-1]["data"]["sources"] == [
+        {"title": "Refund policy", "doc_type": "policy", "source": "policy/refunds.md"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_done_event_has_no_sources_checkout_or_ticket_id_by_default():
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Hello!")],
+        "guardrail_flags": [],
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    done = events[-1]["data"]
+    assert done["sources"] == []
+    assert done["checkout"] is None
+    assert done["ticket_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_done_event_carries_the_checkout_session_and_ticket_id_from_state():
+    ticket_id = uuid.uuid4()
+    quote = PriceQuote(
+        current_plan_slug="starter",
+        target_plan_slug="pro",
+        current_price_cents=1900,
+        target_price_cents=4900,
+        price_delta_cents=3000,
+        billing_period="monthly",
+    )
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Here is your link.")],
+        "guardrail_flags": [],
+        "checkout_session": CheckoutSession(
+            checkout_url="https://checkout.acmeflow.example/abc",
+            target_plan_slug="pro",
+            price_quote=quote,
+        ),
+        "ticket_receipt": TicketReceipt(
+            ticket_id=ticket_id, status="open", created_at=datetime.now(UTC)
+        ),
+    }
+    graph = _FakeGraph([_graph_end_event(final_state)])
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    done = events[-1]["data"]
+    assert done["checkout"]["target_plan_slug"] == "pro"
+    assert done["checkout"]["price_quote"]["price_delta_cents"] == 3000
+    assert done["ticket_id"] == str(ticket_id)

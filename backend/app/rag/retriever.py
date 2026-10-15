@@ -57,6 +57,8 @@ def search(
             DocumentChunk.chunk_metadata,
             Document.id,
             Document.doc_type,
+            Document.title,
+            Document.source,
             distance,
         )
         .join(Document, DocumentChunk.document_id == Document.id)
@@ -78,9 +80,20 @@ def search(
             metadata=chunk_metadata,
             document_id=document_id,
             doc_type=DocType(doc_type_value),
+            document_title=title,
+            source=source,
             score=1 - distance_value,
         )
-        for chunk_id, content, chunk_metadata, document_id, doc_type_value, distance_value in rows
+        for (
+            chunk_id,
+            content,
+            chunk_metadata,
+            document_id,
+            doc_type_value,
+            title,
+            source,
+            distance_value,
+        ) in rows
     ]
 
     if min_score is not None:
