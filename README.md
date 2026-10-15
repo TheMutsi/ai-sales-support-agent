@@ -13,9 +13,15 @@ This project was built to demonstrate AI engineering practice, not to ship an ac
 
 Under active development. This README will be expanded with the architecture diagrams, evaluation methodology and results, setup instructions, and demo scenarios as the project progresses.
 
+## Documentation
+
+- [Architecture](docs/architecture.md): system and agent-graph diagrams, code layout
+- [Architecture decision records](docs/adr/README.md): why each major choice was made, and what it costs
+- [Evaluation suite](backend/evaluation/README.md): methodology, results and known limitations
+
 ## Stack
 
-- **Backend:** Python 3.12, FastAPI, LangGraph, LangChain (Claude / Gemini), PostgreSQL + pgvector
+- **Backend:** Python 3.12, FastAPI, LangGraph, LangChain (Claude / Gemini / Ollama), PostgreSQL + pgvector
 - **Frontend:** Vite + React
-- **Observability:** LangSmith
+- **Observability:** Langfuse (self-hosted)
 - **Packaging:** Docker Compose

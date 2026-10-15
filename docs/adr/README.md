@@ -23,6 +23,10 @@ links back to it.
 | [0008](0008-deterministic-output-guardrails.md) | Output guardrails are deterministic checks against state | Accepted |
 | [0009](0009-stateless-chat-api.md) | The chat API is stateless; the client resends the conversation | Accepted |
 | [0010](0010-stream-then-correct.md) | Stream tokens live, and correct afterwards if a guardrail rewrites the answer | Accepted |
+| [0011](0011-self-hosted-langfuse-for-tracing.md) | Self-hosted Langfuse for tracing, instead of LangSmith | Accepted |
+| [0012](0012-evaluation-against-the-real-api.md) | Evaluate the running API with a dev set, a held-out set and mostly deterministic metrics | Accepted |
+
+For the system and agent-graph diagrams, see [`docs/architecture.md`](../architecture.md).
 
 ## Writing a new one
 

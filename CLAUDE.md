@@ -27,7 +27,7 @@ The RAG pipeline (`backend/app/rag/`) is the one exception exercised so far: the
 - **Embeddings:** Google `text-embedding-004` by default, or Ollama's `nomic-embed-text` (also 768-dim, no API key) via `EMBEDDING_PROVIDER`, behind the same swappable interface.
 - **Database:** PostgreSQL + pgvector — plans, customers, subscriptions (a customer's commercial state, kept separate from identity so plan/status changes have history), KB documents + chunks, tickets, evaluation runs.
 - **Frontend:** Vite + React SPA (no SSR/routing needs) with streaming responses, activity indicators, source references, customer selector, simulated checkout/escalation results.
-- **Observability:** LangSmith tracing (graph/LLM/tool/retrieval spans + metadata) plus basic structured app logging.
+- **Observability:** self-hosted Langfuse tracing (graph/LLM/tool/retrieval spans + metadata) plus basic structured app logging. Replaced the planned LangSmith in Stage 8, see `docs/adr/0011-self-hosted-langfuse-for-tracing.md`.
 - **Packaging:** Docker Compose (backend, frontend, Postgres+pgvector), `.env.example` — never commit `.env` or real API keys.
 
 ## Repo structure
@@ -50,6 +50,7 @@ backend/
   evaluation/           # dataset.jsonl (dev), heldout.jsonl, run_eval.py, metrics.py, llm_judge.py [AI writes, per owner's Stage 9 call]
   tests/                # unit/, integration/, evaluation/
 frontend/               # Vite + React chat app                       [AI writes]
+docs/                   # architecture.md (diagrams) and adr/ (architecture decision records)
 docker-compose.yml, Dockerfile(s), .env.example, README.md
 ```
 
@@ -59,7 +60,7 @@ docker-compose.yml, Dockerfile(s), .env.example, README.md
 2. Keep agent state explicit and strongly typed (Pydantic/TypedDict) — no ad-hoc dicts passed through the graph.
 3. Keep tool inputs/outputs strongly typed.
 4. Separate business logic from LLM prompts.
-5. Make failures observable (LangSmith + structured logs), not silently swallowed.
+5. Make failures observable (Langfuse traces + structured logs), not silently swallowed.
 6. Make evaluations reproducible — same dataset, same script, same metrics, every run.
 7. Don't hide everything inside LangChain/LangGraph abstractions where a plain function is clearer.
 8. Avoid unnecessary dependencies — don't introduce a technology just to pad the stack.
@@ -121,7 +122,7 @@ again for manual testing.
 
 ## Environment variables
 
-See `.env.example` for the full list. Key ones: `LLM_PROVIDER` (`anthropic` | `google` | `ollama`), `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_MODEL`/`OLLAMA_BASE_URL` (no key needed — requires `ollama pull qwen2.5:7b-instruct` + `ollama serve` running locally), `EMBEDDING_PROVIDER` (`google` | `ollama`), `OLLAMA_EMBEDDING_MODEL` (requires `ollama pull nomic-embed-text`), `DATABASE_URL`, `LANGCHAIN_API_KEY`/`LANGCHAIN_TRACING_V2` for LangSmith.
+See `.env.example` for the full list. Key ones: `LLM_PROVIDER` (`anthropic` | `google` | `ollama`), `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_MODEL`/`OLLAMA_BASE_URL` (no key needed — requires `ollama pull qwen2.5:7b-instruct` + `ollama serve` running locally), `EMBEDDING_PROVIDER` (`google` | `ollama`), `OLLAMA_EMBEDDING_MODEL` (requires `ollama pull nomic-embed-text`), `DATABASE_URL`, `LANGFUSE_TRACING_ENABLED`/`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` for the self-hosted Langfuse stack in `docker-compose.yml`.
 
 The `db` service in `docker-compose.yml` publishes on host port **5433** (not 5432), to avoid colliding with a native Postgres install. `DATABASE_URL` in `.env.example` already points at 5433; containers talk to each other over the internal Docker network on the default 5432, unaffected by this.
 
