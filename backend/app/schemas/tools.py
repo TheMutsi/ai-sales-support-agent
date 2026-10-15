@@ -48,6 +48,20 @@ class CustomerContext(BaseModel):
     subscription: SubscriptionSummary | None
 
 
+class CustomerListItem(BaseModel):
+    """One row of the customer selector. Deliberately thinner than
+    `CustomerContext`: a picker needs enough to tell customers apart, not
+    their email or billing dates. `plan_*` are `None` for a customer with no
+    subscription row yet."""
+
+    customer_id: uuid.UUID
+    name: str
+    company: str | None
+    status: str
+    plan_slug: str | None
+    plan_name: str | None
+
+
 class CheckoutSession(BaseModel):
     """A simulated checkout — AcmeFlow has no real payment processor, so
     `checkout_url` is a fake link, not something that should ever be followed."""
