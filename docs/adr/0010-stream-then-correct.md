@@ -1,7 +1,7 @@
 # ADR-0010: Stream tokens live, and correct afterwards if a guardrail rewrites the answer
 
 - **Status:** Accepted
-- **Introduced in:** PR #28 (Stage 8); typed `done` summary in PR #30, `error` event in PR #40
+- **Introduced in:** PR #28 (Stage 8); typed `done` summary in PR #30, `error` event in PR #40; `reset` event in Stage 10
 
 ## Context
 
@@ -17,10 +17,16 @@ but makes every response feel slow, to protect against a case that is rare.
 | Event | When |
 |---|---|
 | `delta` | Each token chunk from `response_writer`, live |
+| `reset` | The knowledge-base search is about to run: discard everything streamed so far (the model's "let me check..." before its tool call, not the answer) |
 | `message` | The whole answer at once, when nothing streamed (input refused by tier 1 or 3) |
 | `correction` | The final text, when it differs from what was streamed (a guardrail rewrote it) |
 | `done` | Always last on success: a typed `ChatTurnSummary` (intent, escalation, ticket, flags, eligibility) |
 | `error` | The graph failed; replaces `done`, so a client can tell a failure from a dropped connection |
+
+`reset` keeps `correction` meaningful: the final answer is only the last message, so
+without it every turn that searched the KB would end with a `correction` (the streamed
+preamble differs from the final text), and a client could not tell that from a real
+guardrail rewrite. The client clears its in-progress text on `reset`.
 
 Only `response_writer`'s tokens are streamed; nodes such as `intent_router` also call
 the model, but their structured output is not user-facing.

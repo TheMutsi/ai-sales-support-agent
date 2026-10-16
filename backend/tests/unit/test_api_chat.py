@@ -441,3 +441,76 @@ async def test_done_event_carries_the_checkout_session_and_ticket_id_from_state(
     assert done["checkout"]["target_plan_slug"] == "pro"
     assert done["checkout"]["price_quote"]["price_delta_cents"] == 3000
     assert done["ticket_id"] == str(ticket_id)
+
+
+def _node_start_event(node: str) -> dict:
+    return {
+        "event": "on_chain_start",
+        "name": node,
+        "metadata": {"langgraph_node": node},
+        "data": {},
+    }
+
+
+@pytest.mark.asyncio
+async def test_preamble_before_a_knowledge_base_search_is_reset_not_corrected():
+    """Regression: a model that talks before calling the search tool ("let me
+    check...") had that text streamed, but the final answer is only the last
+    message — so every searching turn ended with a `correction`, which is
+    meant to signal a guardrail rewrite. The search starting resets what was
+    streamed so far instead."""
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Refunds take 5 days.")],
+        "guardrail_flags": [],
+    }
+    graph = _FakeGraph(
+        [
+            _chat_model_stream_event("response_writer", "Let me check."),
+            _node_start_event("knowledge_tool"),
+            _chat_model_stream_event("response_writer", "Refunds take 5 days."),
+            _graph_end_event(final_state),
+        ]
+    )
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    assert [e["event"] for e in events] == ["delta", "reset", "delta", "done"]
+
+
+@pytest.mark.asyncio
+async def test_a_guardrail_rewrite_after_a_search_is_still_a_correction():
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Safe fallback.")],
+        "guardrail_flags": [],
+    }
+    graph = _FakeGraph(
+        [
+            _chat_model_stream_event("response_writer", "Let me check."),
+            _node_start_event("knowledge_tool"),
+            _chat_model_stream_event("response_writer", "A refund was issued."),
+            _graph_end_event(final_state),
+        ]
+    )
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    assert [e["event"] for e in events] == ["delta", "reset", "delta", "correction", "done"]
+
+
+@pytest.mark.asyncio
+async def test_a_search_with_no_preamble_sends_no_reset():
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Answer.")],
+        "guardrail_flags": [],
+    }
+    graph = _FakeGraph(
+        [
+            _node_start_event("knowledge_tool"),
+            _chat_model_stream_event("response_writer", "Answer."),
+            _graph_end_event(final_state),
+        ]
+    )
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _request()))
+
+    assert [e["event"] for e in events] == ["delta", "done"]

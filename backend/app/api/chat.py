@@ -16,6 +16,10 @@ event carrying the corrected text. A blocked *input* never reaches
 by `input_guardrail_node`/`safety_judge_node`), so nothing streams for that
 path — it's sent as a single `message` event instead.
 
+When the model talks before calling the knowledge-base tool, that text is not the
+answer; a `reset` event tells the client to discard it, so `correction` stays a
+signal that a guardrail rewrote the final answer.
+
 If the graph run fails, the stream ends with an `error` event (and no
 `done`), so clients can tell a failed turn from a dropped connection.
 """
@@ -34,6 +38,7 @@ from langfuse import get_client
 from langfuse.langchain import CallbackHandler
 
 from app.agent.graph import graph as agent_graph
+from app.agent.names import Node
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
 from app.schemas.chat import ChatRequest, ChatTurnSummary
@@ -151,6 +156,15 @@ async def stream_chat_turn(chat_graph, request: ChatRequest) -> AsyncIterator[st
                     if delta:
                         streamed_text += delta
                         yield _format_sse("delta", {"text": delta})
+
+                elif event["event"] == "on_chain_start" and node == Node.KNOWLEDGE_TOOL:
+                    # Whatever streamed so far was the model talking before its
+                    # search call ("let me check..."), not the answer. Tell the
+                    # client to drop it, so a later `correction` only ever means
+                    # a guardrail rewrote the final answer.
+                    if streamed_text:
+                        streamed_text = ""
+                        yield _format_sse("reset", {})
 
                 elif event["event"] == "on_chain_end" and event.get("name") == "intent_router":
                     if tracing_enabled:
