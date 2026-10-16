@@ -56,4 +56,17 @@ class RetrievedChunk(BaseModel):
     content: str
     score: float
     doc_type: DocType
+    # Carried so the answer can cite where it came from (see `SourceReference`).
+    document_title: str
+    source: str
     metadata: dict = Field(default_factory=dict)
+
+
+class SourceReference(BaseModel):
+    """A KB document an answer drew on, as shown to the customer. Built from
+    retrieval results, never from model output: the model is not asked to
+    cite, so it cannot misquote or invent a source."""
+
+    title: str
+    doc_type: DocType
+    source: str

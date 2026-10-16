@@ -25,6 +25,8 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.agent import Intent
+from app.schemas.rag import SourceReference
+from app.schemas.tools import CheckoutSession
 
 
 class ChatMessage(BaseModel):
@@ -72,3 +74,11 @@ class ChatTurnSummary(BaseModel):
     # `_summarize_turn`). Exposed so the routing threshold can be calibrated
     # against labeled cases instead of guessed.
     safety_confidence: float | None = None
+
+    # What the answer drew on and what the turn produced, so the client can
+    # render citations and result cards from structured data instead of
+    # parsing the response text. All read from tool results in state, never
+    # from the model's words.
+    sources: list[SourceReference] = Field(default_factory=list)
+    checkout: CheckoutSession | None = None
+    ticket_id: uuid.UUID | None = None

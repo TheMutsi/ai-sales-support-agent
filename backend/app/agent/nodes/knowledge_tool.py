@@ -18,7 +18,9 @@ from app.agent.state import AgentState
 
 def _run_tool_call(tool, call: dict) -> ToolMessage:
     try:
-        content = tool.invoke(call["args"])
+        # Invoked with the whole tool call (not just its args) so the tool
+        # returns a ToolMessage that keeps its artifact (the cited sources).
+        return tool.invoke({**call, "type": "tool_call"})
     except ValidationError as exc:
         errors = "; ".join(
             f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
@@ -29,7 +31,6 @@ def _run_tool_call(tool, call: dict) -> ToolMessage:
             tool_call_id=call["id"],
             status="error",
         )
-    return ToolMessage(content=content, tool_call_id=call["id"])
 
 
 def knowledge_tool_node(state: AgentState) -> dict:

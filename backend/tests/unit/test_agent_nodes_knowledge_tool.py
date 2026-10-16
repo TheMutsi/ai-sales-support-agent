@@ -4,20 +4,23 @@ exercises the ToolMessage/round-counter bookkeeping, not real retrieval."""
 import uuid
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
 from app.agent.llm_tools.knowledge_base import make_search_knowledge_base_tool
 from app.agent.nodes import knowledge_tool as knowledge_tool_module
 
 
 class _FakeTool:
-    def __init__(self, result: str):
+    def __init__(self, result: str, artifact=None):
         self._result = result
+        self._artifact = artifact
         self.invoked_with: list[dict] = []
 
-    def invoke(self, args):
-        self.invoked_with.append(args)
-        return self._result
+    def invoke(self, tool_call):
+        self.invoked_with.append(tool_call["args"])
+        return ToolMessage(
+            content=self._result, tool_call_id=tool_call["id"], artifact=self._artifact
+        )
 
 
 def test_runs_each_requested_call_and_appends_tool_messages(monkeypatch):
@@ -110,3 +113,20 @@ def test_other_tool_failures_still_propagate(monkeypatch):
 
     with pytest.raises(ConnectionError):
         knowledge_tool_module.knowledge_tool_node(state)
+
+
+def test_keeps_the_tool_artifact_on_the_message(monkeypatch):
+    fake_tool = _FakeTool("text", artifact=["a-source"])
+    monkeypatch.setattr(
+        knowledge_tool_module, "make_search_knowledge_base_tool", lambda customer_id: fake_tool
+    )
+    ai_message = AIMessage(
+        content="",
+        tool_calls=[{"name": "search_knowledge_base_tool", "args": {"query": "q"}, "id": "c1"}],
+    )
+
+    result = knowledge_tool_module.knowledge_tool_node(
+        {"customer_id": str(uuid.uuid4()), "messages": [ai_message]}
+    )
+
+    assert result["messages"][0].artifact == ["a-source"]

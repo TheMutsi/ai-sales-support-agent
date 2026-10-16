@@ -129,3 +129,20 @@ def test_search_with_plan_scope_includes_unscoped_docs(rag_db: Session, monkeypa
     results = retriever.search(rag_db, "query", top_k=10, plan_scope="pro")
 
     assert {r.content for r in results} == {"pro-only", "general"}
+
+
+def test_search_results_carry_the_document_title_and_source(rag_db: Session, monkeypatch):
+    document = _add_document(
+        rag_db,
+        source="policy/refunds.md",
+        doc_type=DocType.POLICY,
+        chunks=[("refund window", _unit_vector(0))],
+    )
+    document.title = "Refund policy"
+    rag_db.commit()
+    monkeypatch.setattr(retriever, "get_embeddings", lambda: _FakeEmbeddings(_unit_vector(0)))
+
+    [result] = retriever.search(rag_db, "query")
+
+    assert result.document_title == "Refund policy"
+    assert result.source == "policy/refunds.md"

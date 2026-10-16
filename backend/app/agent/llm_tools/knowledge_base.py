@@ -14,6 +14,7 @@ import uuid
 
 from langchain_core.tools import tool
 
+from app.schemas.rag import SourceReference
 from app.tools.knowledge_base import search_knowledge_base
 
 
@@ -31,8 +32,8 @@ def make_search_knowledge_base_tool(customer_id: uuid.UUID):
     first for every one of those queries, so the model gets no filter to
     misuse."""
 
-    @tool
-    def search_knowledge_base_tool(query: str) -> str:
+    @tool(response_format="content_and_artifact")
+    def search_knowledge_base_tool(query: str) -> tuple[str, list[SourceReference]]:
         """Search AcmeFlow's knowledge base (features, billing, policies, FAQ,
         security, integrations) with a natural-language query. Call this when
         you need a specific fact you don't already have from the conversation
@@ -40,7 +41,16 @@ def make_search_knowledge_base_tool(customer_id: uuid.UUID):
         answer."""
         chunks = search_knowledge_base(customer_id, query)
         if not chunks:
-            return "No relevant knowledge base results found."
-        return "\n---\n".join(chunk.content for chunk in chunks)
+            return "No relevant knowledge base results found.", []
+        # The model reads only the text; the sources ride along as the
+        # ToolMessage artifact, one per document (several chunks of the same
+        # document are one citation).
+        sources = {
+            chunk.document_id: SourceReference(
+                title=chunk.document_title, doc_type=chunk.doc_type, source=chunk.source
+            )
+            for chunk in chunks
+        }
+        return "\n---\n".join(chunk.content for chunk in chunks), list(sources.values())
 
     return search_knowledge_base_tool
