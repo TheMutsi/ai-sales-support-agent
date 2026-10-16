@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # colliding with a native Postgres install that may already own 5432.
     database_url: str = "postgresql+psycopg://acmeflow:acmeflow@localhost:5433/acmeflow"
 
+    # Origins the browser frontend is served from (Vite dev server by default).
+    # An explicit allow-list, never "*": the API will carry customer-scoped
+    # data. Env override is a JSON list: CORS_ALLOW_ORIGINS='["https://app.example.com"]'.
+    cors_allow_origins: list[str] = ["http://localhost:5173"]
+
     llm_provider: LLMProvider = "anthropic"
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
