@@ -11,7 +11,22 @@ This project was built to demonstrate AI engineering practice, not to ship an ac
 
 ## Status
 
-Backend complete through evaluation (Stages 0-9): the agent, the chat API and the evaluation suite run end to end. The frontend (Stage 10) is not built yet, so the agent is used through `POST /api/chat` (Server-Sent Events). Open work is tracked in the roadmap in [`CLAUDE.md`](CLAUDE.md).
+Complete end to end (Stages 0-10): the agent, the chat API, the evaluation suite and an embeddable chat widget, **Mew**, that a shop adds with one script tag. Remaining work is tracked in the roadmap in [`CLAUDE.md`](CLAUDE.md); what is known not to work well is listed under [Known limitations](#known-limitations).
+
+<table>
+  <tr>
+    <td><img src="docs/img/widget-plans.png" alt="The widget answering a pricing question with the three plans" width="260"></td>
+    <td><img src="docs/img/widget-identity.png" alt="The widget asking the visitor to identify with an emailed code" width="260"></td>
+    <td><img src="docs/img/widget-injection.png" alt="The widget refusing a prompt-injection attempt" width="260"></td>
+  </tr>
+  <tr>
+    <td>Plans and prices come from the database, not the model.</td>
+    <td>Account questions need a verified identity: the visitor gets a form, the code never goes through the chat.</td>
+    <td>A prompt-injection attempt is refused before the model sees it.</td>
+  </tr>
+</table>
+
+The three scenes are scripted in [`docs/demo.md`](docs/demo.md) so you can reproduce them.
 
 ## What the agent does
 
@@ -71,7 +86,7 @@ Captured from a real evaluation run (`qwen2.5:7b-instruct` through Ollama, the s
 
 ## Evaluation
 
-55 dev cases and 16 held-out cases run against the live `/api/chat` endpoint, scored by deterministic checks plus an LLM judge from a different model family. Latest run: 49/55 fully passed on dev and 10/16 on held-out, with no net gain on held-out after the fixes. Single runs are one noisy sample and several known limitations apply (small samples, English only, a small judge model), so read [`backend/evaluation/README.md`](backend/evaluation/README.md) before trusting a number.
+66 dev cases and 16 held-out cases run against the live `/api/chat` endpoint, scored by deterministic checks plus an LLM judge from a different model family. Latest run (run 9, after the MewFlow rename, one trial per case): **65/66 fully passed on dev and 12/16 on held-out**. The held-out set is the honest number: it was not used to tune anything, and its failures are listed case by case in [`backend/evaluation/README.md`](backend/evaluation/README.md). Single runs are one noisy sample (cases flip between runs, and the differences against the previous run are not statistically significant), and several limitations apply (small samples, English only, a small judge model), so read that file before trusting a number.
 
 ## Quick start
 
@@ -89,17 +104,31 @@ python -m app.rag.ingestion       # embed the knowledge base (needs the embeddin
 pytest -q && ruff check .
 ```
 
+To try the widget, start the API (`uvicorn app.main:app` in `backend/`) and `docker compose up -d --no-deps frontend`, then open <http://localhost:8080> and click the launcher (the model provider must be reachable; see `.env.example`).
+
 `docker compose up --build` starts the whole stack, including the API (`/api/health`), the self-hosted Langfuse used for tracing, and an example shop page with the Mew chat widget on <http://localhost:8080> (see [`frontend/README.md`](frontend/README.md)).
 
 ## Documentation
 
+- [Demo scenarios](docs/demo.md): three scripted conversations you can reproduce
 - [Architecture](docs/architecture.md): system and agent-graph diagrams, code layout
 - [Architecture decision records](docs/adr/README.md): why each major choice was made, and what it costs
 - [Evaluation suite](backend/evaluation/README.md): methodology, results and known limitations
+- [Widget](frontend/README.md): how a shop embeds it, the login token format, how it is built
+
+## Known limitations
+
+Stated here because a portfolio project that hides them is less credible than one that does not.
+
+- **The model still invents product details.** Plan prices and limits come from the database and are correct, but free text around them is not guaranteed: in a recorded demo, after the visitor identified, the assistant correctly reported the customer's plan, status and renewal date and then claimed that MewFlow offers no invoice previews and that invoices can be checked in a dashboard. Nothing in the knowledge base says either. The output guardrails catch false refund, checkout and ticket claims, not this; a product-fact check is open work.
+- **Small local model.** Results come from `qwen2.5:7b-instruct`; a stronger model would change the numbers.
+- **Evaluation is small and single-trial** (see above), and the judge is a small model.
+- **Widget:** image attachments are a preview only (nothing is uploaded), and an expired session retried mid-conversation opens a new conversation. The full list is in [`frontend/README.md`](frontend/README.md).
+- **One-time codes are printed to the server log** in development; there is no email provider yet, and outside local environments the API refuses to send codes at all.
 
 ## Stack
 
 - **Backend:** Python 3.12, FastAPI, LangGraph, LangChain (Claude / Gemini / Ollama), PostgreSQL + pgvector
-- **Frontend:** Vite + React (planned, Stage 10)
+- **Widget:** React + TypeScript + Vite, one script rendered into an iframe
 - **Observability:** Langfuse (self-hosted)
 - **Packaging:** Docker Compose
