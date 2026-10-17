@@ -39,7 +39,7 @@ function boot() {
   doc.body.style.cssText = "margin:0;background:transparent";
   const mount = doc.createElement("div");
   doc.body.appendChild(mount);
-  createRoot(mount).render(createElement(App, { controller, chat, apiKey }));
+  createRoot(mount).render(createElement(App, { controller, chat }));
 }
 
 // The shop may place the <script> in <head>, before <body> exists.
