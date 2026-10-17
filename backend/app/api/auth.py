@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import optional_session
+from app.api.rate_limit import limit_by_ip
 from app.auth.login import (
     LoginError,
     login_with_otp,
@@ -28,7 +29,11 @@ from app.schemas.auth import (
 router = APIRouter()
 
 
-@router.post("/conversations", response_model=SessionResponse)
+@router.post(
+    "/conversations",
+    response_model=SessionResponse,
+    dependencies=[limit_by_ip("conversations", limit=20, window_seconds=3600)],
+)
 def new_conversation(
     request: ConversationRequest, db: Annotated[Session, Depends(get_db)]
 ) -> SessionResponse:
@@ -45,7 +50,11 @@ def new_conversation(
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code}) from None
 
 
-@router.post("/auth/login", response_model=SessionResponse)
+@router.post(
+    "/auth/login",
+    response_model=SessionResponse,
+    dependencies=[limit_by_ip("login", limit=30, window_seconds=600)],
+)
 def login(
     request: LoginRequest,
     db: Annotated[Session, Depends(get_db)],
@@ -67,7 +76,11 @@ def login(
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code}) from None
 
 
-@router.post("/auth/otp/request", status_code=202)
+@router.post(
+    "/auth/otp/request",
+    status_code=202,
+    dependencies=[limit_by_ip("otp_request", limit=10, window_seconds=3600)],
+)
 def otp_request(request: OtpRequest, db: Annotated[Session, Depends(get_db)]) -> None:
     """Emails a code when the address belongs to a customer. Always the same empty 202."""
     settings = get_settings()
@@ -80,7 +93,11 @@ def otp_request(request: OtpRequest, db: Annotated[Session, Depends(get_db)]) ->
     )
 
 
-@router.post("/auth/otp/verify", response_model=SessionResponse)
+@router.post(
+    "/auth/otp/verify",
+    response_model=SessionResponse,
+    dependencies=[limit_by_ip("otp_verify", limit=20, window_seconds=3600)],
+)
 def otp_verify(
     request: OtpVerifyRequest,
     db: Annotated[Session, Depends(get_db)],

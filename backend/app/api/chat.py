@@ -44,6 +44,7 @@ from starlette.background import BackgroundTask
 from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
 from app.api.deps import require_customer_session, require_session
+from app.api.rate_limit import limit_by_conversation
 from app.auth.session import SessionClaims
 from app.chat.turns import (
     MessageIdReused,
@@ -342,7 +343,10 @@ async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
     yield _format_sse("done", ChatTurnSummary(conversation_id=conversation_id).model_dump(mode="json"))
 
 
-@router.post("/chat")
+@router.post(
+    "/chat",
+    dependencies=[limit_by_conversation("chat", limit=30, window_seconds=600)],
+)
 async def chat(
     request: ChatRequest, session: Annotated[SessionClaims, Depends(require_customer_session)]
 ) -> StreamingResponse:
