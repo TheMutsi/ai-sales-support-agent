@@ -18,12 +18,13 @@ from app.schemas.rag import SourceReference
 from app.tools.knowledge_base import search_knowledge_base
 
 
-def make_search_knowledge_base_tool(customer_id: uuid.UUID):
+def make_search_knowledge_base_tool(customer_id: uuid.UUID | None):
     """Builds a `search_knowledge_base` tool closed over `customer_id`. The
     LLM must never be able to choose whose plan scope a search applies to —
     it only ever sees `query`, never the customer identity — so
     `customer_id` comes from the graph's own state at bind time, not from an
-    argument the model fills in.
+    argument the model fills in. An anonymous visitor has none: the search then isn't
+    scoped to a plan.
 
     The retriever's `doc_type` filter is deliberately not exposed either. The
     evaluation suite found the model guessing the category wrong (SSO under

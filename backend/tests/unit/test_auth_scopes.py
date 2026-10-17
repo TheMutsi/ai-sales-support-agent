@@ -17,6 +17,10 @@ def test_verified_customers_can_act_on_their_account():
     assert {Scope.CUSTOMER_READ, Scope.TICKET_CREATE, Scope.REFUND_REQUEST} <= scopes
 
 
+def test_a_verified_customer_can_read_their_own_orders():
+    assert Scope.ORDER_READ in scopes_for(IdentityLevel.OTP_LOGIN)
+
+
 def test_order_lookup_is_read_only_and_exposes_no_personal_data():
     scopes = scopes_for(IdentityLevel.ORDER_LOOKUP)
 

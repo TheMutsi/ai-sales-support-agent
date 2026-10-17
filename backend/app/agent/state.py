@@ -32,6 +32,12 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
     customer_id: str | None
+    # What this visitor may do (`Scope` values, resolved with the tenant's overrides) and
+    # those overrides, so a missing scope can be turned into the methods that grant it.
+    scopes: list[str]
+    scope_overrides: dict | None
+    identity_required: bool
+    identity_methods: list[str]
     input_blocked: bool
     intent: Intent | None
     intent_confidence: float | None

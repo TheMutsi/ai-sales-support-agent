@@ -18,5 +18,6 @@ class Node(StrEnum):
     GET_PLAN_CATALOG = "get_plan_catalog"
     KNOWLEDGE_TOOL = "knowledge_tool"
     HUMAN_ESCALATION = "human_escalation"
+    REQUEST_IDENTITY = "request_identity"
     RESPONSE_WRITER = "response_writer"
     GUARDRAIL = "guardrail"
