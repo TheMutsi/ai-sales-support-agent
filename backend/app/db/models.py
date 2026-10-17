@@ -36,12 +36,60 @@ class Plan(Base):
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="plan")
 
 
-class Customer(Base):
-    __tablename__ = "customers"
+class Tenant(Base):
+    """A shop that embeds the chat widget. `api_key` is public (it ships in the
+    widget's script URL) and only identifies the tenant; proving a visitor is who
+    they claim takes a token signed with one of the tenant's `TenantSecret`s."""
+
+    __tablename__ = "tenants"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     name: Mapped[str]
-    email: Mapped[str] = mapped_column(unique=True, index=True)
+    api_key: Mapped[str] = mapped_column(unique=True, index=True)
+    # Per-identity-level scope overrides, e.g. {"order_lookup": ["kb:read"]};
+    # absent levels keep `app.auth.scopes.DEFAULT_LEVEL_SCOPES`.
+    scope_overrides: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    secrets: Mapped[list["TenantSecret"]] = relationship(back_populates="tenant")
+
+
+class TenantSecret(Base):
+    """A signing secret we issued to a tenant. Several can be active at once so
+    a shop can rotate without downtime; `kid` (in the token header) picks one."""
+
+    __tablename__ = "tenant_secrets"
+    __table_args__ = (UniqueConstraint("tenant_id", "kid"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"))
+    kid: Mapped[str]
+    # Stored in the clear: HS256 verification needs the raw key, so it can't be
+    # hashed like a password. Encrypting it at rest is a follow-up.
+    secret: Mapped[str]
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    tenant: Mapped["Tenant"] = relationship(back_populates="secrets")
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "external_id", name="uq_customers_tenant_external"),
+        UniqueConstraint("tenant_id", "email", name="uq_customers_tenant_email"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    name: Mapped[str]
+    # `tenant_id`/`external_id` link a customer to the shop that vouches for them:
+    # `external_id` is the `sub` in that shop's login token. Both are null for
+    # customers that predate multi-tenancy.
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
+    external_id: Mapped[str | None]
+    # Unique per tenant (see `uq_customers_tenant_email`), not globally: two shops
+    # can each have a customer with the same email.
+    email: Mapped[str] = mapped_column(index=True)
     company: Mapped[str | None]
     status: Mapped[str] = mapped_column(default="trial")  # trial | active | churned
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
