@@ -16,6 +16,7 @@ from typing import Literal
 import jwt
 
 from app.auth.scopes import IdentityLevel
+from app.schemas.orders import is_valid_order_id
 
 
 def issue_session_token(
@@ -26,6 +27,7 @@ def issue_session_token(
     level: IdentityLevel,
     signing_key: str,
     ttl: timedelta,
+    order_id: str | None = None,
 ) -> tuple[str, datetime]:
     now = datetime.now(UTC)
     expires_at = now + ttl
@@ -38,6 +40,8 @@ def issue_session_token(
     }
     if customer_id is not None:  # an anonymous session has no customer
         claims["cid"] = str(customer_id)
+    if order_id is not None:  # an order lookup names one order, never a customer
+        claims["oid"] = order_id
     return jwt.encode(claims, signing_key, algorithm="HS256"), expires_at
 
 
@@ -53,8 +57,9 @@ class SessionError(Exception):
 class SessionClaims:
     tenant_id: uuid.UUID
     conversation_id: uuid.UUID
-    customer_id: uuid.UUID | None  # None exactly when the level is anonymous
+    customer_id: uuid.UUID | None  # set exactly for the levels that identify a customer
     level: IdentityLevel
+    order_id: str | None = None  # set exactly for `order_lookup`
 
 
 def verify_session_token(token: str, signing_key: str) -> SessionClaims:
@@ -68,14 +73,22 @@ def verify_session_token(token: str, signing_key: str) -> SessionClaims:
             options={"require": ["exp", "tid", "conv", "lvl"]},
         )
         level = IdentityLevel(claims["lvl"])
-        # An anonymous session must not name a customer, and every other level must.
-        if (level is IdentityLevel.ANONYMOUS) == ("cid" in claims):
-            raise ValueError("customer claim inconsistent with the identity level")
+        # Which identity a session names follows from its level: a customer for the levels that
+        # prove who the customer is, one order for the weak order lookup, nothing for anonymous.
+        # An order id must never double as a customer, so a claim the level does not take is
+        # rejected, not ignored.
+        names_customer = level in (IdentityLevel.STORE_LOGIN, IdentityLevel.OTP_LOGIN)
+        names_order = level is IdentityLevel.ORDER_LOOKUP
+        if ("cid" in claims) != names_customer or ("oid" in claims) != names_order:
+            raise ValueError("identity claims inconsistent with the identity level")
+        if names_order and not is_valid_order_id(claims["oid"]):
+            raise ValueError("malformed order id")
         return SessionClaims(
             tenant_id=uuid.UUID(claims["tid"]),
             conversation_id=uuid.UUID(claims["conv"]),
             customer_id=uuid.UUID(claims["cid"]) if "cid" in claims else None,
             level=level,
+            order_id=claims.get("oid"),
         )
     except jwt.ExpiredSignatureError:
         raise SessionError("session_expired") from None
