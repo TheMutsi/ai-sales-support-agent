@@ -1,4 +1,4 @@
-"""Wire contracts for `POST /api/conversations` and `POST /api/auth/login`."""
+"""Wire contracts for the conversation, login and one-time-code endpoints."""
 
 import uuid
 from datetime import datetime
@@ -15,6 +15,16 @@ class ConversationRequest(BaseModel):
 class LoginRequest(BaseModel):
     api_key: str = Field(min_length=1)
     token: str = Field(min_length=1)
+
+
+class OtpRequest(BaseModel):
+    api_key: str = Field(min_length=1)
+    email: str = Field(min_length=1, max_length=254)
+
+
+class OtpVerifyRequest(OtpRequest):
+    # No minimum: a wrong or empty code is the same generic 401 as any other failure.
+    code: str = Field(max_length=16)
 
 
 class SessionResponse(BaseModel):

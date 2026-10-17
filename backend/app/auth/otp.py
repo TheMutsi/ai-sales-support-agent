@@ -145,7 +145,9 @@ def verify_otp(
 
     customer = _find_customer(db, tenant, email)
     if customer is None:
-        db.rollback()  # release the row lock instead of holding it until the session ends
+        # Commit, not rollback: it frees the row lock, and the session is the caller's, so
+        # their pending work is not ours to discard.
+        db.commit()
         raise OtpError
     challenge.consumed_at = now
     db.commit()

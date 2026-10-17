@@ -5,11 +5,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import optional_session
-from app.auth.login import LoginError, login_with_store_token, start_conversation
+from app.auth.login import (
+    LoginError,
+    login_with_otp,
+    login_with_store_token,
+    send_otp,
+    start_conversation,
+)
+from app.auth.otp import OtpError
+from app.auth.otp_sender import get_otp_sender
 from app.auth.session import SessionClaims
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.schemas.auth import ConversationRequest, LoginRequest, SessionResponse
+from app.schemas.auth import (
+    ConversationRequest,
+    LoginRequest,
+    OtpRequest,
+    OtpVerifyRequest,
+    SessionResponse,
+)
 
 router = APIRouter()
 
@@ -51,3 +65,39 @@ def login(
         )
     except LoginError as exc:
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code}) from None
+
+
+@router.post("/auth/otp/request", status_code=202)
+def otp_request(request: OtpRequest, db: Annotated[Session, Depends(get_db)]) -> None:
+    """Emails a code when the address belongs to a customer. Always the same empty 202."""
+    settings = get_settings()
+    send_otp(
+        db,
+        api_key=request.api_key,
+        email=request.email,
+        sender=get_otp_sender(settings),
+        key=settings.session_signing_key,
+    )
+
+
+@router.post("/auth/otp/verify", response_model=SessionResponse)
+def otp_verify(
+    request: OtpVerifyRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current: Annotated[SessionClaims | None, Depends(optional_session)],
+) -> SessionResponse:
+    """The code is checked here, never by the chat agent: it must not pass through the
+    model or its traces. The caller's anonymous conversation, if any, is continued."""
+    settings = get_settings()
+    try:
+        return login_with_otp(
+            db,
+            api_key=request.api_key,
+            email=request.email,
+            code=request.code,
+            conversation_id=current.conversation_id if current else None,
+            session_key=settings.session_signing_key,
+            session_ttl=timedelta(seconds=settings.session_ttl_seconds),
+        )
+    except OtpError as exc:
+        raise HTTPException(status_code=401, detail={"code": exc.code}) from None
