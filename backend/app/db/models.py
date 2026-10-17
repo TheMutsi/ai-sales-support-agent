@@ -73,6 +73,36 @@ class TenantSecret(Base):
     tenant: Mapped["Tenant"] = relationship(back_populates="secrets")
 
 
+class OtpChallenge(Base):
+    """A one-time code sent to a customer's email (passwordless login). Only an HMAC
+    of the code is stored. Dies when consumed, expired, superseded or out of attempts."""
+
+    __tablename__ = "otp_challenges"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    email: Mapped[str] = mapped_column(index=True)  # normalized: stripped, lowercased
+    code_hash: Mapped[str]
+    created_at: Mapped[datetime]
+    expires_at: Mapped[datetime]
+    attempts: Mapped[int] = mapped_column(default=0)
+    consumed_at: Mapped[datetime | None]
+
+
+class SecurityEvent(Base):
+    """Something worth a human's review (too many wrong codes, requests over the
+    limit). A signal, not a verdict: nothing is blocked by it."""
+
+    __tablename__ = "security_events"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
+    kind: Mapped[str] = mapped_column(index=True)
+    email: Mapped[str | None]
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class Customer(Base):
     __tablename__ = "customers"
     __table_args__ = (
