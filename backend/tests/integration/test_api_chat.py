@@ -312,3 +312,85 @@ def test_the_messages_endpoint_says_which_message_is_a_form(shop):
     )
 
     assert [m["kind"] for m in response.json()["messages"]] == ["text", "identity_request"]
+
+
+class _RecordingGraph:
+    """Ends each run with a plain answer and remembers what it was started with."""
+
+    def __init__(self):
+        self.runs: list[dict] = []
+
+    async def astream_events(self, initial_state, config, version):
+        self.runs.append(initial_state)
+        answer = AIMessage(content="Your next invoice is on the 3rd.")
+        yield {
+            "event": "on_chain_end",
+            "name": "LangGraph",
+            "metadata": {},
+            "data": {"output": {"messages": [answer]}},
+        }
+
+
+def _ask_and_get_asked_for_identity(shop, text="my invoice?"):
+    message_id = uuid.uuid4()
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        turn = begin_turn(
+            db,
+            conversation_id=shop["conversation"].id,
+            client_message_id=message_id,
+            content=text,
+            now=now,
+        )
+        finish_turn(
+            db,
+            conversation_id=shop["conversation"].id,
+            turn=turn,
+            content="Please verify.",
+            now=now,
+            kind=MessageKind.IDENTITY_REQUEST,
+        )
+    return message_id
+
+
+def test_resuming_answers_the_message_the_visitor_was_asked_to_identify_for(shop, monkeypatch):
+    graph = _RecordingGraph()
+    monkeypatch.setattr(chat_module, "agent_graph", graph)
+    _ask_and_get_asked_for_identity(shop, "when is my next invoice?")
+
+    response = client.post("/api/chat/resume", headers=_auth(shop))
+
+    assert response.status_code == 200 and "event: done" in response.text
+    assert graph.runs[0]["messages"][-1].content == "when is my next invoice?"
+    stored = client.get(
+        f"/api/conversations/{shop['conversation'].id}/messages", headers=_auth(shop)
+    ).json()["messages"]
+    assert [(m["role"], m["kind"]) for m in stored] == [
+        ("user", "text"),
+        ("assistant", "identity_request"),
+        ("assistant", "text"),
+    ]
+
+
+def test_resuming_twice_does_not_answer_twice(shop, monkeypatch):
+    graph = _RecordingGraph()
+    monkeypatch.setattr(chat_module, "agent_graph", graph)
+    _ask_and_get_asked_for_identity(shop)
+
+    first = client.post("/api/chat/resume", headers=_auth(shop))
+    second = client.post("/api/chat/resume", headers=_auth(shop))
+
+    assert first.status_code == 200
+    assert second.status_code == 404
+    assert len(graph.runs) == 1
+
+
+def test_there_is_nothing_to_resume_in_a_conversation_that_asked_for_nothing(shop):
+    response = client.post("/api/chat/resume", headers=_auth(shop))
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == {"code": "nothing_to_resume"}
+
+
+def test_resuming_needs_a_session():
+    assert client.post("/api/chat/resume").status_code == 401

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,6 +9,11 @@ from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.core.config import get_settings
 from app.core.observability import configure_langfuse
+
+# Only the app's own messages at INFO (the local one-time code is one); libraries stay at
+# WARNING so they don't flood the console.
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("app").setLevel(logging.INFO)
 
 settings = get_settings()
 configure_langfuse()

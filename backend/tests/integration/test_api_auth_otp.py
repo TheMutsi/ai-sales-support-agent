@@ -67,9 +67,8 @@ def test_the_code_is_sent_and_the_response_does_not_contain_it(shop, sender):
     assert code not in response.text
 
 
-@pytest.mark.parametrize("email", ["nobody@shop.test", "not-an-email-but-fine"])
-def test_an_unknown_email_gets_the_same_response_and_no_code(shop, sender, email):
-    response = _request(shop["api_key"], email)
+def test_an_unknown_email_gets_the_same_response_and_no_code(shop, sender):
+    response = _request(shop["api_key"], "nobody@shop.test")
 
     assert response.status_code == 202 and response.content == _request(shop["api_key"]).content
     assert [sent_to for sent_to, _ in sender.sent] == [EMAIL]
@@ -97,11 +96,24 @@ def test_the_right_code_gives_an_otp_login_session_for_that_customer(shop, sende
     assert claims["cid"] == str(shop["customer"].id) and claims["lvl"] == "otp_login"
 
 
-@pytest.mark.parametrize("code", ["000000", "abc", ""])
-def test_a_wrong_code_is_one_generic_401(shop, sender, code):
+@pytest.mark.parametrize("email", ["", "ana", "ana@", "@shop.test", "a b@shop.test", "ana@shop"])
+def test_something_that_is_not_an_email_is_rejected_before_anything_runs(shop, sender, email):
+    assert _request(shop["api_key"], email).status_code == 422
+    assert _verify(shop["api_key"], "123456", email=email).status_code == 422
+    assert sender.sent == []
+
+
+@pytest.mark.parametrize("code", ["", "abc", "12345", "1234567", "12 456", "１２３４５６", "12345; --"])
+def test_a_code_that_is_not_exactly_six_digits_is_rejected_as_malformed(shop, sender, code):
     _request(shop["api_key"])
 
-    response = _verify(shop["api_key"], code)
+    assert _verify(shop["api_key"], code).status_code == 422
+
+
+def test_a_wrong_code_is_one_generic_401(shop, sender):
+    _request(shop["api_key"])
+
+    response = _verify(shop["api_key"], "000000")
 
     assert response.status_code == 401
     assert response.json()["detail"] == {"code": "invalid_code"}

@@ -200,3 +200,27 @@ def abandon_turn(db: Session, *, conversation_id: uuid.UUID, turn: TurnStart) ->
 
 def list_messages(db: Session, *, conversation_id: uuid.UUID) -> list[Message]:
     return db.query(Message).filter_by(conversation_id=conversation_id).order_by(Message.seq).all()
+
+
+def pending_message(db: Session, *, conversation_id: uuid.UUID) -> Message | None:
+    """The user message waiting for the visitor to identify: the latest one before an
+    identity request that is still the last thing in the conversation. Derived from what is
+    stored, so there is no pending state to expire; once anything else is said, it is gone."""
+    last = (
+        db.query(Message)
+        .filter_by(conversation_id=conversation_id)
+        .order_by(Message.seq.desc())
+        .first()
+    )
+    if last is None or last.kind != MessageKind.IDENTITY_REQUEST:
+        return None
+    return (
+        db.query(Message)
+        .filter(
+            Message.conversation_id == conversation_id,
+            Message.role == "user",
+            Message.seq < last.seq,
+        )
+        .order_by(Message.seq.desc())
+        .first()
+    )

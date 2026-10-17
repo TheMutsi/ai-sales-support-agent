@@ -20,6 +20,7 @@ from app.chat.turns import (
     begin_turn,
     finish_turn,
     list_messages,
+    pending_message,
 )
 from app.db.models import Conversation, Tenant
 from app.db.session import SessionLocal
@@ -251,3 +252,37 @@ def test_retrying_the_message_after_an_identity_request_runs_it_again_and_can_be
     assert again.action is TurnAction.RUN and again.user_text == "my invoice?"
     _finish(db, conversation, again, "Your next invoice is on the 3rd.")
     assert _begin(db, conversation, "my invoice?", message_id=message_id).action is TurnAction.REPLAY
+
+
+def test_the_pending_message_is_the_one_the_identity_request_was_about(db, conversation):
+    message_id = uuid.uuid4()
+    _ask_for_identity(db, conversation, _begin(db, conversation, "my invoice?", message_id=message_id))
+
+    pending = pending_message(db, conversation_id=conversation.id)
+
+    assert (pending.content, pending.client_message_id) == ("my invoice?", message_id)
+
+
+def test_nothing_is_pending_in_a_new_conversation_or_after_a_normal_answer(db, conversation):
+    assert pending_message(db, conversation_id=conversation.id) is None
+
+    _complete(db, conversation, "hello", "Hi")
+
+    assert pending_message(db, conversation_id=conversation.id) is None
+
+
+def test_nothing_is_pending_once_the_visitor_moved_on(db, conversation):
+    """The form is only the last word of the conversation until something else is said."""
+    _ask_for_identity(db, conversation, _begin(db, conversation, "my invoice?"))
+    _complete(db, conversation, "never mind, what are your plans?", "Three plans.")
+
+    assert pending_message(db, conversation_id=conversation.id) is None
+
+
+def test_the_latest_unanswered_question_is_the_pending_one(db, conversation):
+    _complete(db, conversation, "hello", "Hi")
+    first_form = _begin(db, conversation, "my invoice?")
+    _ask_for_identity(db, conversation, first_form)
+    _ask_for_identity(db, conversation, _begin(db, conversation, "and my refund?"))
+
+    assert pending_message(db, conversation_id=conversation.id).content == "and my refund?"

@@ -58,6 +58,7 @@ from app.chat.turns import (
     begin_turn,
     finish_turn,
     list_messages,
+    pending_message,
 )
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
@@ -378,6 +379,33 @@ async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
 async def chat(
     request: ChatRequest, session: Annotated[SessionClaims, Depends(require_session)]
 ) -> StreamingResponse:
+    return await _run_turn(session, request)
+
+
+@router.post(
+    "/chat/resume",
+    dependencies=[limit_by_conversation("chat", limit=30, window_seconds=600)],
+)
+async def resume(
+    session: Annotated[SessionClaims, Depends(require_session)],
+) -> StreamingResponse:
+    """Answers the message the visitor was asked to identify for, now that they have. Same
+    turn as before: the stored message and its id, so nothing is duplicated."""
+
+    def find() -> ChatRequest | None:
+        with SessionLocal() as db:
+            pending = pending_message(db, conversation_id=session.conversation_id)
+            if pending is None or pending.client_message_id is None:
+                return None
+            return ChatRequest(message=pending.content, message_id=pending.client_message_id)
+
+    request = await run_in_threadpool(find)
+    if request is None:
+        raise HTTPException(status_code=404, detail={"code": "nothing_to_resume"})
+    return await _run_turn(session, request)
+
+
+async def _run_turn(session: SessionClaims, request: ChatRequest) -> StreamingResponse:
     # The turn is opened before streaming starts so a refusal can still be a proper
     # HTTP status instead of an event inside a 200 response.
     try:
