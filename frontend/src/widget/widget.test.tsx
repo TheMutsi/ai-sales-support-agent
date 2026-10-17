@@ -5,6 +5,8 @@ import { Composer } from "./Composer";
 import { IdentityForm } from "./IdentityForm";
 import { MessageView } from "./MessageView";
 import { toParts } from "./parts";
+import { rejection } from "./attachments";
+import { answeredCount, nextUnread } from "./unread";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -60,7 +62,7 @@ describe("Composer", () => {
     press(textarea, { shiftKey: true });
     expect(onSend).not.toHaveBeenCalled();
     press(textarea, {});
-    expect(onSend).toHaveBeenCalledExactlyOnceWith("hello");
+    expect(onSend).toHaveBeenCalledExactlyOnceWith("hello", []);
     expect(textarea.value).toBe("");
   });
 
@@ -71,7 +73,7 @@ describe("Composer", () => {
     type(textarea, "hello");
     press(textarea, {});
     expect(onSend).not.toHaveBeenCalled();
-    expect(container.querySelector("button")!.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled).toBe(true);
   });
 });
 
@@ -113,5 +115,75 @@ describe("IdentityForm", () => {
     set(container.querySelector("input")!, "123456");
     await submit();
     expect(container.querySelector('[role="alert"]')!.textContent).toBe("That code did not work.");
+  });
+});
+
+describe("unread count", () => {
+  it("counts answers that arrive while closed, ignoring history and the one still streaming", () => {
+    let state = nextUnread({ seen: null, unread: 0 }, 4, false); // old conversation: baseline only
+    expect(state.unread).toBe(0);
+    state = nextUnread(state, 5, false);
+    expect(state.unread).toBe(1);
+    state = nextUnread(state, 6, false);
+    expect(state.unread).toBe(2);
+    state = nextUnread(state, 6, true); // opening the panel clears it
+    expect(state).toEqual({ seen: 6, unread: 0 });
+    expect(answeredCount([
+      { id: "u", role: "user", kind: "text", content: "hi" },
+      { id: "streaming", role: "assistant", kind: "text", content: "Hel" },
+      { id: "answer-2", role: "assistant", kind: "text", content: "Hello" },
+    ])).toBe(1);
+  });
+});
+
+describe("attachment rules", () => {
+  const file = (type: string, size = 10) => new File([new Uint8Array(size)], "a", { type });
+
+  it("accepts small images and rejects other types, big files and more than three", () => {
+    expect(rejection(file("image/png"), 0)).toBeNull();
+    expect(rejection(file("application/pdf"), 0)).toMatch(/only png/i);
+    expect(rejection(file("image/svg+xml"), 0)).not.toBeNull(); // svg can carry script
+    expect(rejection(file("image/png", 5 * 1024 * 1024 + 1), 0)).toMatch(/5 MB/);
+    expect(rejection(file("image/png"), 3)).toMatch(/up to 3/i);
+  });
+});
+
+describe("Composer attachments", () => {
+  it("previews a chosen image, can remove it, and sends it with the message", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:preview");
+    URL.revokeObjectURL = vi.fn();
+    const onSend = vi.fn();
+    mount(<Composer disabled={false} onSend={onSend} />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const choose = (files: File[]) =>
+      act(() => {
+        Object.defineProperty(input, "files", { value: files, configurable: true });
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    choose([new File(["x"], "cat.png", { type: "image/png" })]);
+    expect(container.querySelector("img")!.getAttribute("src")).toBe("blob:preview");
+    expect(container.textContent).toMatch(/not sent yet/i);
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Remove cat.png"]')!.click());
+    expect(container.querySelector("img")).toBeNull();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
+
+    choose([new File(["x"], "cat.png", { type: "image/png" })]);
+    const textarea = container.querySelector("textarea")!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "look");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => void textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(onSend).toHaveBeenCalledWith("look", [{ url: "blob:preview", name: "cat.png" }]);
+  });
+
+  it("explains why a file was refused", () => {
+    mount(<Composer disabled={false} onSend={vi.fn()} />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    act(() => {
+      Object.defineProperty(input, "files", { value: [new File(["x"], "a.pdf", { type: "application/pdf" })], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.querySelector('[role="alert"]')!.textContent).toMatch(/only png/i);
   });
 });

@@ -4,6 +4,8 @@ import type { Controller } from "./controller";
 /** `Mew('config', { getToken })`: how the shop tells the widget who its logged-in customer is. */
 export interface MewConfig {
   getToken?: GetToken;
+  /** Play a sound when an answer arrives while the panel is closed. Default true. */
+  sound?: boolean;
 }
 
 type MewCall = (command: string, ...args: unknown[]) => void;

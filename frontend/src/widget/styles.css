@@ -16,7 +16,16 @@
 .mew-assistant { align-self: flex-start; background: #f1f2f4; }
 .mew-typing { color: #6b7280; letter-spacing: 2px; }
 .mew-error { padding: 8px 12px; background: #fef2f2; color: #b91c1c; font-size: 13px; }
-.mew-composer { display: flex; gap: 8px; padding: 8px; border-top: 1px solid #e5e7eb; }
+.mew-composer { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid #e5e7eb; }
+.mew-row { display: flex; gap: 8px; align-items: flex-end; }
+.mew-composer .mew-attach { background: none; color: inherit; padding: 0 4px; font-size: 18px; }
+.mew-attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mew-attachments small { flex-basis: 100%; color: #6b7280; }
+.mew-attachments small[role="alert"] { color: #b91c1c; }
+.mew-thumb { position: relative; }
+.mew-thumb img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+.mew-composer .mew-thumb button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px;
+  padding: 0; border-radius: 50%; background: #1b1f24; font-size: 12px; line-height: 1; }
 .mew-composer textarea { flex: 1; resize: none; padding: 8px; border: 1px solid #d1d5db;
   border-radius: 8px; font: inherit; max-height: 96px; }
 .mew-composer button { border: 0; border-radius: 8px; padding: 0 14px; background: #4f46e5;
@@ -30,3 +39,6 @@
 .mew-identity button { align-self: flex-end; border: 0; border-radius: 8px; padding: 8px 14px;
   background: #4f46e5; color: #fff; font: inherit; cursor: pointer; }
 .mew-identity button:disabled { opacity: 0.5; cursor: default; }
+.mew-launcher { position: relative; }
+.mew-badge { position: absolute; top: -2px; right: -2px; min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 10px; background: #dc2626; color: #fff; font: 600 12px/20px system-ui, sans-serif; }
