@@ -19,7 +19,7 @@ from app.auth.conversations import resolve_for_login
 from app.auth.credentials import generate_api_key
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
-from app.chat.turns import begin_turn, finish_turn
+from app.chat.turns import MessageKind, begin_turn, finish_turn
 from app.core.config import get_settings
 from app.db.models import Conversation, Customer, Message, Tenant
 from app.db.session import SessionLocal
@@ -286,3 +286,29 @@ def test_another_conversations_messages_are_not_readable_with_this_session(shop)
     response = client.get(f"/api/conversations/{other}/messages", headers=_auth(shop))
 
     assert response.status_code == 404
+
+
+def test_the_messages_endpoint_says_which_message_is_a_form(shop):
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        turn = begin_turn(
+            db,
+            conversation_id=shop["conversation"].id,
+            client_message_id=uuid.uuid4(),
+            content="my invoice?",
+            now=now,
+        )
+        finish_turn(
+            db,
+            conversation_id=shop["conversation"].id,
+            turn=turn,
+            content="I need to verify it is you.",
+            now=now,
+            kind=MessageKind.IDENTITY_REQUEST,
+        )
+
+    response = client.get(
+        f"/api/conversations/{shop['conversation'].id}/messages", headers=_auth(shop)
+    )
+
+    assert [m["kind"] for m in response.json()["messages"]] == ["text", "identity_request"]

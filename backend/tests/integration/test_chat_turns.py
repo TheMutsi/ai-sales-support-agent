@@ -12,6 +12,7 @@ from app.auth.conversations import create_anonymous
 from app.auth.credentials import generate_api_key
 from app.chat.turns import (
     MessageIdReused,
+    MessageKind,
     TurnAction,
     TurnInProgress,
     TurnSuperseded,
@@ -53,6 +54,17 @@ def _begin(db, conversation, text="hi", message_id=None, now=NOW, **kwargs):
 
 def _finish(db, conversation, turn, reply, now=NOW):
     finish_turn(db, conversation_id=conversation.id, turn=turn, content=reply, now=now)
+
+
+def _ask_for_identity(db, conversation, turn, now=NOW):
+    finish_turn(
+        db,
+        conversation_id=conversation.id,
+        turn=turn,
+        content="I need to verify it is you.",
+        now=now,
+        kind=MessageKind.IDENTITY_REQUEST,
+    )
 
 
 def _complete(db, conversation, user_text, reply, now=NOW):
@@ -201,3 +213,41 @@ def test_retrying_an_old_message_never_replays_someone_elses_reply(db, conversat
 
     again = _begin(db, conversation, "slow question", message_id=a_id, now=later)
     assert again.action is TurnAction.REPLAY and again.reply == "answer to A"
+
+
+def test_a_message_defaults_to_text(db, conversation):
+    _complete(db, conversation, "hello", "Hi")
+
+    assert [m.kind for m in list_messages(db, conversation_id=conversation.id)] == ["text", "text"]
+
+
+def test_an_identity_request_is_stored_with_its_kind(db, conversation):
+    _ask_for_identity(db, conversation, _begin(db, conversation, "my invoice?"))
+
+    stored = list_messages(db, conversation_id=conversation.id)
+
+    assert [(m.role, m.kind) for m in stored] == [("user", "text"), ("assistant", "identity_request")]
+
+
+def test_the_model_never_sees_an_identity_request_in_the_history(db, conversation):
+    """It is a form the widget shows, not something the assistant said about the product."""
+    _ask_for_identity(db, conversation, _begin(db, conversation, "my invoice?"))
+
+    turn = _begin(db, conversation, "never mind, what are your plans?")
+
+    assert [(m.role, m.content) for m in turn.history] == [("user", "my invoice?")]
+
+
+def test_retrying_the_message_after_an_identity_request_runs_it_again_and_can_be_answered(
+    db, conversation
+):
+    """This is how a turn resumes once the visitor has identified: same message id, no reply
+    yet. The identity request must not count as its reply, or it would be replayed forever."""
+    message_id = uuid.uuid4()
+    _ask_for_identity(db, conversation, _begin(db, conversation, "my invoice?", message_id=message_id))
+
+    again = _begin(db, conversation, "my invoice?", message_id=message_id)
+
+    assert again.action is TurnAction.RUN and again.user_text == "my invoice?"
+    _finish(db, conversation, again, "Your next invoice is on the 3rd.")
+    assert _begin(db, conversation, "my invoice?", message_id=message_id).action is TurnAction.REPLAY

@@ -116,6 +116,9 @@ class Message(Base):
     conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id"))
     seq: Mapped[int]
     role: Mapped[str]  # user | assistant
+    # text | identity_request. Anything but text is a form the widget shows (and an audit
+    # record), not conversation: it is kept out of the history the model receives.
+    kind: Mapped[str] = mapped_column(server_default="text", default="text")
     content: Mapped[str] = mapped_column(Text)
     client_message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     # On a reply: the seq of the user message it answers (found by this link, not position).

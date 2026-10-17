@@ -32,6 +32,7 @@ class ChatMessage(BaseModel):
 class StoredMessage(BaseModel):
     seq: int
     role: Literal["user", "assistant"]
+    kind: Literal["text", "identity_request"]
     content: str
     created_at: datetime
 
