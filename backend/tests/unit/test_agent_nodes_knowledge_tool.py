@@ -24,7 +24,7 @@ class _FakeTool:
 
 
 def test_runs_each_requested_call_and_appends_tool_messages(monkeypatch):
-    fake_tool = _FakeTool("AcmeFlow Pro costs $49/month.")
+    fake_tool = _FakeTool("MewFlow Pro costs $49/month.")
     monkeypatch.setattr(
         knowledge_tool_module, "make_search_knowledge_base_tool", lambda customer_id: fake_tool
     )
@@ -41,7 +41,7 @@ def test_runs_each_requested_call_and_appends_tool_messages(monkeypatch):
 
     assert len(result["messages"]) == 1
     tool_message = result["messages"][0]
-    assert tool_message.content == "AcmeFlow Pro costs $49/month."
+    assert tool_message.content == "MewFlow Pro costs $49/month."
     assert tool_message.tool_call_id == "c1"
     assert fake_tool.invoked_with == [{"query": "pricing"}]
     assert result["tool_call_rounds"] == 1

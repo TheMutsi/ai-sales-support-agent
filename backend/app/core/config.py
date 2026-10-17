@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # Port 5433: the docker-compose `db` service maps to 5433 on the host to avoid
     # colliding with a native Postgres install that may already own 5432.
-    database_url: str = "postgresql+psycopg://acmeflow:acmeflow@localhost:5433/acmeflow"
+    database_url: str = "postgresql+psycopg://mewflow:mewflow@localhost:5433/mewflow"
 
     # Origins the browser frontend is served from (Vite dev server by default).
     # An explicit allow-list, never "*": the API will carry customer-scoped
@@ -72,8 +72,8 @@ class Settings(BaseSettings):
     # seeds the Langfuse project with, so tracing works out of the box with no
     # manual key-copying — they're meaningless outside this local stack.
     langfuse_tracing_enabled: bool = False
-    langfuse_public_key: str = "pk-lf-acmeflow-local"
-    langfuse_secret_key: str = "sk-lf-acmeflow-local-dev-only"
+    langfuse_public_key: str = "pk-lf-mewflow-local"
+    langfuse_secret_key: str = "sk-lf-mewflow-local-dev-only"
     langfuse_host: str = "http://localhost:3000"
 
     @model_validator(mode="after")

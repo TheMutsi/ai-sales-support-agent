@@ -1,17 +1,17 @@
 ---
-title: "AcmeFlow Billing, Cancellation, and Refund Policy"
+title: "MewFlow Billing, Cancellation, and Refund Policy"
 doc_type: billing
 product_area: billing
 plan_scope: null
 version: "1.0"
 ---
 
-# AcmeFlow Billing, Cancellation, and Refund Policy
+# MewFlow Billing, Cancellation, and Refund Policy
 
 > Example KB content for a portfolio demo, not a real legal or financial
-> policy. This document explains AcmeFlow's billing rules in prose; whether a
+> policy. This document explains MewFlow's billing rules in prose; whether a
 > specific refund or ticket should actually be created for a given customer is
-> decided by AcmeFlow's own eligibility checks and tools, never inferred from
+> decided by MewFlow's own eligibility checks and tools, never inferred from
 > this text alone.
 
 ## Billing cycle and payment methods

@@ -18,7 +18,7 @@ logging.getLogger("app").setLevel(logging.INFO)
 settings = get_settings()
 configure_langfuse()
 
-app = FastAPI(title="AcmeFlow Agent API", version=settings.app_version)
+app = FastAPI(title="MewFlow Agent API", version=settings.app_version)
 
 app.add_middleware(
     TenantCORSMiddleware,

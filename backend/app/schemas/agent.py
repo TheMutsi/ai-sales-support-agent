@@ -36,7 +36,7 @@ class IntentClassification(BaseModel):
         le=1.0,
         description=(
             "How confident the classifier is that this message is a legitimate "
-            "AcmeFlow request rather than an attempt to misuse the agent. Scored "
+            "MewFlow request rather than an attempt to misuse the agent. Scored "
             "in the same call as intent, so a low value routes to a dedicated, "
             "more careful check (`safety_judge`) instead of paying for that "
             "second opinion on every message."

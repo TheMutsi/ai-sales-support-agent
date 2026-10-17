@@ -1,12 +1,12 @@
 ---
-title: "AcmeFlow Security Overview"
+title: "MewFlow Security Overview"
 doc_type: security
 product_area: security
 plan_scope: null
 version: "1.0"
 ---
 
-# AcmeFlow Security Overview
+# MewFlow Security Overview
 
 > Example KB content for a portfolio demo — not a real compliance attestation.
 > Don't present any claim in this document as an actual certification.
@@ -14,7 +14,7 @@ version: "1.0"
 ## Encryption
 
 Data is encrypted in transit (TLS 1.2+) between the customer's browser or API
-client and AcmeFlow, and at rest in the production database using the cloud
+client and MewFlow, and at rest in the production database using the cloud
 provider's standard disk-level encryption.
 
 ## Access controls
@@ -39,7 +39,7 @@ across accounts.
 
 ## Incident response
 
-AcmeFlow notifies affected customers by email of any confirmed security
+MewFlow notifies affected customers by email of any confirmed security
 incident involving their data, as soon as it's been verified, consistent with
 applicable breach-notification law. This KB entry doesn't track incident
 status for a specific account — an active incident is communicated directly,
@@ -48,7 +48,7 @@ not looked up here.
 ## Vulnerability reporting
 
 Security researchers can report a suspected vulnerability to
-security@acmeflow.example. This is a support-agent knowledge base, not the
+security@mewflow.example. This is a support-agent knowledge base, not the
 right channel to receive or triage a live vulnerability report — if a message
 reads as an actual vulnerability disclosure rather than a general question
 about security practices, it should be escalated to a human rather than

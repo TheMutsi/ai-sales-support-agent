@@ -1,12 +1,12 @@
 ---
-title: "AcmeFlow Frequently Asked Questions"
+title: "MewFlow Frequently Asked Questions"
 doc_type: faq
 product_area: general
 plan_scope: null
 version: "1.0"
 ---
 
-# AcmeFlow Frequently Asked Questions
+# MewFlow Frequently Asked Questions
 
 > Example KB content for a portfolio demo.
 
@@ -38,13 +38,13 @@ security reasons — they can only revoke that user's access and re-invite them.
 
 ## Is there a mobile app?
 
-Not currently — AcmeFlow is a web dashboard, accessible from a mobile browser
+Not currently — MewFlow is a web dashboard, accessible from a mobile browser
 but not published as a native app.
 
 ## How do I set up SSO?
 
-SSO (SAML 2.0) is available on the Enterprise plan. Contact AcmeFlow support
-to start the setup — it requires exchanging SAML metadata between AcmeFlow and
+SSO (SAML 2.0) is available on the Enterprise plan. Contact MewFlow support
+to start the setup — it requires exchanging SAML metadata between MewFlow and
 the company's identity provider, which isn't a self-serve toggle.
 
 ## What's the difference between account status and subscription status?

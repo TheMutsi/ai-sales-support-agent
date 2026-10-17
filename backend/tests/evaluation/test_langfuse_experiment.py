@@ -116,8 +116,8 @@ def _runner(
 
 
 def test_dataset_name_keeps_dev_and_heldout_apart():
-    assert dataset_name_for(Path("evaluation/dataset.jsonl")) == "acmeflow-eval/dataset"
-    assert dataset_name_for(Path("evaluation/heldout.jsonl")) == "acmeflow-eval/heldout"
+    assert dataset_name_for(Path("evaluation/dataset.jsonl")) == "mewflow-eval/dataset"
+    assert dataset_name_for(Path("evaluation/heldout.jsonl")) == "mewflow-eval/heldout"
 
 
 def test_dataset_item_id_is_stable_per_dataset_and_case():
@@ -150,7 +150,7 @@ def test_run_scores_every_case_and_links_the_session(monkeypatch):
     cases = [_case("billing-001"), _case("billing-002", expected_intent="refund_request")]
 
     results, errored, run_url = _runner(client, _chat_server(requests), sessions).run(
-        cases, "acmeflow-eval/dataset", "abc123 run", {"git_revision": "abc123"}
+        cases, "mewflow-eval/dataset", "abc123 run", {"git_revision": "abc123"}
     )
 
     assert [r.case_id for r in results] == ["billing-001", "billing-002"]
@@ -176,7 +176,7 @@ def test_failed_case_is_reported_as_errored_not_dropped():
     ]
 
     results, errored, _ = _runner(client, _chat_server([], fail_on="boom")).run(
-        cases, "acmeflow-eval/dataset", "run", {}
+        cases, "mewflow-eval/dataset", "run", {}
     )
 
     assert [r.case_id for r in results] == ["billing-001"]
@@ -189,7 +189,7 @@ def test_failed_case_is_reported_as_errored_not_dropped():
 def test_run_level_evaluations_report_one_pass_rate_per_metric():
     client = _FakeLangfuse()
     results, _, _ = _runner(client, _chat_server([])).run(
-        [_case("billing-001")], "acmeflow-eval/dataset", "run", {}
+        [_case("billing-001")], "mewflow-eval/dataset", "run", {}
     )
 
     names = {e.name for e in run_level_evaluations(results, total_cases=1)}

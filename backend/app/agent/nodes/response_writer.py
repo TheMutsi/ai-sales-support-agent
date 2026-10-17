@@ -34,7 +34,7 @@ _SEARCH_REQUIRED_INTENTS = {
 # of `tool_choice="required"`, which Ollama does not support.
 _SEARCH_REQUIRED_REMINDER = (
     "You have not searched the knowledge base in this turn and the context has no "
-    "AcmeFlow facts. Call the search tool now instead of replying."
+    "MewFlow facts. Call the search tool now instead of replying."
 )
 
 

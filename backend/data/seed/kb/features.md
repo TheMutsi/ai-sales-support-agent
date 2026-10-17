@@ -1,12 +1,12 @@
 ---
-title: "AcmeFlow Features by Plan"
+title: "MewFlow Features by Plan"
 doc_type: features
 product_area: product
 plan_scope: null
 version: "1.0"
 ---
 
-# AcmeFlow Features by Plan
+# MewFlow Features by Plan
 
 > Example KB content for a portfolio demo. Feature names here mirror the
 > `features` list in `backend/data/seed/plans.json` — exact prices and seat/API
@@ -37,20 +37,20 @@ the standard one.
 
 ## Integrations
 
-Available on Pro and Enterprise. Connects AcmeFlow to external tools —see the
+Available on Pro and Enterprise. Connects MewFlow to external tools —see the
 Integrations document for the current list of supported providers and setup
 steps.
 
 ## SSO (single sign-on)
 
 Available on Enterprise only. SAML 2.0-based single sign-on so a company can
-manage AcmeFlow access through its own identity provider instead of individual
-passwords. Setup requires coordination with AcmeFlow support to configure the
+manage MewFlow access through its own identity provider instead of individual
+passwords. Setup requires coordination with MewFlow support to configure the
 SAML metadata exchange.
 
 ## Dedicated account manager
 
-Available on Enterprise only. A named AcmeFlow contact for onboarding,
+Available on Enterprise only. A named MewFlow contact for onboarding,
 renewal planning, and escalations, instead of routing every request through
 the general support queue.
 

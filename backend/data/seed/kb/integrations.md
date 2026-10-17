@@ -1,12 +1,12 @@
 ---
-title: "AcmeFlow Integrations"
+title: "MewFlow Integrations"
 doc_type: integrations
 product_area: product
 plan_scope: null
 version: "1.0"
 ---
 
-# AcmeFlow Integrations
+# MewFlow Integrations
 
 > Example KB content for a portfolio demo.
 
@@ -17,7 +17,7 @@ feature flag); Starter does not include integration access.
 
 Posts a notification to a chosen Slack channel when a report finishes
 generating, or when usage crosses a threshold the account configures. Set up
-from Settings → Integrations → Slack; requires authorizing AcmeFlow in the
+from Settings → Integrations → Slack; requires authorizing MewFlow in the
 target Slack workspace.
 
 ## Webhooks
@@ -29,8 +29,8 @@ receiving endpoint can verify authenticity.
 
 ## Zapier
 
-AcmeFlow publishes a Zapier app with triggers for the same events webhooks
-support, so a customer can connect AcmeFlow to hundreds of other tools without
+MewFlow publishes a Zapier app with triggers for the same events webhooks
+support, so a customer can connect MewFlow to hundreds of other tools without
 writing code.
 
 ## REST API

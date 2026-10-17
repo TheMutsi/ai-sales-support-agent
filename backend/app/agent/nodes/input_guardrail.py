@@ -23,7 +23,7 @@ from app.guardrails.input_checks import flag_prompt_injection_signals
 # user-facing outcome (the request gets refused before anything else runs),
 # just via different evidence, so the wording stays consistent between them.
 REFUSAL_MESSAGE = (
-    "I can't help with that request. If you have a question about AcmeFlow "
+    "I can't help with that request. If you have a question about MewFlow "
     "(the product, pricing, your account or support), I'm happy to help."
 )
 

@@ -474,7 +474,7 @@ async def test_done_event_carries_the_checkout_session_and_ticket_id_from_state(
         "messages": [HumanMessage(content="hi"), AIMessage(content="Here is your link.")],
         "guardrail_flags": [],
         "checkout_session": CheckoutSession(
-            checkout_url="https://checkout.acmeflow.example/abc",
+            checkout_url="https://checkout.mewflow.example/abc",
             target_plan_slug="pro",
             price_quote=quote,
         ),
