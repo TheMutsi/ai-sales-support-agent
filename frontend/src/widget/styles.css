@@ -1,0 +1,8 @@
+.mew-root { position: fixed; bottom: 16px; right: 16px; display: flex; flex-direction: column;
+  align-items: flex-end; gap: 12px; font: 14px/1.4 system-ui, sans-serif; color: #1b1f24; pointer-events: auto; }
+.mew-launcher { width: 56px; height: 56px; border: 0; border-radius: 50%; background: #4f46e5;
+  color: #fff; font-size: 24px; cursor: pointer; box-shadow: 0 4px 14px rgb(0 0 0 / 25%); }
+.mew-panel { width: 360px; max-width: calc(100vw - 32px); height: 520px; max-height: calc(100vh - 100px);
+  background: #fff; border-radius: 12px; box-shadow: 0 8px 30px rgb(0 0 0 / 25%); overflow: hidden; }
+.mew-panel header { padding: 16px; background: #4f46e5; color: #fff; font-weight: 600; }
+.mew-panel p { padding: 16px; margin: 0; }
