@@ -49,6 +49,7 @@ flowchart TD
   ri --> stop
   dispatch -- "product / technical / small_talk" --> rw
   dispatch -- pricing --> pc[get_plan_catalog<br/><i>prices from plans table</i>]
+  dispatch -- "order status, with an order<br/>in the session" --> os[get_order_status<br/><i>the shop's orders, async</i>]
   dispatch -- "upgrade / billing / refund" --> cc[get_customer_context]
   dispatch -- "human_escalation / unsupported<br/>(unsupported without ticket:create<br/>goes to response_writer)" --> he
   cc -- upgrade --> br[business_rules<br/><i>eligibility</i>]
@@ -56,6 +57,7 @@ flowchart TD
   cc -- refund --> he[human_escalation<br/><i>creates ticket</i>]
   br --> rw[response_writer<br/><i>LLM</i>]
   pc --> rw
+  os --> rw
   he --> rw
   rw -- "tool call, rounds < 2" --> kt[knowledge_tool<br/><i>KB search</i>]
   kt --> rw
@@ -72,8 +74,9 @@ Reading it:
   classification, then a dedicated judge when that score is low or the intent is
   `unsupported` ([ADR-0007](adr/0007-input-safety-cascade.md)).
 - **Commercial facts never come from the model.** Eligibility is computed in
-  `business_rules`, prices are loaded by `get_plan_catalog`, and refunds have no tool
-  and always reach a human
+  `business_rules`, prices are loaded by `get_plan_catalog`, an order's status is read by
+  `get_order_status` from the one order the session proved (never from the message), and
+  refunds have no tool and always reach a human
   ([ADR-0002](adr/0002-deterministic-business-rules-layer.md)).
 - **Knowledge-base search is the only action the model chooses**, on the
   KB-answerable intents (billing included), at most two rounds per turn

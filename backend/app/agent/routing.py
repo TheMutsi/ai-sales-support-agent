@@ -34,6 +34,7 @@ def route_after_intent(
 ) -> Literal[
     Node.GET_CUSTOMER_CONTEXT,
     Node.GET_PLAN_CATALOG,
+    Node.GET_ORDER_STATUS,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -57,6 +58,7 @@ def route_after_safety_judge(
 ) -> Literal[
     Node.GET_CUSTOMER_CONTEXT,
     Node.GET_PLAN_CATALOG,
+    Node.GET_ORDER_STATUS,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -70,6 +72,7 @@ def _dispatch_by_intent(
 ) -> Literal[
     Node.GET_CUSTOMER_CONTEXT,
     Node.GET_PLAN_CATALOG,
+    Node.GET_ORDER_STATUS,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -82,6 +85,10 @@ def _dispatch_by_intent(
         return Node.HUMAN_ESCALATION if Scope.TICKET_CREATE in scopes else Node.RESPONSE_WRITER
     if REQUIRED_SCOPE[state["intent"]] not in scopes:
         return Node.REQUEST_IDENTITY
+    if state["intent"] == Intent.ORDER_STATUS:
+        # Holding `order:read` is not enough: a verified customer's session names no order, and
+        # the agent must not pick one for them. Only a session that proved an order reads it.
+        return Node.GET_ORDER_STATUS if state.get("order_id") else Node.REQUEST_IDENTITY
     if state["intent"] in {Intent.UPGRADE_REQUEST, Intent.BILLING_QUESTION, Intent.REFUND_REQUEST}:
         return Node.GET_CUSTOMER_CONTEXT
     if state["intent"] == Intent.PRICING_QUESTION:

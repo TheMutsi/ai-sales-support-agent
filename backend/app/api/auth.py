@@ -21,8 +21,8 @@ from app.auth.otp import OtpError
 from app.auth.otp_sender import get_otp_sender
 from app.auth.session import SessionClaims
 from app.core.config import get_settings
-from app.db.session import SessionLocal, get_db
-from app.orders.simulated import SimulatedOrderSource
+from app.db.session import get_db
+from app.orders.factory import get_order_source
 from app.orders.source import OrderSource
 from app.schemas.auth import (
     ConversationRequest,
@@ -34,11 +34,6 @@ from app.schemas.auth import (
 )
 
 router = APIRouter()
-
-
-def get_order_source() -> OrderSource:
-    """The shop's orders. A simulated table until the shop's own API is wired in."""
-    return SimulatedOrderSource(SessionLocal)
 
 
 @router.post(

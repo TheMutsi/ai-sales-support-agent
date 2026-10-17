@@ -220,3 +220,31 @@ def test_someone_who_proved_only_an_order_is_asked_to_identify_for_anything_abou
     assert route_after_intent(_state(Intent.PRODUCT_QUESTION, scopes=_ORDER_LOOKUP_SCOPES)) == (
         "response_writer"
     )
+
+
+def _asking_about_an_order(scopes, order_id=None) -> dict:
+    return {**_state(Intent.ORDER_STATUS, scopes=scopes), "order_id": order_id}
+
+
+def test_someone_who_proved_an_order_gets_that_order_looked_up():
+    state = _asking_about_an_order(_ORDER_LOOKUP_SCOPES, order_id="a" * 20)
+
+    assert route_after_intent(state) == "get_order_status"
+
+
+def test_an_anonymous_visitor_asking_about_an_order_is_asked_to_identify():
+    assert route_after_intent(_asking_about_an_order(_ANONYMOUS_SCOPES)) == "request_identity"
+
+
+def test_a_customer_with_no_order_in_the_session_is_asked_for_one_not_given_a_guess():
+    """A verified customer holds `order:read` but the session names no order: the agent must
+    not pick one for them, so it asks for the order to look up."""
+    assert route_after_intent(_asking_about_an_order(_CUSTOMER_SCOPES)) == "request_identity"
+
+
+def test_the_order_lookup_goes_on_to_the_response_writer_in_the_compiled_graph():
+    from app.agent.graph import build_graph
+
+    edges = {(e.source, e.target) for e in build_graph().get_graph().edges}
+    assert ("get_order_status", "response_writer") in edges
+

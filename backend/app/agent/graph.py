@@ -9,6 +9,7 @@ from app.agent.nodes.human_escalation import human_escalation_node
 from app.agent.nodes.input_guardrail import input_guardrail_node
 from app.agent.nodes.intent_router import intent_router
 from app.agent.nodes.knowledge_tool import knowledge_tool_node
+from app.agent.nodes.order_status import get_order_status_node
 from app.agent.nodes.plan_catalog import get_plan_catalog_node
 from app.agent.nodes.request_identity import request_identity_node
 from app.agent.nodes.response_writer import response_writer_node
@@ -39,6 +40,7 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_node(Node.GET_CUSTOMER_CONTEXT, get_customer_context_node)
     builder.add_node(Node.BUSINESS_RULES, business_rules_node)
     builder.add_node(Node.GET_PLAN_CATALOG, get_plan_catalog_node)
+    builder.add_node(Node.GET_ORDER_STATUS, get_order_status_node)
     builder.add_node(Node.KNOWLEDGE_TOOL, knowledge_tool_node)
     builder.add_node(Node.HUMAN_ESCALATION, human_escalation_node)
     builder.add_node(Node.REQUEST_IDENTITY, request_identity_node)
@@ -52,6 +54,7 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_conditional_edges(Node.GET_CUSTOMER_CONTEXT, route_after_customer_context)
     builder.add_edge(Node.BUSINESS_RULES, Node.RESPONSE_WRITER)
     builder.add_edge(Node.GET_PLAN_CATALOG, Node.RESPONSE_WRITER)
+    builder.add_edge(Node.GET_ORDER_STATUS, Node.RESPONSE_WRITER)
     builder.add_edge(Node.HUMAN_ESCALATION, Node.RESPONSE_WRITER)
     builder.add_conditional_edges(Node.RESPONSE_WRITER, route_after_response_writer)
     builder.add_edge(Node.KNOWLEDGE_TOOL, Node.RESPONSE_WRITER)

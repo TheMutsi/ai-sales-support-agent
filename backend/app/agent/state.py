@@ -25,6 +25,7 @@ from langgraph.graph.message import add_messages
 
 from app.schemas.agent import Intent
 from app.schemas.business import EligibilityResult, UpsellDecision
+from app.schemas.orders import OrderDetails
 from app.schemas.tools import CheckoutSession, CustomerContext, PlanSummary, TicketReceipt
 
 
@@ -32,6 +33,10 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
     customer_id: str | None
+    # Who is asking, as the session proves it: the shop, and (only for an order lookup) the one
+    # order they named. Never taken from the message.
+    tenant_id: str | None
+    order_id: str | None
     # What this visitor may do (`Scope` values, resolved with the tenant's overrides) and
     # those overrides, so a missing scope can be turned into the methods that grant it.
     scopes: list[str]
@@ -45,6 +50,7 @@ class AgentState(TypedDict):
 
     customer_context: CustomerContext | None
     plan_catalog: list[PlanSummary] | None
+    order_details: OrderDetails | None
 
     eligibility_result: EligibilityResult | None
     upsell_decision: UpsellDecision | None
