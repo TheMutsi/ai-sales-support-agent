@@ -73,6 +73,25 @@ class TenantSecret(Base):
     tenant: Mapped["Tenant"] = relationship(back_populates="secrets")
 
 
+class Conversation(Base):
+    """Who is talking, anchored server-side. Starts anonymous (no customer) and gets
+    one when the visitor identifies; a customer already attached is never replaced
+    (see `app.auth.conversations`). Sessions point at a conversation, and traces and
+    security events use its id, instead of anything the client picks."""
+
+    __tablename__ = "conversations"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id"), index=True)
+    identity_level: Mapped[str] = mapped_column(default="anonymous")
+    linked_via: Mapped[str | None]  # how the customer was identified: store_login | otp_login
+    customer_linked_at: Mapped[datetime | None]
+    created_at: Mapped[datetime]
+    # What the retention job reads to decide which conversations are old.
+    last_activity_at: Mapped[datetime]
+
+
 class OtpChallenge(Base):
     """A one-time code sent to a customer's email (passwordless login). Only an HMAC
     of the code is stored. Dies when consumed, expired, superseded or out of attempts."""

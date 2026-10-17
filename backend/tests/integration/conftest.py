@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.db.models import (
+    Conversation,
     Customer,
     Document,
     DocumentChunk,
@@ -45,6 +46,7 @@ def rag_db() -> Session:
 def _wipe_commercial_tables(session: Session) -> None:
     session.query(Ticket).delete()
     session.query(Subscription).delete()
+    session.query(Conversation).delete()
     session.query(Customer).delete()
     session.query(OtpChallenge).delete()
     session.query(SecurityEvent).delete()
