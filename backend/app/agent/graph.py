@@ -10,6 +10,7 @@ from app.agent.nodes.input_guardrail import input_guardrail_node
 from app.agent.nodes.intent_router import intent_router
 from app.agent.nodes.knowledge_tool import knowledge_tool_node
 from app.agent.nodes.plan_catalog import get_plan_catalog_node
+from app.agent.nodes.request_identity import request_identity_node
 from app.agent.nodes.response_writer import response_writer_node
 from app.agent.nodes.safety_judge import safety_judge_node
 from app.agent.routing import (
@@ -40,6 +41,7 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_node(Node.GET_PLAN_CATALOG, get_plan_catalog_node)
     builder.add_node(Node.KNOWLEDGE_TOOL, knowledge_tool_node)
     builder.add_node(Node.HUMAN_ESCALATION, human_escalation_node)
+    builder.add_node(Node.REQUEST_IDENTITY, request_identity_node)
     builder.add_node(Node.RESPONSE_WRITER, response_writer_node)
     builder.add_node(Node.GUARDRAIL, guardrail_node)
 
@@ -53,6 +55,7 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_edge(Node.HUMAN_ESCALATION, Node.RESPONSE_WRITER)
     builder.add_conditional_edges(Node.RESPONSE_WRITER, route_after_response_writer)
     builder.add_edge(Node.KNOWLEDGE_TOOL, Node.RESPONSE_WRITER)
+    builder.add_edge(Node.REQUEST_IDENTITY, END)
     builder.add_edge(Node.GUARDRAIL, END)
     return builder.compile(checkpointer=checkpointer)
 

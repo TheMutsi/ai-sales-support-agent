@@ -3,7 +3,9 @@ from typing import Literal
 from langgraph.graph import END
 
 from app.agent.names import Node
+from app.agent.permissions import REQUIRED_SCOPE
 from app.agent.state import AgentState
+from app.auth.scopes import Scope
 from app.schemas.agent import Intent
 
 # Below this, intent_router's own safety_confidence (scored in the same call
@@ -34,6 +36,7 @@ def route_after_intent(
     Node.GET_PLAN_CATALOG,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
+    Node.REQUEST_IDENTITY,
     Node.SAFETY_JUDGE,
 ]:
     # `unsupported` always gets the second look, whatever the score: it is the
@@ -56,6 +59,7 @@ def route_after_safety_judge(
     Node.GET_PLAN_CATALOG,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
+    Node.REQUEST_IDENTITY,
     "__end__",
 ]:
     return END if state["input_blocked"] else _dispatch_by_intent(state)
@@ -64,8 +68,20 @@ def route_after_safety_judge(
 def _dispatch_by_intent(
     state: AgentState,
 ) -> Literal[
-    Node.GET_CUSTOMER_CONTEXT, Node.GET_PLAN_CATALOG, Node.RESPONSE_WRITER, Node.HUMAN_ESCALATION
+    Node.GET_CUSTOMER_CONTEXT,
+    Node.GET_PLAN_CATALOG,
+    Node.RESPONSE_WRITER,
+    Node.HUMAN_ESCALATION,
+    Node.REQUEST_IDENTITY,
 ]:
+    # A missing list means "no scopes", never "all of them": forgetting to set it must
+    # lock the visitor out, not open the account.
+    scopes = set(state.get("scopes") or [])
+    if state["intent"] == Intent.UNSUPPORTED:
+        # A ticket needs a customer. Without one the message is simply answered.
+        return Node.HUMAN_ESCALATION if Scope.TICKET_CREATE in scopes else Node.RESPONSE_WRITER
+    if REQUIRED_SCOPE[state["intent"]] not in scopes:
+        return Node.REQUEST_IDENTITY
     if state["intent"] in {Intent.UPGRADE_REQUEST, Intent.BILLING_QUESTION, Intent.REFUND_REQUEST}:
         return Node.GET_CUSTOMER_CONTEXT
     if state["intent"] == Intent.PRICING_QUESTION:
@@ -81,7 +97,7 @@ def _dispatch_by_intent(
         # small_talk (thanks, greetings) also lands here but gets no tool: it
         # needs a short reply, not a ticket.
         return Node.RESPONSE_WRITER
-    return Node.HUMAN_ESCALATION  # human_escalation and unsupported
+    return Node.HUMAN_ESCALATION  # human_escalation
 
 
 def route_after_response_writer(

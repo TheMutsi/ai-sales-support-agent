@@ -39,6 +39,7 @@ _VERIFIED_CUSTOMER = frozenset(
     {
         Scope.KB_READ,
         Scope.CUSTOMER_READ,
+        Scope.ORDER_READ,
         Scope.TICKET_CREATE,
         Scope.SUBSCRIPTION_CHANGE,
         Scope.REFUND_REQUEST,

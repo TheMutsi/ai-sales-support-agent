@@ -1,7 +1,8 @@
+from app.agent.nodes._identity import require_customer_id
 from app.agent.state import AgentState
 from app.tools.customers import get_customer_context
 
 
 def get_customer_context_node(state: AgentState) -> dict:
-    context = get_customer_context(state["customer_id"])
+    context = get_customer_context(require_customer_id(state))
     return {"customer_context": context}

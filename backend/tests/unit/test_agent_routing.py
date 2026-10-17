@@ -15,11 +15,15 @@ from app.agent.routing import (
     route_after_response_writer,
     route_after_safety_judge,
 )
+from app.auth.scopes import IdentityLevel, scopes_for
 from app.schemas.agent import Intent
 
+_CUSTOMER_SCOPES = sorted(scopes_for(IdentityLevel.STORE_LOGIN))
+_ANONYMOUS_SCOPES = sorted(scopes_for(IdentityLevel.ANONYMOUS))
 
-def _state(intent: Intent, safety_confidence: float = 1.0) -> dict:
-    return {"intent": intent, "safety_confidence": safety_confidence}
+
+def _state(intent: Intent, safety_confidence: float = 1.0, scopes=_CUSTOMER_SCOPES) -> dict:
+    return {"intent": intent, "safety_confidence": safety_confidence, "scopes": scopes}
 
 
 def test_blocked_input_goes_straight_to_end():
@@ -63,7 +67,7 @@ def test_safety_judge_blocked_goes_straight_to_end():
 
 
 def test_safety_judge_cleared_dispatches_by_the_original_intent():
-    state = {"input_blocked": False, "intent": Intent.UPGRADE_REQUEST}
+    state = {"input_blocked": False, "intent": Intent.UPGRADE_REQUEST, "scopes": _CUSTOMER_SCOPES}
     assert route_after_safety_judge(state) == "get_customer_context"
 
 
@@ -93,9 +97,8 @@ def test_technical_support_goes_to_response_writer():
 
 def test_small_talk_is_answered_directly_without_opening_a_ticket():
     assert route_after_intent(_state(Intent.SMALL_TALK)) == "response_writer"
-    assert route_after_safety_judge({"input_blocked": False, "intent": Intent.SMALL_TALK}) == (
-        "response_writer"
-    )
+    state = {"input_blocked": False, "intent": Intent.SMALL_TALK, "scopes": _CUSTOMER_SCOPES}
+    assert route_after_safety_judge(state) == "response_writer"
 
 
 def test_human_escalation_goes_to_human_escalation():
@@ -103,7 +106,7 @@ def test_human_escalation_goes_to_human_escalation():
 
 
 def test_unsupported_cleared_by_safety_judge_goes_to_human_escalation():
-    state = {"input_blocked": False, "intent": Intent.UNSUPPORTED}
+    state = {"input_blocked": False, "intent": Intent.UNSUPPORTED, "scopes": _CUSTOMER_SCOPES}
     assert route_after_safety_judge(state) == "human_escalation"
 
 
@@ -159,3 +162,43 @@ def test_compiled_graph_exposes_every_conditional_destination():
     assert ("response_writer", "guardrail") in edges
     assert ("intent_router", "safety_judge") in edges
     assert ("input_guardrail", "__end__") in edges
+
+
+def _anonymous(intent: Intent) -> dict:
+    return _state(intent, scopes=_ANONYMOUS_SCOPES)
+
+
+def test_an_anonymous_visitor_asking_about_their_account_is_asked_to_identify():
+    for intent in (Intent.BILLING_QUESTION, Intent.UPGRADE_REQUEST, Intent.REFUND_REQUEST):
+        assert route_after_intent(_anonymous(intent)) == "request_identity"
+
+
+def test_an_anonymous_visitor_asking_for_a_human_is_asked_to_identify_first():
+    assert route_after_intent(_anonymous(Intent.HUMAN_ESCALATION)) == "request_identity"
+
+
+def test_an_anonymous_visitor_can_still_ask_about_the_product():
+    assert route_after_intent(_anonymous(Intent.PRODUCT_QUESTION)) == "response_writer"
+    assert route_after_intent(_anonymous(Intent.PRICING_QUESTION)) == "get_plan_catalog"
+    assert route_after_intent(_anonymous(Intent.SMALL_TALK)) == "response_writer"
+
+
+def test_an_off_topic_message_from_an_anonymous_visitor_is_answered_without_a_ticket():
+    """A ticket needs a customer; asking someone to identify just to say no would be odd."""
+    state = {"input_blocked": False, "intent": Intent.UNSUPPORTED, "scopes": _ANONYMOUS_SCOPES}
+
+    assert route_after_safety_judge(state) == "response_writer"
+
+
+def test_a_missing_scope_list_denies_instead_of_allowing():
+    assert route_after_intent({"intent": Intent.BILLING_QUESTION, "safety_confidence": 1.0}) == (
+        "request_identity"
+    )
+
+
+def test_the_safety_judge_still_runs_before_the_identity_request():
+    assert route_after_intent(_state(Intent.BILLING_QUESTION, 0.4, _ANONYMOUS_SCOPES)) == (
+        "safety_judge"
+    )
+    state = {"input_blocked": False, "intent": Intent.BILLING_QUESTION, "scopes": _ANONYMOUS_SCOPES}
+    assert route_after_safety_judge(state) == "request_identity"

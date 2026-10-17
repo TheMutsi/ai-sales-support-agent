@@ -45,6 +45,7 @@ from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
 from app.api.deps import require_customer_session, require_session
 from app.api.rate_limit import limit_by_conversation
+from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
 from app.chat.turns import (
     MessageIdReused,
@@ -59,7 +60,7 @@ from app.chat.turns import (
 )
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
-from app.db.models import Conversation, Message
+from app.db.models import Conversation, Message, Tenant
 from app.db.session import SessionLocal
 from app.schemas.chat import ChatRequest, ChatTurnSummary, MessageList, StoredMessage
 from app.schemas.rag import SourceReference
@@ -73,13 +74,20 @@ def _format_sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-def _build_initial_state(turn: TurnStart, session: SessionClaims) -> dict:
+def _build_initial_state(
+    turn: TurnStart, session: SessionClaims, scope_overrides: dict | None = None
+) -> dict:
     messages: list = [
         HumanMessage(content=m.content) if m.role == "user" else AIMessage(content=m.content)
         for m in turn.history
     ]
     messages.append(HumanMessage(content=turn.user_text))
-    return {"messages": messages, "customer_id": str(session.customer_id)}
+    return {
+        "messages": messages,
+        "customer_id": str(session.customer_id) if session.customer_id else None,
+        "scopes": sorted(s.value for s in scopes_for(session.level, scope_overrides)),
+        "scope_overrides": scope_overrides,
+    }
 
 
 def _collect_sources(messages: list) -> list[SourceReference]:
@@ -123,7 +131,7 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
 def _build_trace_metadata(session: SessionClaims, conversation_id: uuid.UUID) -> dict:
     settings = get_settings()
     return {
-        "customer_id": str(session.customer_id),
+        "customer_id": str(session.customer_id) if session.customer_id else None,
         "tenant_id": str(session.tenant_id),
         "identity_level": session.level.value,
         "conversation_id": str(conversation_id),
@@ -202,6 +210,7 @@ async def stream_chat_turn(
     turn: TurnStart,
     store: TurnStore,
     state: "_TurnState | None" = None,
+    scope_overrides: dict | None = None,
 ) -> AsyncIterator[str]:
     """Runs the turn and, however the stream ends (done, error, the client closing it or
     cancelling it), makes sure the conversation isn't left marked busy."""
@@ -209,7 +218,9 @@ async def stream_chat_turn(
     try:
         # aclosing: if the client leaves, the graph run and its trace span are closed too,
         # not left suspended until garbage collection.
-        async with aclosing(_stream_turn(chat_graph, session, turn, store, state)) as inner:
+        async with aclosing(
+            _stream_turn(chat_graph, session, turn, store, state, scope_overrides)
+        ) as inner:
             async for chunk in inner:
                 yield chunk
     finally:
@@ -220,7 +231,12 @@ async def stream_chat_turn(
 
 
 async def _stream_turn(
-    chat_graph, session: SessionClaims, turn: TurnStart, store: TurnStore, state: _TurnState
+    chat_graph,
+    session: SessionClaims,
+    turn: TurnStart,
+    store: TurnStore,
+    state: _TurnState,
+    scope_overrides: dict | None = None,
 ) -> AsyncIterator[str]:
     """Drives the graph and translates its event stream into SSE.
 
@@ -254,7 +270,7 @@ async def _stream_turn(
     try:
         with span_cm as span:
             async for event in chat_graph.astream_events(
-                _build_initial_state(turn, session), config=config, version="v2"
+                _build_initial_state(turn, session, scope_overrides), config=config, version="v2"
             ):
                 node = (event.get("metadata") or {}).get("langgraph_node")
 
@@ -337,6 +353,13 @@ def _open_turn(session: SessionClaims, request: ChatRequest) -> TurnStart:
         )
 
 
+def _scope_overrides(session: SessionClaims) -> dict | None:
+    """The tenant's per-level scope overrides: what this session may do depends on them."""
+    with SessionLocal() as db:
+        tenant = db.get(Tenant, session.tenant_id)
+        return tenant.scope_overrides if tenant is not None else None
+
+
 async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
     """The stored answer to a message that was already handled, with no model call."""
     yield _format_sse("message", {"text": reply})
@@ -365,13 +388,16 @@ async def chat(
             headers={"WWW-Authenticate": "Bearer"},
         ) from None
 
+    scope_overrides = await run_in_threadpool(_scope_overrides, session)
     background = None
     if turn.action is TurnAction.REPLAY:
         stream = _replay(turn.reply or "", session.conversation_id)
     else:
         store = _DbTurnStore(session.conversation_id, turn)
         state = _TurnState()
-        stream = stream_chat_turn(agent_graph, session, turn, store, state)
+        stream = stream_chat_turn(
+            agent_graph, session, turn, store, state, scope_overrides=scope_overrides
+        )
         # If the stream never starts (the client left right after the turn opened) the
         # generator's cleanup never runs; this frees the turn then, and does nothing else.
         background = BackgroundTask(_abandon_if_unsettled, state, store, session.conversation_id)

@@ -131,6 +131,15 @@ def _session() -> SessionClaims:
     )
 
 
+def _anonymous_session() -> SessionClaims:
+    return SessionClaims(
+        tenant_id=uuid.uuid4(),
+        conversation_id=uuid.uuid4(),
+        customer_id=None,
+        level=IdentityLevel.ANONYMOUS,
+    )
+
+
 async def _collect(generator) -> list[dict]:
     """Parses each `event: X\\ndata: {...}\\n\\n` block back into
     `{"event": X, "data": {...}}` so assertions read the structure, not the
@@ -673,3 +682,32 @@ async def test_the_cleanup_after_the_response_only_acts_if_the_turn_never_settle
     await chat_module._abandon_if_unsettled(state, store, uuid.uuid4())
 
     assert store.abandoned == freed
+
+
+def _reply_graph(final_state: dict) -> _FakeGraph:
+    return _FakeGraph([_graph_end_event(final_state)])
+
+
+@pytest.mark.asyncio
+async def test_the_graph_starts_with_the_visitors_scopes():
+    graph = _reply_graph({"messages": [AIMessage(content="ok")]})
+
+    await _collect(chat_module.stream_chat_turn(graph, _anonymous_session(), _request(), _Store()))
+
+    assert graph.initial_state["scopes"] == ["kb:read"]
+    assert graph.initial_state["customer_id"] is None  # not the string "None"
+
+
+@pytest.mark.asyncio
+async def test_a_tenants_scope_overrides_reach_the_graph_and_change_the_scopes():
+    graph = _reply_graph({"messages": [AIMessage(content="ok")]})
+    overrides = {"anonymous": ["kb:read", "order:read"]}
+
+    await _collect(
+        chat_module.stream_chat_turn(
+            graph, _anonymous_session(), _request(), _Store(), scope_overrides=overrides
+        )
+    )
+
+    assert graph.initial_state["scopes"] == ["kb:read", "order:read"]
+    assert graph.initial_state["scope_overrides"] == overrides

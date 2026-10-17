@@ -1,5 +1,6 @@
 from langchain_core.messages import SystemMessage
 
+from app.agent.nodes._identity import require_customer_id
 from app.agent.prompts.human_escalation import HUMAN_ESCALATION_SYSTEM_PROMPT
 from app.agent.state import AgentState
 from app.core.llm import get_chat_model
@@ -29,7 +30,7 @@ def human_escalation_node(state: AgentState) -> dict:
     )
 
     ticket = create_support_ticket(
-        customer_id=state["customer_id"],
+        customer_id=require_customer_id(state),
         category=category,
         subject=draft.subject,
         description=draft.description,
