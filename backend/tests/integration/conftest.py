@@ -7,7 +7,9 @@ from app.db.models import (
     Customer,
     Document,
     DocumentChunk,
+    OtpChallenge,
     Plan,
+    SecurityEvent,
     Subscription,
     Tenant,
     TenantSecret,
@@ -44,6 +46,8 @@ def _wipe_commercial_tables(session: Session) -> None:
     session.query(Ticket).delete()
     session.query(Subscription).delete()
     session.query(Customer).delete()
+    session.query(OtpChallenge).delete()
+    session.query(SecurityEvent).delete()
     session.query(TenantSecret).delete()
     session.query(Tenant).delete()
     session.query(Plan).delete()
