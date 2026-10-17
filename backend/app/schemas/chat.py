@@ -13,10 +13,12 @@ still sitting in `response_writer`'s context on turn 3's pricing question.
 Resending full history avoids that: every request is an independent graph run
 starting from an empty state.
 
-`customer_id` is required, not optional: every tool the graph can reach
-(`get_customer_context`, `search_knowledge_base`, `create_support_ticket`)
-takes a real UUID, and `Ticket.customer_id` is a non-nullable FK — there's no
-"anonymous" path through the graph to design around.
+The customer is *not* in the body: it comes from the authenticated session
+(`Authorization: Bearer ...`, issued by `POST /api/auth/login`). A client-supplied
+`customer_id` next to a valid session would let anyone act as another customer.
+Every tool the graph can reach still takes a real customer UUID and
+`Ticket.customer_id` is a non-nullable FK, so there's no anonymous path through
+the graph yet.
 """
 
 import uuid
@@ -35,7 +37,6 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    customer_id: uuid.UUID
     messages: list[ChatMessage] = Field(min_length=1)
     conversation_id: uuid.UUID | None = None
 

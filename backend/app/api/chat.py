@@ -29,9 +29,9 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import nullcontext
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langfuse import get_client
@@ -39,6 +39,8 @@ from langfuse.langchain import CallbackHandler
 
 from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
+from app.api.deps import require_session
+from app.auth.session import SessionClaims
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
 from app.schemas.chat import ChatRequest, ChatTurnSummary
@@ -53,12 +55,12 @@ def _format_sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-def _build_initial_state(request: ChatRequest) -> dict:
+def _build_initial_state(request: ChatRequest, session: SessionClaims) -> dict:
     messages = [
         HumanMessage(content=m.content) if m.role == "user" else AIMessage(content=m.content)
         for m in request.messages
     ]
-    return {"messages": messages, "customer_id": str(request.customer_id)}
+    return {"messages": messages, "customer_id": str(session.customer_id)}
 
 
 def _collect_sources(messages: list) -> list[SourceReference]:
@@ -99,10 +101,12 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
     )
 
 
-def _build_trace_metadata(request: ChatRequest, conversation_id: uuid.UUID) -> dict:
+def _build_trace_metadata(session: SessionClaims, conversation_id: uuid.UUID) -> dict:
     settings = get_settings()
     return {
-        "customer_id": str(request.customer_id),
+        "customer_id": str(session.customer_id),
+        "tenant_id": str(session.tenant_id),
+        "identity_level": session.level.value,
         "conversation_id": str(conversation_id),
         "environment": settings.app_env,
         "model": get_chat_model_name(),
@@ -114,7 +118,9 @@ def _build_trace_metadata(request: ChatRequest, conversation_id: uuid.UUID) -> d
     }
 
 
-async def stream_chat_turn(chat_graph, request: ChatRequest) -> AsyncIterator[str]:
+async def stream_chat_turn(
+    chat_graph, request: ChatRequest, session: SessionClaims
+) -> AsyncIterator[str]:
     """Drives the graph and translates its event stream into SSE.
 
     When Langfuse tracing is enabled, the whole turn runs inside one owned
@@ -131,7 +137,7 @@ async def stream_chat_turn(chat_graph, request: ChatRequest) -> AsyncIterator[st
         get_client().start_as_current_observation(
             as_type="span",
             name="chat_turn",
-            metadata=_build_trace_metadata(request, conversation_id),
+            metadata=_build_trace_metadata(session, conversation_id),
         )
         if tracing_enabled
         else nullcontext()
@@ -147,7 +153,7 @@ async def stream_chat_turn(chat_graph, request: ChatRequest) -> AsyncIterator[st
     try:
         with span_cm as span:
             async for event in chat_graph.astream_events(
-                _build_initial_state(request), config=config, version="v2"
+                _build_initial_state(request, session), config=config, version="v2"
             ):
                 node = (event.get("metadata") or {}).get("langgraph_node")
 
@@ -199,5 +205,9 @@ async def stream_chat_turn(chat_graph, request: ChatRequest) -> AsyncIterator[st
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest) -> StreamingResponse:
-    return StreamingResponse(stream_chat_turn(agent_graph, request), media_type="text/event-stream")
+async def chat(
+    request: ChatRequest, session: Annotated[SessionClaims, Depends(require_session)]
+) -> StreamingResponse:
+    return StreamingResponse(
+        stream_chat_turn(agent_graph, request, session), media_type="text/event-stream"
+    )

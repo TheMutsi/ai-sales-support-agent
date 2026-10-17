@@ -9,7 +9,9 @@ the scopes that follow depend on the route.
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import jwt
 
@@ -34,3 +36,39 @@ def issue_session_token(
         "exp": int(expires_at.timestamp()),
     }
     return jwt.encode(claims, signing_key, algorithm="HS256"), expires_at
+
+
+class SessionError(Exception):
+    """`session_expired` is renewable (log in again); `invalid_session` is not."""
+
+    def __init__(self, code: Literal["session_expired", "invalid_session"]):
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class SessionClaims:
+    tenant_id: uuid.UUID
+    customer_id: uuid.UUID
+    level: IdentityLevel
+
+
+def verify_session_token(token: str, signing_key: str) -> SessionClaims:
+    """Checks a session we issued. The algorithm is fixed here, never read from
+    the token, so `alg: none` can't skip the signature."""
+    try:
+        claims = jwt.decode(
+            token,
+            signing_key,
+            algorithms=["HS256"],
+            options={"require": ["exp", "tid", "cid", "lvl"]},
+        )
+        return SessionClaims(
+            tenant_id=uuid.UUID(claims["tid"]),
+            customer_id=uuid.UUID(claims["cid"]),
+            level=IdentityLevel(claims["lvl"]),
+        )
+    except jwt.ExpiredSignatureError:
+        raise SessionError("session_expired") from None
+    except (jwt.InvalidTokenError, ValueError, TypeError, AttributeError):
+        raise SessionError("invalid_session") from None
