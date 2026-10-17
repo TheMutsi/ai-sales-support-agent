@@ -41,6 +41,7 @@ backend/
     agent/            # graph.py, state.py, nodes/, prompts/, permissions.py  [owner writes]
     auth/             # scopes, tokens, login, one-time codes, conversations
     chat/             # a conversation's stored messages, one turn at a time
+    orders/            # OrderSource interface + simulated source (the shop's orders API stand-in)
     rag/               # loaders, chunking, ingestion.py, retriever.py [AI writes, per owner's Stage 3 call]
     tools/             # typed tool wrappers (get_customer_context, etc.)
     business/          # upsell_rules.py, pricing.py, eligibility.py  [AI writes]
