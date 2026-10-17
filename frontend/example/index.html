@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Example shop</title>
+    <!-- Queue stub: lets the shop call Mew(...) before mew.js has loaded. -->
+    <script>
+      window.Mew = window.Mew || function () { (Mew.q = Mew.q || []).push(arguments); };
+      Mew("hide"); // proves queued calls are replayed in order
+      Mew("show");
+    </script>
+    <script async src="/mew.js?key=pk_dev_mewflow_local"></script>
+  </head>
+  <body style="font-family: system-ui; max-width: 40rem; margin: 3rem auto">
+    <h1>Example shop</h1>
+    <p>A page that embeds the Mew widget. Try the buttons, or <code>Mew('open')</code> in the console.</p>
+    <button onclick="Mew('open')">Open</button>
+    <button onclick="Mew('close')">Close</button>
+    <button onclick="Mew('hide')">Hide</button>
+    <button onclick="Mew('show')">Show</button>
+  </body>
+</html>
