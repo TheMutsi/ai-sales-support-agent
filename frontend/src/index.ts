@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createApi } from "./data/api";
 import { createAuth } from "./data/auth";
 import { createChat } from "./data/chat";
+import { createIdentity } from "./data/identity";
 import { createSessionStore } from "./data/sessionStore";
 import { createController } from "./loader/controller";
 import { createFrame } from "./loader/frame";
@@ -24,6 +25,7 @@ function boot() {
   const store = createSessionStore(apiKey);
   const auth = createAuth(api, store);
   const chat = createChat(api, auth, store);
+  const identity = createIdentity(api, auth, chat);
   // Another tab changed the conversation (a message, a login): show the stored state.
   store.subscribe(() => void chat.load());
   installGlobal(window, controller, ({ getToken }) => {
@@ -39,7 +41,7 @@ function boot() {
   doc.body.style.cssText = "margin:0;background:transparent";
   const mount = doc.createElement("div");
   doc.body.appendChild(mount);
-  createRoot(mount).render(createElement(App, { controller, chat }));
+  createRoot(mount).render(createElement(App, { controller, chat, identity }));
 }
 
 // The shop may place the <script> in <head>, before <body> exists.

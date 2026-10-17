@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
+import { IdentityForm } from "./IdentityForm";
 import { MessageView } from "./MessageView";
 import { toParts } from "./parts";
 
@@ -71,5 +72,46 @@ describe("Composer", () => {
     press(textarea, {});
     expect(onSend).not.toHaveBeenCalled();
     expect(container.querySelector("button")!.disabled).toBe(true);
+  });
+});
+
+describe("IdentityForm", () => {
+  const set = (input: HTMLInputElement, value: string) =>
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  const submit = async () => {
+    await act(async () => void container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  };
+
+  it("asks for the email, then the code, and verifies both", async () => {
+    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => {}) };
+    mount(<IdentityForm identity={identity} />);
+    set(container.querySelector("input")!, "ana@example.com");
+    await submit();
+    expect(identity.requestCode).toHaveBeenCalledWith("ana@example.com");
+    set(container.querySelector("input")!, "12a3456");
+    await submit();
+    expect(identity.verify).toHaveBeenCalledWith("ana@example.com", "123456");
+  });
+
+  it("rejects a malformed email or short code without calling the server", async () => {
+    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => {}) };
+    mount(<IdentityForm identity={identity} />);
+    set(container.querySelector("input")!, "not-an-email");
+    await submit();
+    expect(identity.requestCode).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  });
+
+  it("says only that the code did not work when verification fails", async () => {
+    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => { throw new Error("401"); }) };
+    mount(<IdentityForm identity={identity} />);
+    set(container.querySelector("input")!, "ana@example.com");
+    await submit();
+    set(container.querySelector("input")!, "123456");
+    await submit();
+    expect(container.querySelector('[role="alert"]')!.textContent).toBe("That code did not work.");
   });
 });

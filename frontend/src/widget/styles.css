@@ -22,3 +22,11 @@
 .mew-composer button { border: 0; border-radius: 8px; padding: 0 14px; background: #4f46e5;
   color: #fff; font: inherit; cursor: pointer; }
 .mew-composer button:disabled { opacity: 0.5; cursor: default; }
+.mew-identity { display: flex; flex-direction: column; gap: 8px; margin: 0 12px 8px; padding: 12px;
+  border: 1px solid #c7d2fe; border-radius: 12px; background: #eef2ff; }
+.mew-identity label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.mew-identity input { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; }
+.mew-identity [role="alert"] { color: #b91c1c; font-size: 13px; }
+.mew-identity button { align-self: flex-end; border: 0; border-radius: 8px; padding: 8px 14px;
+  background: #4f46e5; color: #fff; font: inherit; cursor: pointer; }
+.mew-identity button:disabled { opacity: 0.5; cursor: default; }

@@ -27,7 +27,7 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
   }
 
   async function run(open: (session: Session) => AsyncGenerator<ChatEvent>) {
-    update({ ...state, streaming: true, error: null, identityMethods: [] });
+    update({ ...state, streaming: true, error: null, identity: null });
     try {
       // The turn is only opened once the first event arrives, so a rejected session throws before
       // any text is shown and the retry in `withSession` is safe.
@@ -50,7 +50,10 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
     async load() {
       try {
         const messages = await withSession((session) => api.messages(session));
-        update({ ...state, messages, error: null });
+        // The stored request does not say which methods it offered; one-time codes are the one
+        // the backend supports for now, so a reload offers that again.
+        const pending = messages.at(-1)?.kind === "identity_request";
+        update({ ...state, messages, error: null, identity: pending ? { methods: ["otp"] } : null });
       } catch {
         update({ ...state, error: "Could not load the conversation." });
       }
