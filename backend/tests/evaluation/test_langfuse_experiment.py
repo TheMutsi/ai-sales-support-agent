@@ -4,11 +4,13 @@ endpoint is an `httpx.MockTransport`, so no server is needed."""
 
 import json
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 
+from evaluation import langfuse_experiment
 from evaluation.langfuse_experiment import (
     LangfuseExperimentRunner,
     dataset_item_fields,
@@ -72,8 +74,12 @@ class _FakeLangfuse:
 class _FakeSessions:
     """Opens a fresh made-up conversation per case, as the real `CaseSessions` does."""
 
+    def __init__(self):
+        self.opened: list[uuid.UUID] = []
+
     def open(self, case):
         conversation_id = uuid.uuid4()
+        self.opened.append(conversation_id)
         return SimpleNamespace(token=str(conversation_id), conversation_id=conversation_id)
 
 
@@ -97,12 +103,14 @@ def _chat_server(requests: list[dict], fail_on: str | None = None) -> httpx.Clie
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-def _runner(client: _FakeLangfuse, http: httpx.Client) -> LangfuseExperimentRunner:
+def _runner(
+    client: _FakeLangfuse, http: httpx.Client, sessions: _FakeSessions | None = None
+) -> LangfuseExperimentRunner:
     return LangfuseExperimentRunner(
         client,
         http,
         "http://api.test",
-        _FakeSessions(),
+        sessions or _FakeSessions(),
         [evaluate_intent_accuracy, evaluate_escalation],
     )
 
@@ -128,11 +136,18 @@ def test_dataset_item_fields_separate_input_from_expectations():
     assert fields["metadata"] == {"case_id": "billing-001", "scenario": "billing_question"}
 
 
-def test_run_scores_every_case_and_links_the_session():
-    client, requests = _FakeLangfuse(), []
+def test_run_scores_every_case_and_links_the_session(monkeypatch):
+    client, requests, sessions, propagated = _FakeLangfuse(), [], _FakeSessions(), []
+
+    @contextmanager
+    def record_propagation(**attributes):
+        propagated.append(attributes["session_id"])
+        yield
+
+    monkeypatch.setattr(langfuse_experiment, "propagate_attributes", record_propagation)
     cases = [_case("billing-001"), _case("billing-002", expected_intent="refund_request")]
 
-    results, errored, run_url = _runner(client, _chat_server(requests)).run(
+    results, errored, run_url = _runner(client, _chat_server(requests), sessions).run(
         cases, "acmeflow-eval/dataset", "abc123 run", {"git_revision": "abc123"}
     )
 
@@ -142,9 +157,10 @@ def test_run_scores_every_case_and_links_the_session():
     assert run_url == "http://langfuse.test/run/1"
     assert len(client.items) == 2
     assert client.run_kwargs["run_name"] == "abc123 run"
-    # The conversation belongs to the session the runner opened, so the item's Langfuse
-    # session is the same one the API uses for the agent's own trace.
-    assert all(uuid.UUID(payload["message_id"]) for payload in requests)
+    # The conversation belongs to the session the runner opened, so each item's Langfuse
+    # session is that conversation: the same one the API uses for the agent's own trace.
+    assert propagated == [str(conversation_id) for conversation_id in sessions.opened]
+    assert len(set(propagated)) == 2  # one conversation per case
     scores = {(s.name, s.value) for s in client.item_scores}
     assert ("intent_accuracy", 1.0) in scores
     assert ("intent_accuracy", 0.0) in scores

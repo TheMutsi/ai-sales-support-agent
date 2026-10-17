@@ -13,7 +13,7 @@ validation at load time instead of silently never matching.
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from app.schemas.agent import Intent
 from app.schemas.chat import ChatMessage, ChatTurnSummary
@@ -80,6 +80,12 @@ class EvalCase(BaseModel):
     must_not_include: list[str] = Field(default_factory=list)
 
     notes: str = ""
+
+    @model_validator(mode="after")
+    def _ends_with_a_user_message(self) -> "EvalCase":
+        if self.messages[-1].role != "user":
+            raise ValueError("The last message must be from the user: it is the one that is sent.")
+        return self
 
 
 class ChatTurn(BaseModel):

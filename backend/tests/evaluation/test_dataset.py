@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from evaluation.dataset import DEFAULT_DATASET_PATH, HELDOUT_DATASET_PATH, load_dataset
+from evaluation.schemas import EvalCase, EvalScenario
 
 
 def _case_line(case_id: str) -> str:
@@ -54,3 +56,18 @@ def test_heldout_set_does_not_overlap_the_dev_set():
     assert len(heldout) == 16
     assert not {case.id for case in dev} & {case.id for case in heldout}
     assert not first_messages(dev) & first_messages(heldout)
+
+
+def test_a_case_must_end_with_a_user_message():
+    """The runner sends the last message as the user's turn; an assistant one would be sent
+    as if the user had said it, with no error."""
+    with pytest.raises(ValidationError, match="last message must be from the user"):
+        EvalCase(
+            id="c",
+            scenario=EvalScenario.PRODUCT_QUESTION,
+            customer_email="ava.chen@northlightstudio.com",
+            messages=[
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "Hello!"},
+            ],
+        )
