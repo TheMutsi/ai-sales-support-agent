@@ -4,8 +4,10 @@ from datetime import datetime
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
+
+from app.core.origins import normalize_origin
 
 EMBEDDING_DIM = 768
 
@@ -49,7 +51,23 @@ class Tenant(Base):
     # Per-identity-level scope overrides, e.g. {"order_lookup": ["kb:read"]};
     # absent levels keep `app.auth.scopes.DEFAULT_LEVEL_SCOPES`.
     scope_overrides: Mapped[dict | None] = mapped_column(JSON)
+    # The pages (origins) the shop's widget runs on. A browser request carrying another
+    # origin is refused; see `app.api.origins`.
+    allowed_origins: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    @validates("allowed_origins")
+    def _normalize_origins(self, _key: str, origins: list[str]) -> list[str]:
+        """Normalized on the way in, and a wildcard or sloppy entry is an error, not a
+        silent widening of who may use the key."""
+        normalized = []
+        for origin in origins:
+            clean = normalize_origin(origin)
+            if clean is None:
+                raise ValueError(f"not a plain origin (scheme://host[:port]): {origin!r}")
+            if clean not in normalized:
+                normalized.append(clean)
+        return normalized
 
     secrets: Mapped[list["TenantSecret"]] = relationship(back_populates="tenant")
 

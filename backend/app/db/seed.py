@@ -22,6 +22,9 @@ SEED_DIR = Path(__file__).resolve().parents[2] / "data" / "seed"
 # is public (it's right here), so it is only ever written in local environments.
 DEV_TENANT_API_KEY = "pk_dev_mewflow_local"
 DEV_TENANT_SECRET = "dev-only-tenant-secret-never-use-in-production"
+# Where the example page runs when served locally (`python -m http.server 8080`). A page
+# opened as a file has the origin "null", which is never allowed.
+DEV_TENANT_ORIGINS = ["http://localhost:8080", "http://127.0.0.1:8080"]
 DEV_TENANT_KID = "dev-1"
 
 
@@ -37,6 +40,7 @@ def _ensure_dev_tenant(db: Session) -> Tenant | None:
         tenant = Tenant(name="Local development shop", api_key=DEV_TENANT_API_KEY)
         db.add(tenant)
         db.flush()
+    tenant.allowed_origins = DEV_TENANT_ORIGINS
     # Checked on every run, not just when the tenant is created: a dev secret that
     # was deleted or deactivated (say, while trying out rotation) comes back.
     secret = db.query(TenantSecret).filter_by(tenant_id=tenant.id, kid=DEV_TENANT_KID).one_or_none()

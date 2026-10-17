@@ -1,10 +1,11 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import optional_session
+from app.api.origins import check_origin_for_api_key
 from app.api.rate_limit import limit_by_ip
 from app.auth.login import (
     LoginError,
@@ -35,9 +36,10 @@ router = APIRouter()
     dependencies=[limit_by_ip("conversations", limit=20, window_seconds=3600)],
 )
 def new_conversation(
-    request: ConversationRequest, db: Annotated[Session, Depends(get_db)]
+    request: ConversationRequest, http: Request, db: Annotated[Session, Depends(get_db)]
 ) -> SessionResponse:
     """Starts an anonymous conversation and returns a session for it."""
+    check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     try:
         return start_conversation(
@@ -57,11 +59,13 @@ def new_conversation(
 )
 def login(
     request: LoginRequest,
+    http: Request,
     db: Annotated[Session, Depends(get_db)],
     current: Annotated[SessionClaims | None, Depends(optional_session)],
 ) -> SessionResponse:
     """`current` is the caller's present session, if any. Its conversation is continued
     when usable; an expired or invalid one is simply ignored."""
+    check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     try:
         return login_with_store_token(
@@ -81,8 +85,11 @@ def login(
     status_code=202,
     dependencies=[limit_by_ip("otp_request", limit=10, window_seconds=3600)],
 )
-def otp_request(request: OtpRequest, db: Annotated[Session, Depends(get_db)]) -> None:
+def otp_request(
+    request: OtpRequest, http: Request, db: Annotated[Session, Depends(get_db)]
+) -> None:
     """Emails a code when the address belongs to a customer. Always the same empty 202."""
+    check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     send_otp(
         db,
@@ -100,11 +107,13 @@ def otp_request(request: OtpRequest, db: Annotated[Session, Depends(get_db)]) ->
 )
 def otp_verify(
     request: OtpVerifyRequest,
+    http: Request,
     db: Annotated[Session, Depends(get_db)],
     current: Annotated[SessionClaims | None, Depends(optional_session)],
 ) -> SessionResponse:
     """The code is checked here, never by the chat agent: it must not pass through the
     model or its traces. The caller's anonymous conversation, if any, is continued."""
+    check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     try:
         return login_with_otp(
