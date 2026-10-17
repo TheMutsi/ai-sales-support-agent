@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -90,6 +90,37 @@ class Conversation(Base):
     created_at: Mapped[datetime]
     # What the retention job reads to decide which conversations are old.
     last_activity_at: Mapped[datetime]
+    last_seq: Mapped[int] = mapped_column(default=0, server_default="0")  # last message number
+    # While an agent turn runs: when it started and a token unique to that run, so a second
+    # message can't start another and a turn that lost the conversation can't write.
+    turn_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class Message(Base):
+    """One message of a conversation, stored server-side so the client can't forge the
+    history. `client_message_id` (user messages) makes a retry idempotent."""
+
+    __tablename__ = "messages"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "seq", name="uq_messages_conversation_seq"),
+        UniqueConstraint(
+            "conversation_id", "client_message_id", name="uq_messages_conversation_client_id"
+        ),
+        # One reply per user message (NULLs, i.e. user messages, never collide).
+        UniqueConstraint("conversation_id", "reply_to_seq", name="uq_messages_conversation_reply"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    # No separate index: the unique (conversation_id, seq) one serves lookups by conversation.
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id"))
+    seq: Mapped[int]
+    role: Mapped[str]  # user | assistant
+    content: Mapped[str] = mapped_column(Text)
+    client_message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    # On a reply: the seq of the user message it answers (found by this link, not position).
+    reply_to_seq: Mapped[int | None]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class OtpChallenge(Base):
