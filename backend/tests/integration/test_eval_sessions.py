@@ -3,12 +3,13 @@ per repetition, so one run never sees another's messages as history."""
 
 import pytest
 
+from app.auth.scopes import IdentityLevel
 from app.auth.session import verify_session_token
 from app.chat.turns import list_messages
 from app.core.config import get_settings
 from app.db.models import Conversation, Customer, Tenant
 from app.db.seed import DEV_TENANT_API_KEY
-from evaluation.schemas import EvalCase, EvalScenario
+from evaluation.schemas import EvalCase, EvalIdentity, EvalScenario
 from evaluation.sessions import CaseSessions
 from tests.integration.conftest import customer_by_email
 
@@ -88,3 +89,35 @@ def test_another_tenants_customer_with_the_same_email_is_never_used(seeded_db):
 
     dev = seeded_db.query(Tenant).filter_by(api_key=DEV_TENANT_API_KEY).one()
     assert claims.tenant_id == dev.id
+
+
+def _anonymous_case(messages=None) -> EvalCase:
+    return EvalCase(
+        id="anon",
+        scenario=EvalScenario.PRODUCT_QUESTION,
+        identity=EvalIdentity.ANONYMOUS,
+        messages=messages or [{"role": "user", "content": "Do you integrate with Salesforce?"}],
+    )
+
+
+def test_an_anonymous_case_gets_an_anonymous_session_with_no_customer(seeded_db):
+    session = CaseSessions(seeded_db, []).open(_anonymous_case())
+
+    claims = _claims(session)
+    assert claims.customer_id is None and claims.level is IdentityLevel.ANONYMOUS
+    assert seeded_db.get(Conversation, session.conversation_id).customer_id is None
+
+
+def test_an_anonymous_case_keeps_its_earlier_messages_as_history(seeded_db):
+    case = _anonymous_case(
+        [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "Hi there"},
+            {"role": "user", "content": "and pricing?"},
+        ]
+    )
+
+    session = CaseSessions(seeded_db, []).open(case)
+
+    stored = list_messages(seeded_db, conversation_id=session.conversation_id)
+    assert [m.content for m in stored] == ["hello", "Hi there"]

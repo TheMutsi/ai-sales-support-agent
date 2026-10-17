@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from evaluation.dataset import DEFAULT_DATASET_PATH, HELDOUT_DATASET_PATH, load_dataset
-from evaluation.schemas import EvalCase, EvalScenario
+from evaluation.schemas import EvalCase, EvalIdentity, EvalScenario
 
 
 def _case_line(case_id: str) -> str:
@@ -43,7 +43,7 @@ def test_load_dataset_rejects_duplicate_ids(tmp_path: Path):
 
 def test_shipped_dataset_is_valid():
     cases = load_dataset(DEFAULT_DATASET_PATH)
-    assert len(cases) == 58
+    assert len(cases) == 66
 
 
 def test_heldout_set_does_not_overlap_the_dev_set():
@@ -70,4 +70,24 @@ def test_a_case_must_end_with_a_user_message():
                 {"role": "user", "content": "hi"},
                 {"role": "assistant", "content": "Hello!"},
             ],
+        )
+
+
+def test_an_anonymous_case_needs_no_customer():
+    case = EvalCase(
+        id="a",
+        scenario=EvalScenario.PRODUCT_QUESTION,
+        identity=EvalIdentity.ANONYMOUS,
+        messages=[{"role": "user", "content": "hi"}],
+    )
+
+    assert case.customer_email is None
+
+
+def test_a_logged_in_case_must_name_its_customer():
+    with pytest.raises(ValidationError, match="customer_email"):
+        EvalCase(
+            id="a",
+            scenario=EvalScenario.PRODUCT_QUESTION,
+            messages=[{"role": "user", "content": "hi"}],
         )

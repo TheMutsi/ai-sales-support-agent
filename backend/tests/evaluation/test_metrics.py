@@ -12,6 +12,7 @@ from evaluation.metrics import (
     evaluate_answer_correctness,
     evaluate_escalation,
     evaluate_hallucination_substring,
+    evaluate_identity_request,
     evaluate_input_blocked,
     evaluate_intent_accuracy,
     evaluate_upgrade_eligibility,
@@ -47,6 +48,41 @@ def _case(**overrides) -> EvalCase:
 def _turn(response_text: str = "text", **summary_overrides) -> ChatTurn:
     summary = ChatTurnSummary(conversation_id=uuid.uuid4(), **summary_overrides)
     return ChatTurn(response_text=response_text, summary=summary)
+
+
+# --- evaluate_identity_request ---
+
+
+def test_identity_request_passes_when_nothing_was_asked_and_nothing_expected():
+    assert evaluate_identity_request(_case(), _turn()).passed
+
+
+def test_identity_request_fails_when_a_logged_in_case_is_asked_to_identify():
+    result = evaluate_identity_request(_case(), _turn(identity_required=True))
+
+    assert not result.passed and result.metric is EvalMetric.IDENTITY_REQUEST_CORRECTNESS
+
+
+def test_identity_request_passes_when_expected_and_asked_with_the_expected_methods():
+    case = _case(expected_identity_required=True, expected_identity_methods=["otp"])
+
+    assert evaluate_identity_request(
+        case, _turn(identity_required=True, identity_methods=["otp"])
+    ).passed
+
+
+def test_identity_request_fails_when_expected_but_not_asked():
+    assert not evaluate_identity_request(_case(expected_identity_required=True), _turn()).passed
+
+
+def test_identity_request_fails_when_it_offers_other_methods_than_expected():
+    case = _case(expected_identity_required=True, expected_identity_methods=["otp"])
+
+    result = evaluate_identity_request(
+        case, _turn(identity_required=True, identity_methods=["order_id"])
+    )
+
+    assert not result.passed and "order_id" in result.detail
 
 
 # --- evaluate_intent_accuracy ---

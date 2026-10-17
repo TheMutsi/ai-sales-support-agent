@@ -44,11 +44,12 @@ def dataset_item_fields(case: EvalCase) -> dict[str, Any]:
     scored against (`expected_output`), so the Langfuse UI shows them apart."""
     return {
         "input": {
+            "identity": case.identity.value,
             "customer_email": case.customer_email,
             "messages": [message.model_dump() for message in case.messages],
         },
         "expected_output": case.model_dump(
-            mode="json", exclude={"id", "scenario", "customer_email", "messages", "notes"}
+            mode="json", exclude={"id", "scenario", "identity", "customer_email", "messages", "notes"}
         ),
         # `notes` stays out: the SDK copies item metadata onto every span and
         # drops values over 200 characters, which most notes exceed.

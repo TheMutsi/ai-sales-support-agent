@@ -128,11 +128,13 @@ def test_dataset_item_id_is_stable_per_dataset_and_case():
 def test_dataset_item_fields_separate_input_from_expectations():
     fields = dataset_item_fields(_case("billing-001", notes="double charge"))
     assert fields["input"] == {
+        "identity": "store_login",
         "customer_email": _CUSTOMER_EMAIL,
         "messages": [{"role": "user", "content": "Why was I charged twice?"}],
     }
     assert fields["expected_output"]["expected_intent"] == "billing_question"
     assert "messages" not in fields["expected_output"]
+    assert "identity" not in fields["expected_output"]
     assert fields["metadata"] == {"case_id": "billing-001", "scenario": "billing_question"}
 
 
