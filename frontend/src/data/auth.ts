@@ -25,6 +25,9 @@ export function createAuth(api: Api, store: SessionStore) {
   const once = (work: () => Promise<Session>) => (pending ??= work().finally(() => (pending = null)));
 
   return {
+    currentToken: () => store.load()?.token,
+    /** Uses a session obtained elsewhere (the one-time code login). */
+    adopt: (session: Session) => store.save(session),
     setGetToken: (callback: GetToken | null) => (getToken = callback),
     ensure: (): Promise<Session> => {
       const saved = store.load();

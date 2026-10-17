@@ -53,6 +53,17 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
       return toSession(await response.json());
     },
 
+    /** Emails a code. Always the same empty 202, whether or not the address is a customer. */
+    async requestOtp(email: string): Promise<void> {
+      await request("/auth/otp/request", { body: { api_key: apiKey, email } });
+    },
+
+    /** Checks the code on the server (it never passes through the chat) and upgrades the session. */
+    async verifyOtp(email: string, code: string, current?: string): Promise<Session> {
+      const response = await request("/auth/otp/verify", { body: { api_key: apiKey, email, code }, token: current });
+      return toSession(await response.json());
+    },
+
     async messages(session: Session): Promise<ChatMessage[]> {
       const response = await request(`/conversations/${session.conversationId}/messages`, {
         method: "GET",

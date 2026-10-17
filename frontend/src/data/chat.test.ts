@@ -44,7 +44,8 @@ describe("applyEvent", () => {
 
   it("offers the identity methods only when the assistant asked for them", () => {
     const asked = run([{ event: "message", data: { text: "Who are you?" } }, { event: "done", data: { identity_required: true, identity_methods: ["otp"] } }]);
-    expect(asked.identityMethods).toEqual(["otp"]);
+    expect(asked.identity).toEqual({ methods: ["otp"] });
+    expect(asked.messages.at(-1)?.kind).toBe("identity_request");
   });
 
   it("ends the turn with an error", () => {
@@ -142,5 +143,15 @@ describe("chat", () => {
     const chat = setup(api);
     await chat.send("   ");
     expect(api.chat).not.toHaveBeenCalled();
+  });
+
+  it("offers the identity form again after a reload when the last stored message asked for it", async () => {
+    const stored = (kind: "text" | "identity_request") => [{ id: "seq-2", role: "assistant" as const, kind, content: "Please verify" }];
+    const pending = setup(fakeApi({ messages: vi.fn(async () => stored("identity_request")) }));
+    await pending.load();
+    expect(pending.getState().identity).toEqual({ methods: ["otp"] });
+    const answered = setup(fakeApi({ messages: vi.fn(async () => stored("text")) }));
+    await answered.load();
+    expect(answered.getState().identity).toBeNull();
   });
 });

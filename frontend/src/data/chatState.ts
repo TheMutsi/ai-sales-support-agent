@@ -5,11 +5,11 @@ export interface ChatState {
   /** A turn is in flight: the input should wait. */
   streaming: boolean;
   error: string | null;
-  /** The assistant asked the visitor to identify; these are the methods to offer. */
-  identityMethods: string[];
+  /** The assistant asked the visitor to identify; `methods` are the ways to offer (empty: only the shop's own login). */
+  identity: { methods: string[] } | null;
 }
 
-export const initialState: ChatState = { messages: [], streaming: false, error: null, identityMethods: [] };
+export const initialState: ChatState = { messages: [], streaming: false, error: null, identity: null };
 
 /** Id of the assistant message being written by the current turn. */
 export const STREAMING_ID = "streaming";
@@ -43,12 +43,13 @@ export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, streaming: false, error: event.data.message ?? "The assistant could not answer." };
     case "done": {
       const finished = state.messages.filter((m) => m.id !== STREAMING_ID || m.content !== "");
-      const messages = finished.map((m) => (m.id === STREAMING_ID ? { ...m, id: `answer-${finished.length}` } : m));
+      const kind: ChatMessage["kind"] = event.data.identity_required ? "identity_request" : "text";
+      const messages = finished.map((m) => (m.id === STREAMING_ID ? { ...m, id: `answer-${finished.length}`, kind } : m));
       return {
         ...state,
         messages,
         streaming: false,
-        identityMethods: event.data.identity_required ? event.data.identity_methods : [],
+        identity: event.data.identity_required ? { methods: event.data.identity_methods } : null,
       };
     }
   }
