@@ -165,7 +165,7 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 - [x] Stage 8 — FastAPI chat endpoint (streaming) + trace metadata tagging (customer_id, conversation_id, intent, env, model, app_version)
 - [x] Stage 9 — Evaluation dataset + script (AI-written per owner's call, like Stage 3 — the owner reviewed the design and the dataset; see `backend/evaluation/README.md` for methodology and known limitations) — run against the real API before the frontend exists, so agent quality is validated before UI polish
 - [x] Stage 10 — Chat widget (**Mew**). **10a backend (done, see below)** and **10b the widget (done, see below)**
-- [ ] Stage 11 — README, diagrams, demo scenarios, polish
+- [x] Stage 11 — README, diagrams, demo scenarios (`docs/demo.md`), known limitations. The visual design pass of the widget and the README is left for later (the owner will define it); the open backlog is below
 
 ### Stage 10b status (the widget)
 
@@ -178,5 +178,12 @@ Known limits: an expired session retried mid-conversation opens a new conversati
 Done (PRs #62 to #87; the last two, anonymous evaluation cases and allowed origins per tenant, may still be open when you read this): tenants with a public key and rotating secrets; the shop's signed token exchanged for a session (`POST /api/auth/login`); anonymous conversations (`POST /api/conversations`); the server holding each conversation's messages with idempotent retries and one turn at a time; `GET /api/conversations/{id}/messages`; one-time codes (`/api/auth/otp/request` and `/verify`); scopes per identity level and a per-intent permission table, with `request_identity` asking a visitor to identify when a scope is missing and `POST /api/chat/resume` answering the pending message afterwards; rate limits; allowed origins per tenant; a `small_talk` intent so a thank-you does not open a ticket; anonymous cases in the evaluation suite. The reasoning is in ADR-0013 and ADR-0014.
 
 Not built yet: `order_lookup` as a way to identify (it needs an order id plus a second factor, and a source of orders: a simulated `orders` table for now, the shop's API or a database later); an audit record of the identification steps that never stores the code; a real email provider; the retention job (archive old messages, purge anonymous conversations).
+
+### Open backlog
+
+- Product-fact guardrail: the model still invents product details in free text (seen live: "no invoice previews, check your dashboard" after identification). Agent area, owner-written.
+- Audit record of the identification steps (shape undecided; never store the code).
+- Simulated `orders` table and `order_lookup` as an identity method; a real email provider; the retention job.
+- Widget polish: store the identity methods with the identity request, keep old messages off screen after a 401 retry, upload for image attachments, visual design.
 
 Update this checklist as stages complete.
