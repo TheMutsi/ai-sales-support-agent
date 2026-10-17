@@ -22,13 +22,14 @@ continues the conversation the caller presents (if it's usable) and attaches the
 customer to it, or starts an identified one.
 """
 
+import hmac
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.auth.conversations import create_anonymous, resolve_for_login
+from app.auth.conversations import create_anonymous, resolve_for_login, resolve_for_order_lookup
 from app.auth.otp import OtpError, request_otp, verify_otp
 from app.auth.otp_sender import OtpSender
 from app.auth.scopes import IdentityLevel, scopes_for
@@ -36,6 +37,7 @@ from app.auth.session import issue_session_token
 from app.auth.store_token import StoreTokenError, verify_store_token
 from app.db.models import Conversation, Customer, Tenant, TenantSecret
 from app.schemas.auth import SessionResponse
+from app.schemas.orders import OrderDetails
 
 
 @dataclass
@@ -58,6 +60,7 @@ def _session_response(
     *,
     session_key: str,
     session_ttl: timedelta,
+    order_id: str | None = None,
 ) -> SessionResponse:
     session_token, expires_at = issue_session_token(
         tenant_id=tenant.id,
@@ -66,6 +69,7 @@ def _session_response(
         level=level,
         signing_key=session_key,
         ttl=session_ttl,
+        order_id=order_id,
     )
     return SessionResponse(
         session_token=session_token,
@@ -158,3 +162,48 @@ def login_with_otp(
     return _session_response(
         tenant, conversation, level, session_key=session_key, session_ttl=session_ttl
     )
+
+
+def find_tenant_id(db: Session, api_key: str) -> uuid.UUID | None:
+    """The tenant an API key belongs to, so the shop's orders can be asked for *its* order."""
+    tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
+    return tenant.id if tenant else None
+
+
+def login_with_order(
+    db: Session,
+    *,
+    api_key: str,
+    email: str,
+    order: OrderDetails | None,
+    conversation_id: uuid.UUID | None,
+    session_key: str,
+    session_ttl: timedelta,
+) -> SessionResponse:
+    """The visitor gave an email and an order id; `order` is what the shop's orders answered
+    for that id (None if there is none). The email must be the order's: that comparison is
+    ours, so it holds whoever provides the orders. Every failure is the same 401 (an unknown
+    key, an unknown order, another shop's order, someone else's email), so the response never
+    says which orders exist. The per-IP rate limit is the defence against probing.
+
+    The session names the order and nothing else: the customer behind it is not attached, so
+    an order id, which leaks easily, can never open the account."""
+    tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
+    if tenant is None or order is None or not _same_email(email, order.customer_email):
+        raise LoginError("invalid_order_lookup", 401)
+    conversation = resolve_for_order_lookup(
+        db, tenant_id=tenant.id, conversation_id=conversation_id, now=datetime.now(UTC)
+    )
+    return _session_response(
+        tenant,
+        conversation,
+        IdentityLevel.ORDER_LOOKUP,
+        session_key=session_key,
+        session_ttl=session_ttl,
+        order_id=order.order_id,
+    )
+
+
+def _same_email(given: str, expected: str) -> bool:
+    """Case-insensitive, and in constant time: the comparison does not leak how much matched."""
+    return hmac.compare_digest(given.strip().casefold().encode(), expected.strip().casefold().encode())

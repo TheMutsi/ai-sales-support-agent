@@ -82,3 +82,31 @@ def resolve_for_login(
     conversation.last_activity_at = now
     db.commit()
     return conversation
+
+
+def resolve_for_order_lookup(
+    db: Session, *, tenant_id: uuid.UUID, conversation_id: uuid.UUID | None, now: datetime
+) -> Conversation:
+    """The conversation a visitor who proved an order continues in. No customer is attached:
+    an order id is a weak proof, so the conversation stays unlinked and a later, stronger login
+    (a one-time code) can still claim it. A conversation that already belongs to a customer is
+    never reused, for the same reason `resolve_for_login` never reassigns one."""
+    conversation = None
+    if conversation_id is not None:
+        conversation = (
+            db.query(Conversation)
+            .filter_by(id=conversation_id, tenant_id=tenant_id)
+            .populate_existing()
+            .with_for_update()
+            .one_or_none()
+        )
+    if conversation is None or conversation.customer_id is not None:
+        conversation = Conversation(
+            id=uuid.uuid4(), tenant_id=tenant_id, created_at=now, last_activity_at=now
+        )
+        db.add(conversation)
+    conversation.identity_level = IdentityLevel.ORDER_LOOKUP.value
+    conversation.linked_via = IdentityLevel.ORDER_LOOKUP.value
+    conversation.last_activity_at = now
+    db.commit()
+    return conversation

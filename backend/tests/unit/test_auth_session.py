@@ -154,3 +154,33 @@ def test_verify_rejects_a_signed_token_with_missing_or_inconsistent_claims(claim
 def test_verify_rejects_garbage():
     with pytest.raises(SessionError):
         verify_session_token("not-a-jwt", KEY)
+
+
+# --- the order_lookup level: it names an order, never a customer ----------------------------
+
+ORDER_ID = "A1b2C3d4E5f6G7h8I9j0"
+
+
+def test_an_order_lookup_session_carries_the_order_and_no_customer():
+    token, _ = _issue(level=IdentityLevel.ORDER_LOOKUP, customer_id=None, order_id=ORDER_ID)
+    claims = jwt.decode(token, KEY, algorithms=["HS256"])
+    assert claims["oid"] == ORDER_ID and "cid" not in claims
+    verified = verify_session_token(token, KEY)
+    assert verified.order_id == ORDER_ID and verified.customer_id is None
+    assert verified.level is IdentityLevel.ORDER_LOOKUP
+
+
+@pytest.mark.parametrize(
+    "claims",
+    [
+        _ids(cid=None) | {"lvl": "order_lookup"},  # an order level without an order
+        _ids() | {"lvl": "order_lookup", "oid": ORDER_ID},  # ... that also names a customer
+        _ids(cid=None) | {"lvl": "order_lookup", "oid": "short"},  # a malformed order id
+        _ids() | {"lvl": "otp_login", "oid": ORDER_ID},  # an order on a level that has none
+        _ids(cid=None) | {"lvl": "anonymous", "oid": ORDER_ID},
+    ],
+    ids=["no-order", "order-and-customer", "malformed-order", "order-on-otp", "order-on-anonymous"],
+)
+def test_verify_rejects_an_order_claim_that_does_not_fit_the_level(claims):
+    with pytest.raises(SessionError):
+        verify_session_token(_forge(claims), KEY)

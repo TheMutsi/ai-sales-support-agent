@@ -85,8 +85,12 @@ which), and a request is then checked against its own tenant's list.
 
 ## Not built yet
 
-- `order_lookup` as a way to identify (an endpoint taking an order id plus a second
-  factor, and the orders it would read). The level and its scopes exist.
+- `order_lookup` as a way to use the chat. The endpoint exists (`POST /api/auth/order-lookup`:
+  an email plus the id of one of its orders, one generic 401 for every failure, a session that
+  names that one order and never the customer, and a conversation left unlinked so a one-time
+  code can still claim it later); orders come from the async `OrderSource` interface, with a
+  simulated table behind it. Still missing: an `order_status` intent and tool that read the
+  order, and the widget form for the `order_id` method.
 - An audit record of the identification steps (the email asked for, given, and which
   method proved identity), without ever storing the code.
 - A real email provider for the codes (outside local environments sending fails loudly).

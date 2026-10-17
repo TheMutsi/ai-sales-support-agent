@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.api.deps import optional_session
@@ -9,6 +10,8 @@ from app.api.origins import check_origin_for_api_key
 from app.api.rate_limit import limit_by_ip
 from app.auth.login import (
     LoginError,
+    find_tenant_id,
+    login_with_order,
     login_with_otp,
     login_with_store_token,
     send_otp,
@@ -18,16 +21,24 @@ from app.auth.otp import OtpError
 from app.auth.otp_sender import get_otp_sender
 from app.auth.session import SessionClaims
 from app.core.config import get_settings
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
+from app.orders.simulated import SimulatedOrderSource
+from app.orders.source import OrderSource
 from app.schemas.auth import (
     ConversationRequest,
     LoginRequest,
+    OrderLookupRequest,
     OtpRequest,
     OtpVerifyRequest,
     SessionResponse,
 )
 
 router = APIRouter()
+
+
+def get_order_source() -> OrderSource:
+    """The shop's orders. A simulated table until the shop's own API is wired in."""
+    return SimulatedOrderSource(SessionLocal)
 
 
 @router.post(
@@ -127,3 +138,41 @@ def otp_verify(
         )
     except OtpError as exc:
         raise HTTPException(status_code=401, detail={"code": exc.code}) from None
+
+
+@router.post(
+    "/auth/order-lookup",
+    response_model=SessionResponse,
+    dependencies=[limit_by_ip("order_lookup", limit=20, window_seconds=3600)],
+)
+async def order_lookup(
+    request: OrderLookupRequest,
+    http: Request,
+    db: Annotated[Session, Depends(get_db)],
+    current: Annotated[SessionClaims | None, Depends(optional_session)],
+    orders: Annotated[OrderSource, Depends(get_order_source)],
+) -> SessionResponse:
+    """A weaker way to identify than a one-time code: an email and the id of one of its orders.
+    The session it gives can read that one order and nothing about the customer."""
+    await run_in_threadpool(check_origin_for_api_key, http, request.api_key)
+    settings = get_settings()
+    tenant_id = await run_in_threadpool(find_tenant_id, db, request.api_key)
+    order = (
+        await orders.get_order(tenant_id=tenant_id, order_id=request.order_id)
+        if tenant_id is not None
+        else None
+    )
+    try:
+        return await run_in_threadpool(
+            lambda: login_with_order(
+                db,
+                api_key=request.api_key,
+                email=request.email,
+                order=order,
+                conversation_id=current.conversation_id if current else None,
+                session_key=settings.session_signing_key,
+                session_ttl=timedelta(seconds=settings.session_ttl_seconds),
+            )
+        )
+    except LoginError as exc:
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code}) from None
