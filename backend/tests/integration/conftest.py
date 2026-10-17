@@ -11,6 +11,7 @@ from app.db.models import (
     Message,
     OtpChallenge,
     Plan,
+    RateLimitCounter,
     SecurityEvent,
     Subscription,
     Tenant,
@@ -45,6 +46,7 @@ def rag_db() -> Session:
 
 
 def _wipe_commercial_tables(session: Session) -> None:
+    session.query(RateLimitCounter).delete()
     session.query(Ticket).delete()
     session.query(Subscription).delete()
     session.query(Message).delete()

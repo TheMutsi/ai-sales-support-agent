@@ -5,8 +5,8 @@ session. Failures raise `LoginError` with a stable code and HTTP status:
 
 - `invalid_token` (401) covers an unknown API key *and* a bad signature alike, so
   the *response* doesn't say which API keys exist. Response timing still differs
-  (an unknown key skips the secrets lookup), so rate limiting on these endpoints is
-  the real defence against probing; that's not built yet.
+  (an unknown key skips the secrets lookup), so the per-IP rate limit on these endpoints
+  (`app.api.rate_limit`) is the real defence against probing.
 - `token_expired` (401) is its own code: the widget can fix it by asking the
   shop's server for a fresh token.
 - `customer_not_found` (403) means the token was genuine but the shop's

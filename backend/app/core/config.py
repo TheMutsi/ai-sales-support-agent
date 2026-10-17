@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # convenience only; `_require_real_session_key` refuses it outside local envs.
     session_signing_key: str = _DEV_SESSION_KEY
     session_ttl_seconds: int = 24 * 3600
+    # How many reverse proxies sit in front of the API and append to X-Forwarded-For. 0 means
+    # the header is ignored (anyone can send it) and the socket peer is the client.
+    trusted_proxy_count: int = 0
 
     llm_provider: LLMProvider = "anthropic"
     anthropic_api_key: str | None = None

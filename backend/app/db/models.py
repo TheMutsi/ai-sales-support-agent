@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -151,6 +151,20 @@ class SecurityEvent(Base):
     email: Mapped[str | None]
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class RateLimitCounter(Base):
+    """How many requests a key (an address, a conversation) made in one fixed time
+    window. In Postgres rather than memory so every server instance shares the count."""
+
+    __tablename__ = "rate_limit_counters"
+
+    key: Mapped[str] = mapped_column(primary_key=True)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    count: Mapped[int] = mapped_column(default=0)
+
+    # Indexed for the cleanup of windows that ended long ago.
+    __table_args__ = (Index("ix_rate_limit_counters_window_start", "window_start"),)
 
 
 class Customer(Base):

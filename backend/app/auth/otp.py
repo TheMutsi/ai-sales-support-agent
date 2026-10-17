@@ -3,7 +3,7 @@ tenant's customers, which gives the same standing as the shop vouching for them
 (`otp_login`, a passwordless login).
 
 What the *responses* say is flattened on purpose (timing still differs, and a limit
-per IP is the real defence against probing; that isn't built yet):
+per IP, in `app.api.rate_limit`, is the real defence against probing):
 - `request_otp` returns nothing whether or not the email belongs to a customer,
   and whether or not it was rate limited.
 - `verify_otp` raises the same `invalid_code` for a wrong code, an expired one, a
@@ -15,7 +15,7 @@ hour. Tripping them is recorded as a `SecurityEvent` for review.
 The code is stored only as an HMAC keyed with the server's secret: six digits are
 a million possibilities, so a plain hash would be reversed instantly if the table leaked.
 
-Not here yet: limits per IP, and flagging codes requested but never used.
+Not here yet: flagging codes requested but never used.
 """
 
 import hashlib
