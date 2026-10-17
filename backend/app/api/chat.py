@@ -24,14 +24,17 @@ If the graph run fails, the stream ends with an `error` event (and no
 `done`), so clients can tell a failed turn from a dropped connection.
 """
 
+import asyncio
 import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import nullcontext
-from typing import Annotated, Any
+from datetime import UTC, datetime
+from typing import Annotated, Any, Protocol
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langfuse import get_client
@@ -41,8 +44,19 @@ from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
 from app.api.deps import require_customer_session
 from app.auth.session import SessionClaims
+from app.chat.turns import (
+    TurnAction,
+    TurnInProgress,
+    TurnStart,
+    TurnSuperseded,
+    abandon_turn,
+    begin_turn,
+    finish_turn,
+)
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
+from app.db.models import Conversation
+from app.db.session import SessionLocal
 from app.schemas.chat import ChatRequest, ChatTurnSummary
 from app.schemas.rag import SourceReference
 
@@ -55,19 +69,20 @@ def _format_sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-def _build_initial_state(request: ChatRequest, session: SessionClaims) -> dict:
-    messages = [
+def _build_initial_state(turn: TurnStart, session: SessionClaims) -> dict:
+    messages: list = [
         HumanMessage(content=m.content) if m.role == "user" else AIMessage(content=m.content)
-        for m in request.messages
+        for m in turn.history
     ]
+    messages.append(HumanMessage(content=turn.user_text))
     return {"messages": messages, "customer_id": str(session.customer_id)}
 
 
 def _collect_sources(messages: list) -> list[SourceReference]:
     """Sources from every knowledge-base search this turn, deduplicated across
     rounds, in the order they were first retrieved. Only this turn's messages
-    can carry artifacts: the request's own history is plain user/assistant
-    text (ADR 0009), so no earlier turn's sources can leak in."""
+    can carry artifacts: the stored history is plain user/assistant text
+    (ADR 0013), so no earlier turn's sources can leak in."""
     sources: dict[str, SourceReference] = {}
     for message in messages:
         if isinstance(message, ToolMessage) and isinstance(message.artifact, list):
@@ -118,8 +133,51 @@ def _build_trace_metadata(session: SessionClaims, conversation_id: uuid.UUID) ->
     }
 
 
+class TurnStore(Protocol):
+    async def finish(self, content: str) -> None: ...
+
+    async def abandon(self) -> None: ...
+
+
+async def _abandon_quietly(store: TurnStore, conversation_id: uuid.UUID) -> None:
+    try:
+        await store.abandon()
+    except Exception:
+        logger.exception("could not free the conversation (conversation_id=%s)", conversation_id)
+
+
+class _DbTurnStore:
+    """Saves the reply or frees the conversation in short DB calls off the event loop."""
+
+    def __init__(self, conversation_id: uuid.UUID, turn: TurnStart):
+        self._conversation_id, self._turn = conversation_id, turn
+
+    async def finish(self, content: str) -> None:
+        def save() -> None:
+            with SessionLocal() as db:
+                try:
+                    finish_turn(
+                        db,
+                        conversation_id=self._conversation_id,
+                        turn=self._turn,
+                        content=content,
+                        now=datetime.now(UTC),
+                    )
+                except TurnSuperseded:
+                    logger.warning("late reply dropped (conversation %s)", self._conversation_id)
+
+        await run_in_threadpool(save)
+
+    async def abandon(self) -> None:
+        def free() -> None:
+            with SessionLocal() as db:
+                abandon_turn(db, conversation_id=self._conversation_id, turn=self._turn)
+
+        await run_in_threadpool(free)
+
+
 async def stream_chat_turn(
-    chat_graph, request: ChatRequest, session: SessionClaims
+    chat_graph, session: SessionClaims, turn: TurnStart, store: TurnStore
 ) -> AsyncIterator[str]:
     """Drives the graph and translates its event stream into SSE.
 
@@ -130,7 +188,7 @@ async def stream_chat_turn(
     isn't a single global env-var switch the way LangSmith's was, so tracing
     is wired per-call here rather than in `app/core/observability.py`."""
     settings = get_settings()
-    conversation_id = request.conversation_id or uuid.uuid4()
+    conversation_id = session.conversation_id
     tracing_enabled = settings.langfuse_tracing_enabled
 
     span_cm = (
@@ -153,7 +211,7 @@ async def stream_chat_turn(
     try:
         with span_cm as span:
             async for event in chat_graph.astream_events(
-                _build_initial_state(request, session), config=config, version="v2"
+                _build_initial_state(turn, session), config=config, version="v2"
             ):
                 node = (event.get("metadata") or {}).get("langgraph_node")
 
@@ -182,8 +240,15 @@ async def stream_chat_turn(
                     and node is None
                 ):
                     final_state = event["data"]["output"]
+    except asyncio.CancelledError:
+        # The client went away mid-turn. Free the conversation (shielded, so the
+        # cancellation can't interrupt it) instead of leaving it busy until the
+        # stale limit.
+        await asyncio.shield(_abandon_quietly(store, conversation_id))
+        raise
     except Exception:
         logger.exception("chat turn failed (conversation_id=%s)", conversation_id)
+        await _abandon_quietly(store, conversation_id)
         yield _format_sse(
             "error",
             {
@@ -194,6 +259,11 @@ async def stream_chat_turn(
         return
 
     final_text = final_state["messages"][-1].content
+    try:
+        await store.finish(final_text)
+    except Exception:
+        # The client already has its answer; failing now would only cut the stream.
+        logger.exception("could not store the reply (conversation_id=%s)", conversation_id)
 
     if not streamed_text:
         yield _format_sse("message", {"text": final_text})
@@ -204,10 +274,51 @@ async def stream_chat_turn(
     yield _format_sse("done", summary.model_dump(mode="json"))
 
 
+def _open_turn(session: SessionClaims, request: ChatRequest) -> TurnStart:
+    """Checks the session still matches its conversation, then starts the turn (sync)."""
+    with SessionLocal() as db:
+        conversation = db.get(Conversation, session.conversation_id)
+        if (
+            conversation is None
+            or conversation.tenant_id != session.tenant_id
+            or conversation.customer_id != session.customer_id
+        ):
+            raise LookupError("session does not match its conversation")
+        return begin_turn(
+            db,
+            conversation_id=conversation.id,
+            client_message_id=request.message_id,
+            content=request.message,
+            now=datetime.now(UTC),
+        )
+
+
+async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
+    """The stored answer to a message that was already handled, with no model call."""
+    yield _format_sse("message", {"text": reply})
+    yield _format_sse("done", ChatTurnSummary(conversation_id=conversation_id).model_dump(mode="json"))
+
+
 @router.post("/chat")
 async def chat(
     request: ChatRequest, session: Annotated[SessionClaims, Depends(require_customer_session)]
 ) -> StreamingResponse:
-    return StreamingResponse(
-        stream_chat_turn(agent_graph, request, session), media_type="text/event-stream"
-    )
+    # The turn is opened before streaming starts so a refusal can still be a proper
+    # HTTP status instead of an event inside a 200 response.
+    try:
+        turn = await run_in_threadpool(_open_turn, session, request)
+    except TurnInProgress:
+        raise HTTPException(status_code=409, detail={"code": "turn_in_progress"}) from None
+    except LookupError:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "invalid_session"},
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
+
+    if turn.action is TurnAction.REPLAY:
+        stream = _replay(turn.reply or "", session.conversation_id)
+    else:
+        store = _DbTurnStore(session.conversation_id, turn)
+        stream = stream_chat_turn(agent_graph, session, turn, store)
+    return StreamingResponse(stream, media_type="text/event-stream")

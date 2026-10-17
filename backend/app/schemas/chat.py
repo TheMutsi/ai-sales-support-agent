@@ -1,30 +1,22 @@
 """Wire contracts for `POST /api/chat`: the request body and the summary
 carried by the final SSE `done` event.
 
-The endpoint is stateless on the server: the graph isn't checkpointed, so
-`messages` carries the full conversation so far, not just the latest turn —
-the same shape as the Anthropic/OpenAI chat-completions APIs. The alternative
-(a LangGraph checkpointer keyed by `conversation_id`) was considered and
-dropped: `AgentState`'s per-turn fields (`customer_context`,
-`checkout_session`, `ticket_receipt`, ...) are plain overwrites, not reducers,
-so a checkpointed run would carry stale tool output from an earlier, unrelated
-turn into one that never touched that node — e.g. a refund ticket from turn 1
-still sitting in `response_writer`'s context on turn 3's pricing question.
-Resending full history avoids that: every request is an independent graph run
-starting from an empty state.
+The request carries only the new message. The history lives on the server
+(`app.chat.turns`): a client that resends it can forge assistant messages, which is
+prompt injection through the history. The graph isn't checkpointed: `AgentState`'s
+per-turn fields are plain overwrites, not reducers, so a checkpointed run would carry
+stale tool output into a turn that never touched that node. Each turn is an independent
+graph run started from the stored plain user/assistant text.
 
-The customer is *not* in the body: it comes from the authenticated session
-(`Authorization: Bearer ...`, issued by `POST /api/auth/login`). A client-supplied
-`customer_id` next to a valid session would let anyone act as another customer.
-Every tool the graph can reach still takes a real customer UUID and
-`Ticket.customer_id` is a non-nullable FK, so there's no anonymous path through
-the graph yet.
+`message_id` is an idempotency key chosen by the client: sending it again replays the
+stored reply instead of running the agent twice. Who is talking and in which
+conversation comes from the session (`Authorization: Bearer ...`), never from the body.
 """
 
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from app.schemas.agent import Intent
 from app.schemas.rag import SourceReference
@@ -37,14 +29,8 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    messages: list[ChatMessage] = Field(min_length=1)
-    conversation_id: uuid.UUID | None = None
-
-    @model_validator(mode="after")
-    def _last_message_is_from_the_user(self) -> "ChatRequest":
-        if self.messages[-1].role != "user":
-            raise ValueError("The last message must be from the user — nothing to respond to.")
-        return self
+    message: str = Field(min_length=1)
+    message_id: uuid.UUID
 
 
 class ChatTurnSummary(BaseModel):
