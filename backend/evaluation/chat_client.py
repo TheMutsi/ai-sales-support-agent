@@ -57,19 +57,11 @@ def collect_chat_turn(events: Iterable[tuple[str, dict]]) -> ChatTurn:
 
 
 def run_chat_turn(
-    client: httpx.Client,
-    base_url: str,
-    session_token: str,
-    case: EvalCase,
-    conversation_id: uuid.UUID | None = None,
+    client: httpx.Client, base_url: str, session_token: str, case: EvalCase
 ) -> ChatTurn:
-    """Without `conversation_id` the server generates one, as for any new
-    conversation; passing it lets the caller know the session id up front."""
-    payload = {
-        "messages": [message.model_dump() for message in case.messages],
-    }
-    if conversation_id is not None:
-        payload["conversation_id"] = str(conversation_id)
+    """Sends the case's last message; the server already holds any earlier ones (see
+    `evaluation.sessions`), and the conversation comes from the session."""
+    payload = {"message": case.messages[-1].content, "message_id": str(uuid.uuid4())}
     with client.stream(
         "POST",
         f"{base_url}/api/chat",
