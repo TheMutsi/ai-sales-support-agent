@@ -35,3 +35,17 @@ def test_unlisted_origin_gets_no_cors_header():
     response = client.get("/api/health", headers={"Origin": "https://evil.example"})
 
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_preflight_allows_the_authorization_header():
+    response = client.options(
+        "/api/chat",
+        headers={
+            "Origin": ALLOWED_ORIGIN,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()
