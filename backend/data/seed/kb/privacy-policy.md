@@ -1,12 +1,12 @@
 ---
-title: "AcmeFlow Privacy Policy"
+title: "MewFlow Privacy Policy"
 doc_type: policy
 product_area: legal
 plan_scope: null
 version: "1.0"
 ---
 
-# AcmeFlow Privacy Policy
+# MewFlow Privacy Policy
 
 > Example KB content for a portfolio demo. Written for this project, not a real
 > legally-reviewed policy — don't reuse it as one.
@@ -15,8 +15,8 @@ version: "1.0"
 
 ## 1. Scope
 
-This policy describes what personal information AcmeFlow Inc. ("AcmeFlow", "we",
-"us") collects when you use the AcmeFlow platform — our website, dashboard, and
+This policy describes what personal information MewFlow Inc. ("MewFlow", "we",
+"us") collects when you use the MewFlow platform — our website, dashboard, and
 API — and how we use, share, and retain it. It applies to prospective customers,
 active account holders, and individual users invited to a customer's workspace.
 
@@ -27,7 +27,7 @@ you create an account or are invited to a workspace.
 
 **Billing information.** Your subscription plan, billing address, and invoice
 history. Card numbers and other payment credentials are collected and stored by
-our payment processor, never by AcmeFlow directly.
+our payment processor, never by MewFlow directly.
 
 **Usage and telemetry data.** API call volume, feature usage, error logs, and
 session activity within the dashboard. We use this to operate the product, debug
@@ -53,7 +53,7 @@ We share data with: payment processors (to charge your subscription), cloud
 infrastructure providers (to host the platform), and email/notification providers
 (to deliver receipts and alerts) — each bound by a data processing agreement. We
 do not sell personal information. We disclose information if required by law or to
-protect the rights, safety, or property of AcmeFlow or our users.
+protect the rights, safety, or property of MewFlow or our users.
 
 ## 5. Data retention
 
@@ -69,7 +69,7 @@ Depending on where you live (including under the GDPR and the CCPA/CPRA), you ma
 have the right to: access the personal information we hold about you, request a
 copy in a portable format, request correction or deletion, and object to or
 restrict certain processing. To exercise these rights, contact
-privacy@acmeflow.example — we respond within 30 days.
+privacy@mewflow.example — we respond within 30 days.
 
 ## 7. Cookies and similar technologies
 
@@ -80,7 +80,7 @@ prevent you from staying signed in.
 
 ## 8. International data transfers
 
-AcmeFlow's infrastructure is hosted in the United States and the European Union.
+MewFlow's infrastructure is hosted in the United States and the European Union.
 If you access the platform from another region, your information may be
 transferred to and processed in a country with different data protection laws
 than your own, under appropriate safeguards (such as standard contractual
@@ -88,7 +88,7 @@ clauses).
 
 ## 9. Children's privacy
 
-The AcmeFlow platform is a business product and is not directed at, or knowingly
+The MewFlow platform is a business product and is not directed at, or knowingly
 used to collect information from, individuals under 16 years of age.
 
 ## 10. Changes to this policy
@@ -99,4 +99,4 @@ use of the platform after that date constitutes acceptance of the updated policy
 
 ## 11. Contact us
 
-Questions about this policy can be sent to privacy@acmeflow.example.
+Questions about this policy can be sent to privacy@mewflow.example.

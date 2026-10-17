@@ -63,7 +63,7 @@ class CustomerListItem(BaseModel):
 
 
 class CheckoutSession(BaseModel):
-    """A simulated checkout — AcmeFlow has no real payment processor, so
+    """A simulated checkout — MewFlow has no real payment processor, so
     `checkout_url` is a fake link, not something that should ever be followed."""
 
     checkout_url: str

@@ -42,7 +42,7 @@ def test_does_not_flag_a_response_that_only_mentions_a_ticket():
 
 def test_flags_checkout_link_without_a_checkout_session():
     violation = check_checkout_without_eligibility(
-        OutputCheckContext(), "Podés confirmar acá: https://acmeflow.test/checkout/abc"
+        OutputCheckContext(), "Podés confirmar acá: https://mewflow.test/checkout/abc"
     )
     assert violation is not None
     assert violation.severity == GuardrailSeverity.BLOCK
@@ -119,7 +119,7 @@ def test_run_output_guardrails_collects_every_violation():
 def test_run_output_guardrails_returns_empty_for_a_clean_response():
     state = OutputCheckContext(intent=Intent.PRODUCT_QUESTION)
     assert (
-        run_output_guardrails(state, "AcmeFlow soporta hasta 10 integraciones en el plan Pro.")
+        run_output_guardrails(state, "MewFlow soporta hasta 10 integraciones en el plan Pro.")
         == []
     )
 
@@ -191,5 +191,5 @@ def test_raw_tool_call_text_is_blocked():
 
 
 def test_plain_mentions_of_a_tool_are_not_tool_text():
-    text = "Our Zapier integration is a no-code tool for connecting AcmeFlow to other apps."
+    text = "Our Zapier integration is a no-code tool for connecting MewFlow to other apps."
     assert run_output_guardrails(OutputCheckContext(tool_call_rounds=0), text) == []

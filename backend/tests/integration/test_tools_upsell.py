@@ -80,7 +80,7 @@ def test_creates_checkout_for_eligible_customer(seeded_db: Session):
     checkout = create_upgrade_checkout(customer.id, "pro")
 
     assert checkout.target_plan_slug == "pro"
-    assert checkout.checkout_url.startswith("https://acmeflow.example/demo-checkout/")
+    assert checkout.checkout_url.startswith("https://mewflow.example/demo-checkout/")
     assert checkout.price_quote.price_delta_cents == 9900 - 2900
 
 

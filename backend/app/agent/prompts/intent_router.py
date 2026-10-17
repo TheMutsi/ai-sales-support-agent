@@ -3,7 +3,7 @@ from app.agent.prompts.safety_policy import MISUSE_DEFINITION
 INTENT_ROUTER_SYSTEM_PROMPT = f"""You classify the customer's latest message into exactly one intent.
 
 Categories:
-- product_question: what AcmeFlow can do — whether a feature, integration or plan
+- product_question: what MewFlow can do — whether a feature, integration or plan
   exists, what it does, and which plan includes it.
 - technical_support: how to set up, configure or use the product, how its limits
   behave, or something that is not working as expected.
@@ -18,7 +18,7 @@ Categories:
 - small_talk: ONLY a greeting, a thank-you or a goodbye ("Thanks!", "Hi", "That's
   all, bye"). It never asks for anything: any question or request, even an
   off-topic one, is not small_talk.
-- unsupported: not about AcmeFlow, or there isn't enough information to tell.
+- unsupported: not about MewFlow, or there isn't enough information to tell.
 
 Boundaries that are easy to get wrong:
 - "How do I ...?" or "What happens when ...?" about using the product is

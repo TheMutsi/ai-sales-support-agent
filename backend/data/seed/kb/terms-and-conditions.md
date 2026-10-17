@@ -1,12 +1,12 @@
 ---
-title: "AcmeFlow Terms & Conditions"
+title: "MewFlow Terms & Conditions"
 doc_type: policy
 product_area: legal
 plan_scope: null
 version: "1.0"
 ---
 
-# AcmeFlow Terms & Conditions
+# MewFlow Terms & Conditions
 
 > Example KB content for a portfolio demo. Written for this project, not a real
 > legally-binding agreement — don't reuse it as one.
@@ -15,7 +15,7 @@ version: "1.0"
 
 ## 1. Acceptance of these terms
 
-By creating an account or using the AcmeFlow platform, you agree to these Terms.
+By creating an account or using the MewFlow platform, you agree to these Terms.
 If you're accepting on behalf of a company, you're confirming you have the
 authority to bind that company. If you don't agree, don't use the platform.
 
@@ -28,7 +28,7 @@ your workspace.
 
 ## 3. Subscription plans and billing
 
-AcmeFlow is billed on a recurring basis (monthly or annual, per your selected
+MewFlow is billed on a recurring basis (monthly or annual, per your selected
 plan) and renews automatically at the end of each billing period unless canceled
 before the renewal date. If you upgrade mid-cycle, the price difference is
 prorated for the remainder of the current period; downgrades take effect at the
@@ -47,7 +47,7 @@ substantially used, except where required by law.
 ## 5. Acceptable use
 
 You agree not to: use the platform to violate any law, attempt to gain
-unauthorized access to another workspace or to AcmeFlow's infrastructure,
+unauthorized access to another workspace or to MewFlow's infrastructure,
 reverse-engineer the platform, or use it to send spam or malicious content. We
 may suspend or terminate an account that violates this section, with notice
 where reasonably possible.
@@ -61,21 +61,21 @@ over this section.
 
 ## 7. Intellectual property
 
-AcmeFlow retains all rights to the platform itself (software, design,
+MewFlow retains all rights to the platform itself (software, design,
 trademarks). You retain all rights to the data and content you upload to your
 workspace; you grant us only the limited license needed to host, process, and
 display it back to you as part of providing the service.
 
 ## 8. Limitation of liability
 
-To the extent permitted by law, AcmeFlow is not liable for indirect, incidental,
+To the extent permitted by law, MewFlow is not liable for indirect, incidental,
 or consequential damages arising from your use of the platform. Our total
 liability for any claim is limited to the amount you paid us in the 12 months
 before the claim arose.
 
 ## 9. Dispute resolution
 
-Before filing a claim, you agree to first contact us at legal@acmeflow.example so
+Before filing a claim, you agree to first contact us at legal@mewflow.example so
 we can try to resolve the dispute informally. If that doesn't resolve it, disputes
 are handled through binding individual arbitration rather than in court, except
 either party may bring an individual claim in small-claims court. Neither party
@@ -95,4 +95,4 @@ use of the platform after that date constitutes acceptance of the updated Terms.
 
 ## 12. Contact us
 
-Questions about these Terms can be sent to legal@acmeflow.example.
+Questions about these Terms can be sent to legal@mewflow.example.

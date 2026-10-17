@@ -1,7 +1,7 @@
 [project]
-name = "acmeflow-agent"
+name = "mewflow-agent"
 version = "0.1.0"
-description = "AcmeFlow AI Sales & Support Agent backend"
+description = "MewFlow AI Sales & Support Agent backend"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115",

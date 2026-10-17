@@ -48,9 +48,9 @@ _TICKET_NUMBER_CLAIM_PATTERN = re.compile(
 # checked" also covers legitimate statements about the customer's account or
 # a ticket, which come from other tools and must not be blocked.
 _LOOKUP_CLAIM_PATTERN = re.compile(
-    r"((checked|searched|looked (it )?up in|reviewed|consulted) (in )?(our|the|acmeflow'?s?) "
+    r"((checked|searched|looked (it )?up in|reviewed|consulted) (in )?(our|the|mewflow'?s?) "
     r"(documentation|docs|knowledge base)|"
-    r"(based on|according to|per) (the information (in|from) )?(our|the|acmeflow'?s?) "
+    r"(based on|according to|per) (the information (in|from) )?(our|the|mewflow'?s?) "
     r"(documentation|docs|knowledge base)|"
     r"(revis[eé]|consult[eé]|busqu[eé]) (en )?(la|nuestra) (documentaci[oó]n|base de conocimiento)|"
     r"seg[uú]n (la|nuestra) (documentaci[oó]n|base de conocimiento))",

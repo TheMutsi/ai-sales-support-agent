@@ -20,18 +20,18 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: acmeflow
-          POSTGRES_PASSWORD: acmeflow
-          POSTGRES_DB: acmeflow
+          POSTGRES_USER: mewflow
+          POSTGRES_PASSWORD: mewflow
+          POSTGRES_DB: mewflow
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U acmeflow"
+          --health-cmd "pg_isready -U mewflow"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql+psycopg://acmeflow:acmeflow@localhost:5433/acmeflow
+      DATABASE_URL: postgresql+psycopg://mewflow:mewflow@localhost:5433/mewflow
     steps:
       - uses: actions/checkout@v4
 

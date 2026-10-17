@@ -241,7 +241,7 @@ def _print_summary(report: EvalReport, out_path: Path) -> None:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the AcmeFlow agent evaluation suite.")
+    parser = argparse.ArgumentParser(description="Run the MewFlow agent evaluation suite.")
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET_PATH)
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--out", type=Path, default=None)

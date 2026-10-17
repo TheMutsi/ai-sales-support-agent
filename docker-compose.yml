@@ -2,16 +2,16 @@ services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-acmeflow}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-acmeflow}
-      POSTGRES_DB: ${POSTGRES_DB:-acmeflow}
+      POSTGRES_USER: ${POSTGRES_USER:-mewflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mewflow}
+      POSTGRES_DB: ${POSTGRES_DB:-mewflow}
     ports:
       # Host port 5433 (not 5432) to avoid colliding with a native Postgres install.
       - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-acmeflow}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mewflow}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,7 +21,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-acmeflow}:${POSTGRES_PASSWORD:-acmeflow}@db:5432/${POSTGRES_DB:-acmeflow}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mewflow}:${POSTGRES_PASSWORD:-mewflow}@db:5432/${POSTGRES_DB:-mewflow}
       # Containerized backend reaches Langfuse by its service name, not
       # localhost — LANGFUSE_HOST from .env is only correct for a backend
       # running on the host directly (`uvicorn ... --reload`).
@@ -69,30 +69,30 @@ services:
     environment: &langfuse-worker-env
       NEXTAUTH_URL: http://localhost:3000
       DATABASE_URL: postgresql://postgres:postgres@langfuse-postgres:5432/postgres
-      SALT: acmeflow-local-salt
+      SALT: mewflow-local-salt
       ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
       CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
       CLICKHOUSE_URL: http://langfuse-clickhouse:8123
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: acmeflow-local-clickhouse
+      CLICKHOUSE_PASSWORD: mewflow-local-clickhouse
       CLICKHOUSE_CLUSTER_ENABLED: "false"
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: acmeflow-local-minio
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: mewflow-local-minio
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: acmeflow-local-minio
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: mewflow-local-minio
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
       REDIS_HOST: langfuse-redis
       REDIS_PORT: 6379
-      REDIS_AUTH: acmeflow-local-redis
+      REDIS_AUTH: mewflow-local-redis
 
   langfuse-web:
     image: docker.langfuse.com/langfuse/langfuse:4
@@ -102,18 +102,18 @@ services:
       - "3000:3000"
     environment:
       <<: *langfuse-worker-env
-      NEXTAUTH_SECRET: acmeflow-local-nextauth
-      LANGFUSE_INIT_ORG_ID: acmeflow
-      LANGFUSE_INIT_ORG_NAME: AcmeFlow
-      LANGFUSE_INIT_PROJECT_ID: acmeflow-agent
-      LANGFUSE_INIT_PROJECT_NAME: acmeflow-agent
+      NEXTAUTH_SECRET: mewflow-local-nextauth
+      LANGFUSE_INIT_ORG_ID: mewflow
+      LANGFUSE_INIT_ORG_NAME: MewFlow
+      LANGFUSE_INIT_PROJECT_ID: mewflow-agent
+      LANGFUSE_INIT_PROJECT_NAME: mewflow-agent
       # Must match LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY in .env.example —
       # this is what lets the backend trace with zero manual setup.
-      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-acmeflow-local
-      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-acmeflow-local-dev-only
-      LANGFUSE_INIT_USER_EMAIL: dev@acmeflow.local
-      LANGFUSE_INIT_USER_NAME: AcmeFlow Dev
-      LANGFUSE_INIT_USER_PASSWORD: acmeflow-local-dev
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-mewflow-local
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-mewflow-local-dev-only
+      LANGFUSE_INIT_USER_EMAIL: dev@mewflow.local
+      LANGFUSE_INIT_USER_NAME: MewFlow Dev
+      LANGFUSE_INIT_USER_PASSWORD: mewflow-local-dev
 
   langfuse-clickhouse:
     image: docker.io/clickhouse/clickhouse-server:25.12
@@ -122,7 +122,7 @@ services:
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: acmeflow-local-clickhouse
+      CLICKHOUSE_PASSWORD: mewflow-local-clickhouse
     volumes:
       - langfuse_clickhouse_data:/var/lib/clickhouse
       - langfuse_clickhouse_logs:/var/log/clickhouse-server
@@ -140,7 +140,7 @@ services:
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: acmeflow-local-minio
+      MINIO_ROOT_PASSWORD: mewflow-local-minio
     volumes:
       - langfuse_minio_data:/data
     healthcheck:
@@ -153,7 +153,7 @@ services:
   langfuse-redis:
     image: docker.io/redis:7
     restart: unless-stopped
-    command: --requirepass acmeflow-local-redis --maxmemory-policy noeviction
+    command: --requirepass mewflow-local-redis --maxmemory-policy noeviction
     volumes:
       - langfuse_redis_data:/data
     healthcheck:

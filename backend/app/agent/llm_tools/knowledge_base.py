@@ -35,7 +35,7 @@ def make_search_knowledge_base_tool(customer_id: uuid.UUID | None):
 
     @tool(response_format="content_and_artifact")
     def search_knowledge_base_tool(query: str) -> tuple[str, list[SourceReference]]:
-        """Search AcmeFlow's knowledge base (features, billing, policies, FAQ,
+        """Search MewFlow's knowledge base (features, billing, policies, FAQ,
         security, integrations) with a natural-language query. Call this when
         you need a specific fact you don't already have from the conversation
         so far — don't call it for greetings or questions you can already

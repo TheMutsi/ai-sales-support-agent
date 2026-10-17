@@ -26,11 +26,11 @@ from .metrics import Evaluator, pass_rates_by_metric, score_case
 from .schemas import CaseResult, ChatTurn, EvalCase
 from .sessions import CaseSessions
 
-DATASET_NAME_PREFIX = "acmeflow-eval"
+DATASET_NAME_PREFIX = "mewflow-eval"
 
 
 def dataset_name_for(path: Path) -> str:
-    """`evaluation/heldout.jsonl` -> `acmeflow-eval/heldout`. Langfuse shows the
+    """`evaluation/heldout.jsonl` -> `mewflow-eval/heldout`. Langfuse shows the
     `/` as a folder, keeping the dev and held-out sets apart."""
     return f"{DATASET_NAME_PREFIX}/{path.stem}"
 

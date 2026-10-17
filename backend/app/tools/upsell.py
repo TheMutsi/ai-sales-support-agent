@@ -22,7 +22,7 @@ from app.tools.errors import UpgradeNotEligibleError
 # .example is reserved for documentation/testing (RFC 2606) — guarantees this
 # can never resolve to a real domain, matching the "simulated checkout,
 # clearly labeled demo" requirement from the roadmap.
-_DEMO_CHECKOUT_BASE_URL = "https://acmeflow.example/demo-checkout"
+_DEMO_CHECKOUT_BASE_URL = "https://mewflow.example/demo-checkout"
 
 
 def evaluate_upsell(customer_id: uuid.UUID, feature: str) -> UpsellDecision:
