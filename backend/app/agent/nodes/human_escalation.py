@@ -19,6 +19,8 @@ _INTENT_TICKET_CATEGORY = {
 
 
 def human_escalation_node(state: AgentState) -> dict:
+    # First, before the model call: without a customer there is no ticket to write.
+    customer_id = require_customer_id(state)
     intent = state["intent"]
     category = _INTENT_TICKET_CATEGORY.get(intent, TicketCategory.OTHER)
 
@@ -30,7 +32,7 @@ def human_escalation_node(state: AgentState) -> dict:
     )
 
     ticket = create_support_ticket(
-        customer_id=require_customer_id(state),
+        customer_id=customer_id,
         category=category,
         subject=draft.subject,
         description=draft.description,
