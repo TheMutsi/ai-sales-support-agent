@@ -157,6 +157,9 @@ async def order_lookup(
     await run_in_threadpool(check_origin_for_api_key, http, request.api_key)
     settings = get_settings()
     tenant_id = await run_in_threadpool(find_tenant_id, db, request.api_key)
+    # The lookup opened a transaction on this request's session. The shop's orders will be a
+    # network call, so end it now: a slow shop must not leave a pooled connection held.
+    await run_in_threadpool(db.rollback)
     order = (
         await orders.get_order(tenant_id=tenant_id, order_id=request.order_id)
         if tenant_id is not None
