@@ -19,7 +19,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from app.api import chat as chat_module
 from app.auth.scopes import IdentityLevel
 from app.auth.session import SessionClaims
-from app.chat.turns import TurnAction, TurnStart
+from app.chat.turns import MessageKind, TurnAction, TurnStart
 from app.core.config import Settings
 from app.schemas.business import EligibilityResult, PriceQuote
 from app.schemas.rag import SourceReference
@@ -110,13 +110,15 @@ class _Store:
 
     def __init__(self, fail_finish: bool = False):
         self.finished: list[str] = []
+        self.kinds: list[MessageKind] = []
         self.abandoned = 0
         self._fail_finish = fail_finish
 
-    async def finish(self, content: str) -> None:
+    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT) -> None:
         if self._fail_finish:
             raise RuntimeError("db down")
         self.finished.append(content)
+        self.kinds.append(kind)
 
     async def abandon(self) -> None:
         self.abandoned += 1
@@ -711,3 +713,38 @@ async def test_a_tenants_scope_overrides_reach_the_graph_and_change_the_scopes()
 
     assert graph.initial_state["scopes"] == ["kb:read", "order:read"]
     assert graph.initial_state["scope_overrides"] == overrides
+
+
+@pytest.mark.asyncio
+async def test_an_identity_request_is_stored_as_a_form_and_reported_to_the_client():
+    final_state = {
+        "messages": [HumanMessage(content="my invoice?"), AIMessage(content="Please verify.")],
+        "intent": "billing_question",
+        "identity_required": True,
+        "identity_methods": ["otp"],
+    }
+    store = _Store()
+
+    events = await _collect(
+        chat_module.stream_chat_turn(
+            _reply_graph(final_state), _anonymous_session(), _request(), store
+        )
+    )
+
+    assert store.kinds == [MessageKind.IDENTITY_REQUEST]
+    done = events[-1]["data"]
+    assert done["identity_required"] is True and done["identity_methods"] == ["otp"]
+
+
+@pytest.mark.asyncio
+async def test_a_normal_answer_is_stored_as_text_and_asks_for_nothing():
+    final_state = {"messages": [AIMessage(content="It's $49.")], "intent": "pricing_question"}
+    store = _Store()
+
+    events = await _collect(
+        chat_module.stream_chat_turn(_reply_graph(final_state), _session(), _request(), store)
+    )
+
+    assert store.kinds == [MessageKind.TEXT]
+    assert events[-1]["data"]["identity_required"] is False
+    assert events[-1]["data"]["identity_methods"] == []

@@ -82,3 +82,9 @@ class ChatTurnSummary(BaseModel):
     sources: list[SourceReference] = Field(default_factory=list)
     checkout: CheckoutSession | None = None
     ticket_id: uuid.UUID | None = None
+
+    # The assistant could not go on without knowing who this is. `identity_methods` are the
+    # forms the widget should offer ("otp", "order_id"); empty means only the shop's own
+    # login can unlock it. The turn resumes when the visitor sends the message again.
+    identity_required: bool = False
+    identity_methods: list[str] = Field(default_factory=list)

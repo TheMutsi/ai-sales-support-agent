@@ -43,12 +43,13 @@ from starlette.background import BackgroundTask
 
 from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
-from app.api.deps import require_customer_session, require_session
+from app.api.deps import require_session
 from app.api.rate_limit import limit_by_conversation
 from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
 from app.chat.turns import (
     MessageIdReused,
+    MessageKind,
     TurnAction,
     TurnInProgress,
     TurnStart,
@@ -125,6 +126,8 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
         sources=_collect_sources(final_state.get("messages", [])),
         checkout=final_state.get("checkout_session"),
         ticket_id=ticket_receipt.ticket_id if ticket_receipt else None,
+        identity_required=final_state.get("identity_required", False),
+        identity_methods=final_state.get("identity_methods", []),
     )
 
 
@@ -146,7 +149,7 @@ def _build_trace_metadata(session: SessionClaims, conversation_id: uuid.UUID) ->
 
 
 class TurnStore(Protocol):
-    async def finish(self, content: str) -> None: ...
+    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT) -> None: ...
 
     async def abandon(self) -> None: ...
 
@@ -171,7 +174,7 @@ class _DbTurnStore:
     def __init__(self, conversation_id: uuid.UUID, turn: TurnStart):
         self._conversation_id, self._turn = conversation_id, turn
 
-    async def finish(self, content: str) -> None:
+    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT) -> None:
         def save() -> None:
             with SessionLocal() as db:
                 try:
@@ -181,6 +184,7 @@ class _DbTurnStore:
                         turn=self._turn,
                         content=content,
                         now=datetime.now(UTC),
+                        kind=kind,
                     )
                 except TurnSuperseded:
                     logger.warning("late reply dropped (conversation %s)", self._conversation_id)
@@ -316,9 +320,10 @@ async def _stream_turn(
 
     final_text = final_state["messages"][-1].content
     state.settled = True  # from here the store decides the outcome, not the `finally`
+    kind = MessageKind.IDENTITY_REQUEST if final_state.get("identity_required") else MessageKind.TEXT
     try:
         # Shielded, so a disconnect can't interrupt saving the reply halfway.
-        await asyncio.shield(store.finish(final_text))
+        await asyncio.shield(store.finish(final_text, kind))
     except Exception:
         # The client already has its answer, so the stream goes on; but the turn must
         # not stay busy for the next two minutes because the reply wasn't stored.
@@ -371,7 +376,7 @@ async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
     dependencies=[limit_by_conversation("chat", limit=30, window_seconds=600)],
 )
 async def chat(
-    request: ChatRequest, session: Annotated[SessionClaims, Depends(require_customer_session)]
+    request: ChatRequest, session: Annotated[SessionClaims, Depends(require_session)]
 ) -> StreamingResponse:
     # The turn is opened before streaming starts so a refusal can still be a proper
     # HTTP status instead of an event inside a 200 response.

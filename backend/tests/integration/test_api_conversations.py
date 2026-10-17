@@ -131,14 +131,26 @@ def test_a_session_from_another_tenant_is_never_attached_to(shop):
         assert db.get(Conversation, uuid.UUID(foreign["conversation_id"])).customer_id is None
 
 
-def test_chatting_with_an_anonymous_session_asks_for_identification(shop):
+def test_an_anonymous_session_can_chat(shop, monkeypatch):
+    """What it may ask about is decided inside the graph, by scope; the endpoint only
+    needs a valid session for the conversation."""
+    from app.api import chat as chat_module
+
+    class _Silent:
+        async def astream_events(self, initial_state, config, version):
+            self.state = initial_state
+            return
+            yield
+
+    graph = _Silent()
+    monkeypatch.setattr(chat_module, "agent_graph", graph)
     anonymous = _start(shop["api_key"]).json()
 
     response = client.post(
         "/api/chat",
-        json={"messages": [{"role": "user", "content": "hi"}]},
+        json={"message": "hi", "message_id": str(uuid.uuid4())},
         headers=_bearer(anonymous["session_token"]),
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == {"code": "identity_required"}
+    assert response.status_code == 200
+    assert graph.state["scopes"] == ["kb:read"] and graph.state["customer_id"] is None
