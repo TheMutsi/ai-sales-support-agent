@@ -37,6 +37,17 @@ class EvalScenario(StrEnum):
     AMBIGUOUS_INPUT = "ambiguous_input"
     WRONG_CUSTOMER_ASSUMPTION = "wrong_customer_assumption"
     TOOL_EDGE_CASE = "tool_edge_case"
+    # An anonymous visitor: what they can ask without identifying, and when the assistant
+    # must ask them to identify first.
+    ANONYMOUS_VISITOR = "anonymous_visitor"
+
+
+class EvalIdentity(StrEnum):
+    """Who the visitor is when the case's last message is sent: logged in as the case's
+    customer (the shop vouched for them) or an anonymous visitor."""
+
+    STORE_LOGIN = "store_login"
+    ANONYMOUS = "anonymous"
 
 
 class EvalMetric(StrEnum):
@@ -45,6 +56,7 @@ class EvalMetric(StrEnum):
 
     INTENT_ACCURACY = "intent_accuracy"
     INPUT_BLOCKED_CORRECTNESS = "input_blocked_correctness"
+    IDENTITY_REQUEST_CORRECTNESS = "identity_request_correctness"
     ESCALATION_CORRECTNESS = "escalation_correctness"
     UPGRADE_ELIGIBILITY_CORRECTNESS = "upgrade_eligibility_correctness"
     ANSWER_CORRECTNESS = "answer_correctness"
@@ -62,7 +74,9 @@ class EvalCase(BaseModel):
 
     id: str
     scenario: EvalScenario
-    customer_email: str
+    identity: EvalIdentity = EvalIdentity.STORE_LOGIN
+    # Required for a logged-in case, ignored for an anonymous one.
+    customer_email: str | None = None
     messages: list[ChatMessage] = Field(min_length=1)
 
     expected_intent: Intent | None = None
@@ -72,6 +86,10 @@ class EvalCase(BaseModel):
     # from `expected_intent=None`: an ambiguous but legitimate message has no
     # fixed intent either, yet must never be blocked.
     expected_input_blocked: bool = False
+    # Whether the assistant should ask the visitor to identify, and with which forms.
+    # `expected_identity_methods` is only checked when it is set.
+    expected_identity_required: bool = False
+    expected_identity_methods: list[str] | None = None
     # Only set for upgrade cases. `None` means "not applicable", not "False".
     expected_upgrade_eligible: bool | None = None
 
@@ -80,6 +98,12 @@ class EvalCase(BaseModel):
     must_not_include: list[str] = Field(default_factory=list)
 
     notes: str = ""
+
+    @model_validator(mode="after")
+    def _logged_in_cases_name_their_customer(self) -> "EvalCase":
+        if self.identity is EvalIdentity.STORE_LOGIN and not self.customer_email:
+            raise ValueError("a logged-in case needs a customer_email")
+        return self
 
     @model_validator(mode="after")
     def _ends_with_a_user_message(self) -> "EvalCase":

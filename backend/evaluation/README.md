@@ -1,6 +1,6 @@
 # Evaluation suite
 
-Two fixed datasets, a 55-case dev set (`dataset.jsonl`) and a 16-case held-out set
+Two fixed datasets, a dev set (`dataset.jsonl`, 66 cases at the time of writing) and a 16-case held-out set
 (`heldout.jsonl`), run against the **real, running `/api/chat` endpoint** and
 scored by small single-purpose evaluators. Same datasets, same script, same metrics
 on every run.
@@ -82,9 +82,11 @@ before they count as evidence.
 Each line is an `EvalCase` (`evaluation/schemas.py`): scenario, customer,
 messages, and the expectations to check. Scenarios, metrics and intents are
 `StrEnum`s, so a typo in the dataset fails at load time instead of silently
-scoring wrong; duplicate case ids are rejected too. 12 scenarios: product,
+scoring wrong; duplicate case ids are rejected too. 13 scenarios: product,
 pricing, billing, technical, upgrade, refund, human escalation, unsupported,
-prompt injection, ambiguous input, wrong customer assumption, tool edge cases.
+prompt injection, ambiguous input, wrong customer assumption, tool edge cases, and
+anonymous visitor (`identity: anonymous`: what a visitor can ask without identifying,
+and when the assistant must ask them to identify first; the other cases run logged in).
 
 ### Dev and held-out sets
 
@@ -127,6 +129,7 @@ applicable to this case". Adding one = one function + one entry in
 |---|---|
 | `intent_accuracy` | `done.intent` == `expected_intent` |
 | `input_blocked_correctness` | `done.input_blocked` (regex pre-filter *or* `safety_judge`) vs `expected_input_blocked` |
+| `identity_request_correctness` | `done.identity_required` (and `identity_methods`, when `expected_identity_methods` is set) vs `expected_identity_required`; a logged-in case must never be asked to identify |
 | `escalation_correctness` | `done.escalated` / `done.ticket_created` vs expectations |
 | `upgrade_eligibility_correctness` | `done.upgrade_eligible` vs `expected_upgrade_eligible` |
 | `answer_correctness` | every `must_include` term appears (case-insensitive substring) |

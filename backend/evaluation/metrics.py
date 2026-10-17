@@ -65,6 +65,24 @@ def evaluate_input_blocked(case: EvalCase, turn: ChatTurn) -> MetricResult:
     )
 
 
+def evaluate_identity_request(case: EvalCase, turn: ChatTurn) -> MetricResult:
+    """Always applicable: a logged-in case must never be asked to identify, and an anonymous
+    one asking about an account must be."""
+    summary = turn.summary
+    passed = summary.identity_required == case.expected_identity_required
+    if passed and case.expected_identity_methods is not None:
+        passed = summary.identity_methods == case.expected_identity_methods
+    return MetricResult(
+        metric=EvalMetric.IDENTITY_REQUEST_CORRECTNESS,
+        passed=passed,
+        detail=(
+            f"expected={case.expected_identity_required} actual={summary.identity_required} "
+            f"expected_methods={case.expected_identity_methods} "
+            f"actual_methods={summary.identity_methods}"
+        ),
+    )
+
+
 def evaluate_escalation(case: EvalCase, turn: ChatTurn) -> MetricResult:
     """Always applicable: "this case must not escalate" is an assertion too."""
     summary = turn.summary
@@ -122,6 +140,7 @@ def evaluate_hallucination_substring(case: EvalCase, turn: ChatTurn) -> MetricRe
 DEFAULT_EVALUATORS: tuple[Evaluator, ...] = (
     evaluate_intent_accuracy,
     evaluate_input_blocked,
+    evaluate_identity_request,
     evaluate_escalation,
     evaluate_upgrade_eligibility,
     evaluate_answer_correctness,
