@@ -1,4 +1,10 @@
+import type { GetToken } from "../data/auth";
 import type { Controller } from "./controller";
+
+/** `Mew('config', { getToken })`: how the shop tells the widget who its logged-in customer is. */
+export interface MewConfig {
+  getToken?: GetToken;
+}
 
 type MewCall = (command: string, ...args: unknown[]) => void;
 type QueueingMew = MewCall & { q?: IArguments[] };
@@ -11,9 +17,14 @@ type QueueingMew = MewCall & { q?: IArguments[] };
  * replay that queue in order and from then on run commands immediately (same pattern as
  * Google Analytics and Intercom).
  */
-export function installGlobal(target: Window, controller: Controller): void {
+export function installGlobal(
+  target: Window,
+  controller: Controller,
+  onConfig: (options: MewConfig) => void = () => {},
+): void {
   const queued = ((target as unknown as { Mew?: QueueingMew }).Mew?.q ?? []) as ArrayLike<unknown>[];
-  const mew: MewCall = (command) => controller.run(command);
+  const mew: MewCall = (command, ...args) =>
+    command === "config" ? onConfig((args[0] ?? {}) as MewConfig) : controller.run(command);
   (target as unknown as { Mew: MewCall }).Mew = mew;
   for (const args of Array.from(queued)) mew(...(Array.from(args) as [string, ...unknown[]]));
 }

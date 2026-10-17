@@ -1,8 +1,15 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import type { Chat } from "../data/chat";
 import type { Controller } from "../loader/controller";
 
-export function App({ controller, apiKey }: { controller: Controller; apiKey: string }) {
+export function App({ controller, chat, apiKey }: { controller: Controller; chat: Chat; apiKey: string }) {
   const { open, visible } = useSyncExternalStore(controller.subscribe, controller.getState);
+  const { messages } = useSyncExternalStore(chat.subscribe, chat.getState);
+
+  // The conversation is only fetched (and an anonymous one only created) when the panel opens.
+  useEffect(() => {
+    if (open) void chat.load();
+  }, [open, chat]);
 
   if (!visible) return null;
   return (
@@ -10,7 +17,10 @@ export function App({ controller, apiKey }: { controller: Controller; apiKey: st
       {open && (
         <section className="mew-panel" aria-label="Chat">
           <header>Mew</header>
-          <p>Connected with key <code>{apiKey}</code>. The conversation arrives in the next PR.</p>
+          <p>
+            Connected with key <code>{apiKey}</code>: {messages.length} stored messages. The chat UI
+            arrives in the next PR.
+          </p>
         </section>
       )}
       <button

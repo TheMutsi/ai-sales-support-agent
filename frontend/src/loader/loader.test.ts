@@ -52,6 +52,19 @@ describe("installGlobal", () => {
   });
 });
 
+describe("Mew('config', ...)", () => {
+  it("hands the options to the config handler instead of running a command", () => {
+    const c = createController();
+    const win = { Mew: undefined } as unknown as Window;
+    const onConfig = vi.fn();
+    installGlobal(win, c, onConfig);
+    const getToken = () => "jwt";
+    (win as unknown as { Mew: (...a: unknown[]) => void }).Mew("config", { getToken });
+    expect(onConfig).toHaveBeenCalledWith({ getToken });
+    expect(c.getState()).toEqual({ open: false, visible: true });
+  });
+});
+
 describe("readKey", () => {
   it("reads the key from the script URL", () => {
     const s = document.createElement("script");
