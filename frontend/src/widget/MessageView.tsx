@@ -19,7 +19,7 @@ function Part({ part }: { part: MessagePart }) {
 export function MessageView({ message }: { message: ChatMessage }) {
   return (
     <div className={`mew-message mew-${message.role}`}>
-      {toParts(message.content).map((part, index) => (
+      {[...(message.images ?? []).map((i): MessagePart => ({ type: "image", ...i})), ...toParts(message.content)].map((part, index) => (
         <Part key={index} part={part} />
       ))}
     </div>

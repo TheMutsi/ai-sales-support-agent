@@ -12,6 +12,8 @@ export interface ChatMessage {
   role: "user" | "assistant";
   kind: "text" | "identity_request";
   content: string;
+  /** Previews of images the visitor attached. Local only: they are not sent or stored yet. */
+  images?: { url: string; alt: string }[];
 }
 
 export interface TurnSummary {

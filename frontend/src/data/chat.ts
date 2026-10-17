@@ -2,7 +2,7 @@ import { ApiError, type Api } from "./api";
 import type { Auth } from "./auth";
 import { applyEvent, initialState, type ChatState } from "./chatState";
 import type { SessionStore } from "./sessionStore";
-import type { ChatEvent, Session } from "./types";
+import type { ChatEvent, ChatMessage, Session } from "./types";
 
 /**
  * The conversation as the UI sees it: state to subscribe to (`useSyncExternalStore`) and the
@@ -58,11 +58,11 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
         update({ ...state, error: "Could not load the conversation." });
       }
     },
-    async send(text: string) {
+    async send(text: string, images: ChatMessage["images"] = []) {
       if (state.streaming || !text.trim()) return;
       const id = crypto.randomUUID();
       store.touch();
-      update({ ...state, messages: [...state.messages, { id, role: "user", kind: "text", content: text }] });
+      update({ ...state, messages: [...state.messages, { id, role: "user", kind: "text", content: text, images }] });
       await run((session) => api.chat(session, text, id));
     },
     /** After the visitor identified: answers the message that was waiting. */

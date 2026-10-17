@@ -28,7 +28,9 @@ function boot() {
   const identity = createIdentity(api, auth, chat);
   // Another tab changed the conversation (a message, a login): show the stored state.
   store.subscribe(() => void chat.load());
-  installGlobal(window, controller, ({ getToken }) => {
+  const settings = { sound: true };
+  installGlobal(window, controller, ({ getToken, sound }) => {
+    if (sound !== undefined) settings.sound = sound;
     auth.setGetToken(getToken ?? null);
     if (getToken) void auth.identify().then(() => chat.load());
   });
@@ -41,7 +43,7 @@ function boot() {
   doc.body.style.cssText = "margin:0;background:transparent";
   const mount = doc.createElement("div");
   doc.body.appendChild(mount);
-  createRoot(mount).render(createElement(App, { controller, chat, identity }));
+  createRoot(mount).render(createElement(App, { controller, chat, identity, settings }));
 }
 
 // The shop may place the <script> in <head>, before <body> exists.
