@@ -605,3 +605,71 @@ async def test_a_client_disconnect_frees_the_conversation():
         await task
 
     assert store.abandoned == 1
+
+
+@pytest.mark.asyncio
+async def test_a_failure_storing_the_reply_frees_the_conversation_and_keeps_the_stream():
+    """The user already has their answer, so the stream still ends with `done`; but the
+    turn isn't left marked busy for the next two minutes."""
+    store = _Store(fail_finish=True)
+
+    events = await _collect(
+        chat_module.stream_chat_turn(_answering_graph("Hello!"), _session(), _request(), store)
+    )
+
+    assert events[-1]["event"] == "done" and store.abandoned == 1
+
+
+@pytest.mark.asyncio
+async def test_closing_the_stream_early_frees_the_conversation():
+    """A disconnect can close the generator at a `yield` (GeneratorExit), not only cancel it."""
+    store = _Store()
+    stream = chat_module.stream_chat_turn(
+        _answering_graph("Hello!"), _session(), _request(), store
+    )
+
+    await stream.__anext__()  # the first delta
+    await stream.aclose()
+
+    assert store.abandoned == 1 and store.finished == []
+
+
+@pytest.mark.asyncio
+async def test_closing_the_stream_also_closes_the_graph_run():
+    """Otherwise the graph run (and its trace span) outlives a client that left."""
+    closed = []
+
+    class _Graph:
+        async def astream_events(self, initial_state, config, version):
+            try:
+                yield _chat_model_stream_event("response_writer", "partial")
+                await asyncio.sleep(60)
+            finally:
+                closed.append(True)
+
+    stream = chat_module.stream_chat_turn(_Graph(), _session(), _request(), _Store())
+    await stream.__anext__()
+    await stream.aclose()
+
+    assert closed == [True]
+
+
+@pytest.mark.asyncio
+async def test_a_graph_that_ends_without_a_final_state_is_an_error_not_a_dropped_stream():
+    graph = _FakeGraph([_chat_model_stream_event("response_writer", "Hi")])
+    store = _Store()
+
+    events = await _collect(chat_module.stream_chat_turn(graph, _session(), _request(), store))
+
+    assert events[-1]["event"] == "error" and store.abandoned >= 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("settled, freed", [(True, 0), (False, 1)])
+async def test_the_cleanup_after_the_response_only_acts_if_the_turn_never_settled(settled, freed):
+    state, store = chat_module._TurnState(), _Store()
+    state.settled = settled
+
+    await chat_module._abandon_if_unsettled(state, store, uuid.uuid4())
+
+    assert store.abandoned == freed
