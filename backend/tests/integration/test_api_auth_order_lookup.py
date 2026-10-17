@@ -1,20 +1,27 @@
 """`POST /api/auth/order-lookup` through the real app: a visitor gets a weak session by giving
 the email of an order and its id. The session names that one order, never the customer."""
 
+import asyncio
+import time
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
+import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.auth import get_order_source
+from app.api.chat import _open_turn
 from app.auth.credentials import generate_api_key
 from app.auth.scopes import IdentityLevel
-from app.auth.session import issue_session_token
+from app.auth.session import issue_session_token, verify_session_token
 from app.core.config import get_settings
 from app.db.models import Conversation, Customer, Order, Plan, Tenant
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.main import app
+from app.schemas.chat import ChatRequest
+from app.schemas.orders import OrderDetails, OrderStatus
 
 client = TestClient(app)
 EMAIL = "ana@shop.test"
@@ -149,3 +156,124 @@ def test_a_malformed_order_id_is_rejected_before_anything_runs(shop, order_id):
 
 def test_a_malformed_email_is_rejected_before_anything_runs(shop):
     assert _lookup(shop["api_key"], email="not-an-email").status_code == 422
+
+
+def _a_valid_order() -> OrderDetails:
+    return OrderDetails(
+        order_id=ORDER_ID,
+        customer_email=EMAIL,
+        plan_slug="starter",
+        amount_cents=2900,
+        currency="usd",
+        status=OrderStatus.PAID,
+        created_at=datetime.now(UTC),
+    )
+
+
+@pytest.fixture
+def fake_orders():
+    """Replaces the shop's orders API with one the test controls, restoring the real one."""
+
+    def install(source):
+        app.dependency_overrides[get_order_source] = lambda: source
+
+    yield install
+    app.dependency_overrides.pop(get_order_source, None)
+
+
+def test_the_twenty_first_attempt_in_an_hour_is_refused_whatever_it_gave(shop):
+    statuses = [_lookup(shop["api_key"], email="mallory@shop.test").status_code for _ in range(21)]
+
+    assert statuses[:20] == [401] * 20 and statuses[20] == 429
+
+
+def test_a_conversation_of_another_shop_is_not_continued(shop):
+    other_tenant_id = next(
+        t.id for t in _all_tenants() if t.id != shop["tenant"].id
+    )
+    with SessionLocal() as db:
+        foreign = Conversation(
+            id=uuid.uuid4(),
+            tenant_id=other_tenant_id,
+            created_at=datetime.now(UTC),
+            last_activity_at=datetime.now(UTC),
+        )
+        db.add(foreign)
+        db.commit()
+        foreign_id = foreign.id
+    token, _ = issue_session_token(
+        tenant_id=other_tenant_id,
+        conversation_id=foreign_id,
+        customer_id=None,
+        level=IdentityLevel.ANONYMOUS,
+        signing_key=get_settings().session_signing_key,
+        ttl=timedelta(hours=1),
+    )
+
+    response = _lookup(shop["api_key"], headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json()["conversation_id"] != str(foreign_id)
+    with SessionLocal() as db:
+        assert db.get(Conversation, foreign_id).identity_level == "anonymous"
+
+
+def _all_tenants():
+    with SessionLocal() as db:
+        return db.query(Tenant).all()
+
+
+def test_the_session_it_gives_can_open_a_chat_turn(shop):
+    """It has no customer, like an anonymous one: the chat must accept it as it does that."""
+    response = _lookup(shop["api_key"])
+    claims = verify_session_token(response.json()["session_token"], get_settings().session_signing_key)
+
+    turn = _open_turn(claims, ChatRequest(message="hello", message_id=uuid.uuid4()))
+
+    assert turn.user_text == "hello"
+
+
+def test_no_database_connection_is_held_while_waiting_for_the_shops_orders(shop, fake_orders):
+    """The orders will be a network call: the request's own session must not sit on a pooled
+    connection (and its transaction) while it waits, or a slow shop drains the pool."""
+    seen = {}
+
+    class Source:
+        async def get_order(self, *, tenant_id, order_id):
+            seen["checked_out"] = engine.pool.checkedout()
+            return _a_valid_order()
+
+    fake_orders(Source())
+
+    assert _lookup(shop["api_key"]).status_code == 200
+    assert seen["checked_out"] == 0
+
+
+@pytest.mark.asyncio
+async def test_slow_orders_do_not_make_requests_wait_for_each_other(shop, fake_orders):
+    """Five lookups against a source that takes 0.3 s each finish in about 0.3 s, not 1.5 s:
+    the endpoint awaits instead of blocking the event loop."""
+
+    class Slow:
+        async def get_order(self, *, tenant_id, order_id):
+            await asyncio.sleep(0.3)
+            return _a_valid_order()
+
+    fake_orders(Slow())
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+        started = time.perf_counter()
+        responses = await asyncio.gather(
+            *[
+                http.post(
+                    "/api/auth/order-lookup",
+                    json={"api_key": shop["api_key"], "email": EMAIL, "order_id": ORDER_ID},
+                )
+                for _ in range(5)
+            ]
+        )
+        elapsed = time.perf_counter() - started
+
+    assert [r.status_code for r in responses] == [200] * 5
+    assert elapsed < 1.2, f"requests were serialized: {elapsed:.2f}s"
+

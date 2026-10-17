@@ -54,6 +54,15 @@ DEFAULT_LEVEL_SCOPES: Mapping[IdentityLevel, frozenset[Scope]] = {
 }
 
 
+# Scopes that act on a customer. A level that proves no customer (anonymous, or an order id)
+# can never hold one: the nodes behind them need a customer and fail without it, so granting
+# one would turn "please identify" into a server error.
+_CUSTOMER_BOUND = frozenset(
+    {Scope.CUSTOMER_READ, Scope.TICKET_CREATE, Scope.SUBSCRIPTION_CHANGE, Scope.REFUND_REQUEST}
+)
+_LEVELS_WITHOUT_A_CUSTOMER = frozenset({IdentityLevel.ANONYMOUS, IdentityLevel.ORDER_LOOKUP})
+
+
 def scopes_for(
     level: IdentityLevel, overrides: Mapping[str, Sequence[str]] | None = None
 ) -> frozenset[Scope]:
@@ -64,5 +73,8 @@ def scopes_for(
     entry shouldn't lock a tenant out entirely."""
     if overrides and level.value in overrides:
         known = {s.value: s for s in Scope}
-        return frozenset(known[name] for name in overrides[level.value] if name in known)
+        granted = frozenset(known[name] for name in overrides[level.value] if name in known)
+        if level in _LEVELS_WITHOUT_A_CUSTOMER:
+            granted -= _CUSTOMER_BOUND
+        return granted
     return DEFAULT_LEVEL_SCOPES[level]

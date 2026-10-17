@@ -20,6 +20,7 @@ from app.schemas.agent import Intent
 
 _CUSTOMER_SCOPES = sorted(scopes_for(IdentityLevel.STORE_LOGIN))
 _ANONYMOUS_SCOPES = sorted(scopes_for(IdentityLevel.ANONYMOUS))
+_ORDER_LOOKUP_SCOPES = sorted(scopes_for(IdentityLevel.ORDER_LOOKUP))
 
 
 def _state(intent: Intent, safety_confidence: float = 1.0, scopes=_CUSTOMER_SCOPES) -> dict:
@@ -202,3 +203,20 @@ def test_the_safety_judge_still_runs_before_the_identity_request():
     )
     state = {"input_blocked": False, "intent": Intent.BILLING_QUESTION, "scopes": _ANONYMOUS_SCOPES}
     assert route_after_safety_judge(state) == "request_identity"
+
+
+def test_someone_who_proved_only_an_order_is_asked_to_identify_for_anything_about_the_account():
+    """The order level has no customer: account intents must route to `request_identity`
+    (never into a node that needs a customer), whatever the order says."""
+    for intent in (
+        Intent.BILLING_QUESTION,
+        Intent.UPGRADE_REQUEST,
+        Intent.REFUND_REQUEST,
+        Intent.HUMAN_ESCALATION,
+    ):
+        assert route_after_intent(_state(intent, scopes=_ORDER_LOOKUP_SCOPES)) == (
+            "request_identity"
+        )
+    assert route_after_intent(_state(Intent.PRODUCT_QUESTION, scopes=_ORDER_LOOKUP_SCOPES)) == (
+        "response_writer"
+    )

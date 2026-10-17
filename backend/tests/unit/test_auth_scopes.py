@@ -41,3 +41,18 @@ def test_unknown_scope_in_an_override_is_ignored_not_granted():
     overrides = {"anonymous": ["kb:read", "root:everything"]}
 
     assert scopes_for(IdentityLevel.ANONYMOUS, overrides) == {Scope.KB_READ}
+
+
+def test_a_level_without_a_customer_cannot_be_given_customer_scopes_by_an_override():
+    """Found in review: such a scope would send a visitor with no customer into a node that
+    needs one, which fails with a 500 instead of asking them to identify. Closed in the
+    scopes themselves, since an override is configuration and must never widen access."""
+    everything = [scope.value for scope in Scope]
+
+    for level in (IdentityLevel.ORDER_LOOKUP, IdentityLevel.ANONYMOUS):
+        granted = scopes_for(level, {level.value: everything})
+        assert granted == {Scope.KB_READ, Scope.ORDER_READ}
+
+    # Levels that do have a customer keep what the tenant gives them.
+    assert Scope.CUSTOMER_READ in scopes_for(IdentityLevel.OTP_LOGIN, {"otp_login": everything})
+
