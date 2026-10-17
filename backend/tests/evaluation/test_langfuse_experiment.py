@@ -20,7 +20,6 @@ from evaluation.metrics import evaluate_escalation, evaluate_intent_accuracy
 from evaluation.schemas import EvalCase, EvalScenario
 
 _CUSTOMER_EMAIL = "ava.chen@northlightstudio.com"
-_CUSTOMER_ID = uuid.uuid4()
 
 
 def _case(case_id: str, **overrides) -> EvalCase:
@@ -70,13 +69,25 @@ class _FakeLangfuse:
         return SimpleNamespace(dataset_run_url="http://langfuse.test/run/1")
 
 
+class _FakeSessions:
+    """Opens a fresh made-up conversation per case, as the real `CaseSessions` does."""
+
+    def open(self, case):
+        conversation_id = uuid.uuid4()
+        return SimpleNamespace(token=str(conversation_id), conversation_id=conversation_id)
+
+
 def _chat_server(requests: list[dict], fail_on: str | None = None) -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
         requests.append(payload)
-        if fail_on and fail_on in payload["messages"][0]["content"]:
+        if fail_on and fail_on in payload["message"]:
             return httpx.Response(500)
-        done = {"conversation_id": payload["conversation_id"], "intent": "billing_question"}
+        # The fake session's token is its conversation id.
+        done = {
+            "conversation_id": request.headers["authorization"].removeprefix("Bearer "),
+            "intent": "billing_question",
+        }
         body = (
             f"event: message\ndata: {json.dumps({'text': 'Here is why.'})}\n\n"
             f"event: done\ndata: {json.dumps(done)}\n\n"
@@ -91,7 +102,7 @@ def _runner(client: _FakeLangfuse, http: httpx.Client) -> LangfuseExperimentRunn
         client,
         http,
         "http://api.test",
-        {_CUSTOMER_EMAIL: _CUSTOMER_ID},
+        _FakeSessions(),
         [evaluate_intent_accuracy, evaluate_escalation],
     )
 
@@ -131,9 +142,9 @@ def test_run_scores_every_case_and_links_the_session():
     assert run_url == "http://langfuse.test/run/1"
     assert len(client.items) == 2
     assert client.run_kwargs["run_name"] == "abc123 run"
-    # The conversation id is chosen client-side, so the item's session is
-    # the same one the API uses for the agent's own trace.
-    assert all(uuid.UUID(payload["conversation_id"]) for payload in requests)
+    # The conversation belongs to the session the runner opened, so the item's Langfuse
+    # session is the same one the API uses for the agent's own trace.
+    assert all(uuid.UUID(payload["message_id"]) for payload in requests)
     scores = {(s.name, s.value) for s in client.item_scores}
     assert ("intent_accuracy", 1.0) in scores
     assert ("intent_accuracy", 0.0) in scores

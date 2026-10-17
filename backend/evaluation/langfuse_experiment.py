@@ -24,6 +24,7 @@ from langfuse import Evaluation, Langfuse, propagate_attributes
 from .chat_client import run_chat_turn
 from .metrics import Evaluator, pass_rates_by_metric, score_case
 from .schemas import CaseResult, ChatTurn, EvalCase
+from .sessions import CaseSessions
 
 DATASET_NAME_PREFIX = "acmeflow-eval"
 
@@ -100,13 +101,13 @@ class LangfuseExperimentRunner:
         client: Langfuse,
         http: httpx.Client,
         base_url: str,
-        session_tokens: dict[str, str],
+        sessions: CaseSessions,
         evaluators: Sequence[Evaluator],
     ) -> None:
         self._client = client
         self._http = http
         self._base_url = base_url
-        self._session_tokens = session_tokens
+        self._sessions = sessions
         self._evaluators = evaluators
         self._cases: dict[str, EvalCase] = {}
         self._results: dict[str, CaseResult] = {}
@@ -150,18 +151,12 @@ class LangfuseExperimentRunner:
 
     def _task(self, *, item: Any, **_: Any) -> dict[str, Any]:
         case = self._cases[item.metadata["case_id"]]
-        conversation_id = uuid.uuid4()
         try:
-            # The API puts the agent's own trace in the session named by
-            # `conversation_id`; sharing it links this item to that trace.
-            with propagate_attributes(session_id=str(conversation_id)):
-                turn = run_chat_turn(
-                    self._http,
-                    self._base_url,
-                    self._session_tokens[case.customer_email],
-                    case,
-                    conversation_id=conversation_id,
-                )
+            # The conversation belongs to the session, so the API puts the agent's own trace in
+            # the session of that conversation; sharing its id links this item to that trace.
+            session = self._sessions.open(case)
+            with propagate_attributes(session_id=str(session.conversation_id)):
+                turn = run_chat_turn(self._http, self._base_url, session.token, case)
         except Exception as exc:
             # Langfuse only logs a failed item; say which case it was.
             print(f"[{case.id}] ERROR: {exc}", file=sys.stderr)
