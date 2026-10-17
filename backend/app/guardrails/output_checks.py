@@ -211,6 +211,48 @@ def check_unverified_billing_explanation(
     return None
 
 
+# Any mention of an invoice, in either language the agent answers in.
+_INVOICE_MENTION_PATTERN = re.compile(r"\b(invoices?|facturas?)\b", re.IGNORECASE)
+
+# An admission that the model cannot see something ("I don't have access to...", "no tengo
+# acceso a..."): a negation (don't, can't, cannot, unable to) followed by an access word, with
+# one optional word allowed between ("have specific details"). "doesn't" is not a negation here,
+# so "the system doesn't have X" stays a claim about the product instead of an admission.
+_NO_ACCESS_ADMISSION_PATTERN = re.compile(
+    r"((i |we )?(don'?t|do not|can'?t|cannot|am unable to|am not able to)\s+"
+    r"(have\s+)?(\w+\s+)?(access|information|details|ability|capability|means|see|view|retrieve|look up)|"
+    r"no (tengo|puedo|dispongo)\b.{0,25}(acceso|informaci[oó]n|detalles|ver))",
+    re.IGNORECASE,
+)
+
+
+def check_ungrounded_invoice_claim(
+    context: OutputCheckContext, response_text: str
+) -> GuardrailViolation | None:
+    """Found live while recording the demo: asked about invoices, the model said none were
+    scheduled, that there was no invoice preview, or that invoices live in a dashboard. No tool
+    reads invoices and the customer context holds none, so such a statement can only be grounded
+    in a knowledge-base search this turn (`tool_call_rounds`). Without one, a billing answer that
+    talks about invoices is flagged unless it admits it cannot see them.
+
+    FLAG, not BLOCK, on purpose: the heuristic is wording-based and a hedged answer can look
+    the same, so it first records how often it fires (and on what) before it may rewrite a
+    reply. Known gap: an admission followed by an invented detail in the same reply is not caught
+    (see the unit test); the evaluation cases billing-007 and billing-008 measure that."""
+    if (
+        context.intent == Intent.BILLING_QUESTION
+        and context.tool_call_rounds == 0
+        and _INVOICE_MENTION_PATTERN.search(response_text)
+        and not _NO_ACCESS_ADMISSION_PATTERN.search(response_text)
+    ):
+        return GuardrailViolation(
+            code="ungrounded_invoice_claim",
+            severity=GuardrailSeverity.FLAG,
+            message="Response states facts about invoices that no tool or search supports.",
+        )
+    return None
+
+
 _ALL_CHECKS = (
     check_unconfirmed_refund_claim,
     check_checkout_without_eligibility,
@@ -220,6 +262,7 @@ _ALL_CHECKS = (
     check_internal_tool_text,
     check_system_prompt_leak,
     check_unverified_billing_explanation,
+    check_ungrounded_invoice_claim,
 )
 
 

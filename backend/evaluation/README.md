@@ -260,3 +260,31 @@ invoice email arrives before the charge: both invented, but neither matched the 
 small judge missed it. The phrases were widened and the case re-run; this shows the limit of
 both detectors, and the true failure rate is probably higher than the table. Two runs of 5 are
 a rough baseline: compare any fix against it with `--baseline` and several trials.
+
+### The guardrail added for them (`ungrounded_invoice_claim`)
+
+A FLAG-only output check (`app/guardrails/output_checks.py`): on a `billing_question`, with no
+knowledge-base search this turn, a reply that mentions invoices and does not admit it cannot see
+them is flagged. It records the flag and does not change the reply, so it cannot move a case's
+pass rate; what it changes is that the invention is now visible. Measured on the four cases, 5
+trials each (judge `llama3`), then on the whole dev set:
+
+- **Fired on the inventions:** `billing-007` 3 of 5 runs (all three runs with no search that
+  invented a fact), `billing-008` 4 of 5. One of the `billing-008` flags was on a reply a
+  different guardrail had already replaced with the safe fallback; another was an invented
+  answer ("our current plan does not include a feature to preview invoices") that the substring
+  check and the judge had both passed.
+- **Missed:** a `billing-007` run where the model did search the KB (1 round) and still stated
+  "there are no canceled invoices", and `billing-006` runs that admit they cannot see invoices
+  and then add "you can usually find them in your account dashboard". The check looks at
+  wording and at whether a search ran, not at whether the claim is true.
+- **One false positive** in the first measurement ("I don't have the ability to send invoices"
+  read as a claim), fixed with a unit test; the fix was checked on that captured reply only.
+- **Across all 70 dev cases (one trial) it fired only on `billing-007` and `billing-008`**, never
+  on the other billing cases, including the control `billing-009`. The dev run scored 66/70; the
+  four failures are `billing-007`, `billing-008`, `wrongcust-003` (known) and `product-001`
+  (broke against run 9, a single-trial flip). The check is not meant to fix the first two yet.
+
+Promoting it to BLOCK would replace the reply with the safe fallback; this data supports trying
+it on `billing-007` and `billing-008` but not shipping it blind, because the flag still misses
+the inventions that come with an admission.

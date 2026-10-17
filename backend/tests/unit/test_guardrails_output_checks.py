@@ -9,6 +9,7 @@ from app.guardrails.output_checks import (
     check_fabricated_ticket_claim,
     check_system_prompt_leak,
     check_unconfirmed_refund_claim,
+    check_ungrounded_invoice_claim,
     check_unverified_billing_explanation,
     run_output_guardrails,
 )
@@ -193,3 +194,89 @@ def test_raw_tool_call_text_is_blocked():
 def test_plain_mentions_of_a_tool_are_not_tool_text():
     text = "Our Zapier integration is a no-code tool for connecting MewFlow to other apps."
     assert run_output_guardrails(OutputCheckContext(tool_call_rounds=0), text) == []
+
+
+# --- check_ungrounded_invoice_claim ------------------------------------------------------
+# The responses below are real ones from the agent (qwen2.5:7b-instruct), captured while
+# measuring billing-006 to billing-009. No tool can read invoices, so any fact the model states
+# about them is invented unless it first searched the knowledge base.
+
+_BILLING = OutputCheckContext(intent=Intent.BILLING_QUESTION, tool_call_rounds=0)
+
+
+def test_flags_an_invented_invoice_fact_without_any_knowledge_base_search():
+    violation = check_ungrounded_invoice_claim(
+        _BILLING,
+        "Your subscription is active until November 6, 2026. There are no upcoming invoices "
+        "mentioned in your account details.",
+    )
+    assert violation is not None
+    assert violation.severity == GuardrailSeverity.FLAG
+    assert violation.code == "ungrounded_invoice_claim"
+
+
+def test_flags_invented_invoice_features_even_when_worded_differently():
+    assert check_ungrounded_invoice_claim(
+        _BILLING,
+        "Unfortunately, our system doesn't currently offer a preview feature or a dashboard to "
+        "view invoices. However, you can expect to receive an invoice email before the charge.",
+    )
+    assert check_ungrounded_invoice_claim(_BILLING, "No tienes facturas próximas programadas.")
+
+
+def test_does_not_flag_an_honest_admission_of_no_access():
+    for honest in (
+        (
+            "I don't have access to view your next invoice details directly. Would you like me "
+            "to search for this information in our knowledge base?"
+        ),
+        (
+            "I don't have specific details about the invoice amount as that information isn't "
+            "provided in your account context."
+        ),
+        "No tengo acceso a tus facturas, pero puedo buscar en la base de conocimiento.",
+        # Real response from billing-006: an admission worded with "ability", not "access".
+        (
+            "I'm sorry, but I currently don't have the ability to send invoices directly. "
+            "My knowledge is primarily focused on your subscription and account details."
+        ),
+    ):
+        assert check_ungrounded_invoice_claim(_BILLING, honest) is None, honest
+
+
+def test_does_not_flag_when_the_knowledge_base_was_searched_this_turn():
+    context = OutputCheckContext(intent=Intent.BILLING_QUESTION, tool_call_rounds=1)
+    assert (
+        check_ungrounded_invoice_claim(
+            context, "An invoice is emailed to the account owner after each monthly charge."
+        )
+        is None
+    )
+
+
+def test_does_not_flag_a_response_that_never_mentions_invoices():
+    assert (
+        check_ungrounded_invoice_claim(
+            _BILLING, "Your Starter plan is active and renews on November 6, 2026."
+        )
+        is None
+    )
+
+
+def test_invoice_check_only_applies_to_billing_questions():
+    context = OutputCheckContext(intent=Intent.PRODUCT_QUESTION, tool_call_rounds=0)
+    assert check_ungrounded_invoice_claim(context, "You have no upcoming invoices.") is None
+
+
+def test_known_gap_an_honest_opening_hides_an_invented_follow_up():
+    """Documented limitation, not a goal: the admission of no access wins, so a response that
+    admits it and then invents a feature in the same breath is not flagged. Catching it needs
+    a semantic check; the evaluation (billing-008) is what measures how often it happens."""
+    assert (
+        check_ungrounded_invoice_claim(
+            _BILLING,
+            "I don't have information about a dashboard where you can view invoices, but you "
+            "can preview your invoice before being charged in the billing section.",
+        )
+        is None
+    )
