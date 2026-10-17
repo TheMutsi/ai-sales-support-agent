@@ -29,6 +29,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.auth.conversations import create_anonymous, resolve_for_login
+from app.auth.otp import OtpError, request_otp, verify_otp
+from app.auth.otp_sender import OtpSender
 from app.auth.scopes import IdentityLevel, scopes_for
 from app.auth.session import issue_session_token
 from app.auth.store_token import StoreTokenError, verify_store_token
@@ -115,6 +117,43 @@ def login_with_store_token(
         level=level,
         conversation_id=conversation_id,
         now=datetime.now(UTC),
+    )
+    return _session_response(
+        tenant, conversation, level, session_key=session_key, session_ttl=session_ttl
+    )
+
+
+def send_otp(db: Session, *, api_key: str, email: str, sender: OtpSender, key: str) -> None:
+    """Sends a code if the email is a customer's. Returns nothing in every case, an unknown
+    API key included, so the response never says what exists."""
+    tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
+    if tenant is not None:
+        request_otp(db, tenant=tenant, email=email, sender=sender, key=key, now=datetime.now(UTC))
+
+
+def login_with_otp(
+    db: Session,
+    *,
+    api_key: str,
+    email: str,
+    code: str,
+    conversation_id: uuid.UUID | None,
+    session_key: str,
+    session_ttl: timedelta,
+) -> SessionResponse:
+    tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
+    if tenant is None:
+        raise OtpError
+    now = datetime.now(UTC)
+    customer = verify_otp(db, tenant=tenant, email=email, code=code, key=session_key, now=now)
+    level = IdentityLevel.OTP_LOGIN
+    conversation = resolve_for_login(
+        db,
+        tenant_id=tenant.id,
+        customer_id=customer.id,
+        level=level,
+        conversation_id=conversation_id,
+        now=now,
     )
     return _session_response(
         tenant, conversation, level, session_key=session_key, session_ttl=session_ttl

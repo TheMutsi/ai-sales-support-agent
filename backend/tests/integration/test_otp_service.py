@@ -245,3 +245,18 @@ def test_a_customer_deleted_after_the_request_fails_without_holding_the_lock(db,
         other.execute(
             text("SELECT id FROM otp_challenges FOR UPDATE NOWAIT")
         ).all()
+
+
+def test_a_failed_verification_does_not_discard_the_callers_pending_work(db, tenant):
+    """The session belongs to the caller: rolling it back would silently drop their writes."""
+    sender = FakeSender()
+    _request(db, tenant, sender)
+    db.query(Customer).delete()
+    db.commit()
+    db.add(SecurityEvent(tenant_id=tenant.id, kind="caller_work", email=EMAIL))
+
+    with pytest.raises(OtpError):
+        _verify(db, tenant, sender.last_code)
+
+    with SessionLocal() as other:
+        assert other.query(SecurityEvent).filter_by(kind="caller_work").count() == 1
