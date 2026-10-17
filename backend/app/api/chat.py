@@ -29,7 +29,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import nullcontext
+from contextlib import aclosing, nullcontext
 from datetime import UTC, datetime
 from typing import Annotated, Any, Protocol
 
@@ -39,6 +39,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langfuse import get_client
 from langfuse.langchain import CallbackHandler
+from starlette.background import BackgroundTask
 
 from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
@@ -139,6 +140,13 @@ class TurnStore(Protocol):
     async def abandon(self) -> None: ...
 
 
+async def _abandon_if_unsettled(
+    state: "_TurnState", store: TurnStore, conversation_id: uuid.UUID
+) -> None:
+    if not state.settled:  # skips the DB round trip after every normal turn
+        await _abandon_quietly(store, conversation_id)
+
+
 async def _abandon_quietly(store: TurnStore, conversation_id: uuid.UUID) -> None:
     try:
         await store.abandon()
@@ -165,6 +173,11 @@ class _DbTurnStore:
                     )
                 except TurnSuperseded:
                     logger.warning("late reply dropped (conversation %s)", self._conversation_id)
+                except Exception:
+                    # Freed here, not left to the caller: after a disconnect this save runs
+                    # detached, and nobody else would free the turn if it fails.
+                    abandon_turn(db, conversation_id=self._conversation_id, turn=self._turn)
+                    raise
 
         await run_in_threadpool(save)
 
@@ -176,8 +189,35 @@ class _DbTurnStore:
         await run_in_threadpool(free)
 
 
+class _TurnState:
+    settled = False  # set once the store has been told how the turn ended
+
+
 async def stream_chat_turn(
-    chat_graph, session: SessionClaims, turn: TurnStart, store: TurnStore
+    chat_graph,
+    session: SessionClaims,
+    turn: TurnStart,
+    store: TurnStore,
+    state: "_TurnState | None" = None,
+) -> AsyncIterator[str]:
+    """Runs the turn and, however the stream ends (done, error, the client closing it or
+    cancelling it), makes sure the conversation isn't left marked busy."""
+    state = state or _TurnState()
+    try:
+        # aclosing: if the client leaves, the graph run and its trace span are closed too,
+        # not left suspended until garbage collection.
+        async with aclosing(_stream_turn(chat_graph, session, turn, store, state)) as inner:
+            async for chunk in inner:
+                yield chunk
+    finally:
+        if not state.settled:
+            # Shielded: a cancellation must not interrupt freeing the conversation.
+            await asyncio.shield(_abandon_quietly(store, session.conversation_id))
+            state.settled = True
+
+
+async def _stream_turn(
+    chat_graph, session: SessionClaims, turn: TurnStart, store: TurnStore, state: _TurnState
 ) -> AsyncIterator[str]:
     """Drives the graph and translates its event stream into SSE.
 
@@ -240,15 +280,12 @@ async def stream_chat_turn(
                     and node is None
                 ):
                     final_state = event["data"]["output"]
-    except asyncio.CancelledError:
-        # The client went away mid-turn. Free the conversation (shielded, so the
-        # cancellation can't interrupt it) instead of leaving it busy until the
-        # stale limit.
-        await asyncio.shield(_abandon_quietly(store, conversation_id))
-        raise
+        if final_state is None:
+            raise RuntimeError("the graph ended without a final state")
     except Exception:
         logger.exception("chat turn failed (conversation_id=%s)", conversation_id)
-        await _abandon_quietly(store, conversation_id)
+        await asyncio.shield(_abandon_quietly(store, conversation_id))
+        state.settled = True
         yield _format_sse(
             "error",
             {
@@ -259,11 +296,15 @@ async def stream_chat_turn(
         return
 
     final_text = final_state["messages"][-1].content
+    state.settled = True  # from here the store decides the outcome, not the `finally`
     try:
-        await store.finish(final_text)
+        # Shielded, so a disconnect can't interrupt saving the reply halfway.
+        await asyncio.shield(store.finish(final_text))
     except Exception:
-        # The client already has its answer; failing now would only cut the stream.
+        # The client already has its answer, so the stream goes on; but the turn must
+        # not stay busy for the next two minutes because the reply wasn't stored.
         logger.exception("could not store the reply (conversation_id=%s)", conversation_id)
+        await _abandon_quietly(store, conversation_id)
 
     if not streamed_text:
         yield _format_sse("message", {"text": final_text})
@@ -316,9 +357,14 @@ async def chat(
             headers={"WWW-Authenticate": "Bearer"},
         ) from None
 
+    background = None
     if turn.action is TurnAction.REPLAY:
         stream = _replay(turn.reply or "", session.conversation_id)
     else:
         store = _DbTurnStore(session.conversation_id, turn)
-        stream = stream_chat_turn(agent_graph, session, turn, store)
-    return StreamingResponse(stream, media_type="text/event-stream")
+        state = _TurnState()
+        stream = stream_chat_turn(agent_graph, session, turn, store, state)
+        # If the stream never starts (the client left right after the turn opened) the
+        # generator's cleanup never runs; this frees the turn then, and does nothing else.
+        background = BackgroundTask(_abandon_if_unsettled, state, store, session.conversation_id)
+    return StreamingResponse(stream, media_type="text/event-stream", background=background)

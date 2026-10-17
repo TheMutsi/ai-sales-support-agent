@@ -19,8 +19,9 @@ from app.auth.conversations import resolve_for_login
 from app.auth.credentials import generate_api_key
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
+from app.chat.turns import begin_turn
 from app.core.config import get_settings
-from app.db.models import Customer, Tenant
+from app.db.models import Conversation, Customer, Message, Tenant
 from app.db.session import SessionLocal
 from app.main import app
 
@@ -163,3 +164,44 @@ def test_a_malformed_body_without_a_session_still_gets_the_401():
 
     assert response.status_code == 401
     assert response.json()["detail"] == {"code": "missing_session"}
+
+
+def test_a_completed_turn_leaves_the_conversation_free_and_its_reply_stored(shop, monkeypatch):
+    """The cleanup that runs after the response must be a no-op once the turn finished."""
+    final_state = {
+        "messages": [HumanMessage(content="hi"), AIMessage(content="Hello there")],
+        "guardrail_flags": [],
+    }
+    end = {"event": "on_chain_end", "name": "LangGraph", "metadata": {}, "data": {"output": final_state}}
+    monkeypatch.setattr(chat_module, "agent_graph", _FakeGraph([end]))
+
+    assert client.post("/api/chat", json=_hi(), headers=_auth(shop)).status_code == 200
+
+    with SessionLocal() as db:
+        conversation = db.get(Conversation, shop["conversation"].id)
+        assert conversation.turn_started_at is None and conversation.turn_id is None
+        replies = db.query(Message).filter_by(conversation_id=conversation.id, role="assistant")
+        assert [m.content for m in replies] == ["Hello there"]
+
+
+@pytest.mark.asyncio
+async def test_a_store_whose_save_fails_frees_the_conversation_by_itself(shop, monkeypatch):
+    """Not left to the caller: after a disconnect the save runs detached, and if it then
+    fails nobody else would free the turn."""
+    with SessionLocal() as db:
+        turn = begin_turn(
+            db, conversation_id=shop["conversation"].id, client_message_id=uuid.uuid4(),
+            content="hi", now=datetime.now(UTC),
+        )
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("db down while saving")
+
+    monkeypatch.setattr(chat_module, "finish_turn", broken)
+    store = chat_module._DbTurnStore(shop["conversation"].id, turn)
+
+    with pytest.raises(RuntimeError):
+        await store.finish("Hello")
+
+    with SessionLocal() as db:
+        assert db.get(Conversation, shop["conversation"].id).turn_id is None
