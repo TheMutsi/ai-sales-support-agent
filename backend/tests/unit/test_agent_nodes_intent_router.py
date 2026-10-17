@@ -51,3 +51,29 @@ def test_returns_the_classified_intent_and_confidence(monkeypatch):
         "intent_confidence": 0.87,
         "safety_confidence": 0.98,
     }
+
+
+def _classify_as_small_talk(monkeypatch, text: str) -> Intent:
+    response = IntentClassification(
+        intent=Intent.SMALL_TALK, confidence=0.9, reasoning="x", safety_confidence=1.0
+    )
+    monkeypatch.setattr(
+        intent_router_module, "get_chat_model", lambda: _FakeStructuredChatModel(response)
+    )
+    return intent_router_module.intent_router({"messages": [HumanMessage(content=text)]})["intent"]
+
+
+def test_a_short_closing_message_stays_small_talk(monkeypatch):
+    assert _classify_as_small_talk(monkeypatch, "Thanks!") is Intent.SMALL_TALK
+    assert _classify_as_small_talk(monkeypatch, "Thank you so much, that's all.") is (
+        Intent.SMALL_TALK
+    )
+
+
+def test_small_talk_is_not_trusted_for_a_question_or_a_long_message(monkeypatch):
+    """The 7B model sometimes calls an off-topic request small talk, which would skip the
+    ticket and the safety re-check `unsupported` gets; a request is never just thanks."""
+    question = "Can you recommend a good pizza place nearby?"
+    assert _classify_as_small_talk(monkeypatch, question) is Intent.UNSUPPORTED
+    long = "thanks " * 20
+    assert _classify_as_small_talk(monkeypatch, long) is Intent.UNSUPPORTED

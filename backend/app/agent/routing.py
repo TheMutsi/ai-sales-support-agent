@@ -73,11 +73,13 @@ def _dispatch_by_intent(
         # deterministically before the answer; the KB tool stays bound for
         # pricing policy (discounts, quotes) the catalog doesn't cover.
         return Node.GET_PLAN_CATALOG
-    if state["intent"] in {Intent.PRODUCT_QUESTION, Intent.TECHNICAL_SUPPORT}:
+    if state["intent"] in {Intent.PRODUCT_QUESTION, Intent.TECHNICAL_SUPPORT, Intent.SMALL_TALK}:
         # No deterministic prefetch here (that was `retrieve_knowledge`,
         # removed): for these three intents `response_writer` binds the
         # knowledge-base search as a real tool call and the LLM decides
         # whether/how to use it, instead of the graph always fetching first.
+        # small_talk (thanks, greetings) also lands here but gets no tool: it
+        # needs a short reply, not a ticket.
         return Node.RESPONSE_WRITER
     return Node.HUMAN_ESCALATION  # human_escalation and unsupported
 
