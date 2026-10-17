@@ -26,7 +26,7 @@ The RAG pipeline (`backend/app/rag/`) is the one exception exercised so far: the
 - **LLM provider abstraction:** LangChain chat models, supporting **Anthropic Claude**, **Google Gemini**, and **Ollama** (local, free, no API key — for offline dev) interchangeably via `LLM_PROVIDER` env var. No OpenAI dependency.
 - **Embeddings:** Google `text-embedding-004` by default, or Ollama's `nomic-embed-text` (also 768-dim, no API key) via `EMBEDDING_PROVIDER`, behind the same swappable interface.
 - **Database:** PostgreSQL + pgvector — plans, customers, subscriptions (a customer's commercial state, kept separate from identity so plan/status changes have history), KB documents + chunks, tickets, evaluation runs.
-- **Frontend:** Vite + React SPA (no SSR/routing needs) with streaming responses, activity indicators, source references, customer selector, simulated checkout/escalation results.
+- **Frontend:** an embeddable chat widget named **Mew**, compiled to one script (`mew.js?key=<public api key>`), isolated in an iframe, with a queue-style global (`Mew('open')`, `show`, `hide`, `close`), a 24 hour conversation window shared across tabs, an unread badge, sound, and typed message parts (text, image, link now; cards and carousels later). The shop's server signs a short-lived token for its logged-in customer; anonymous visitors can ask knowledge-base questions and identify with an emailed code. Replaces the Vite + React SPA planned at the start; see `docs/adr/0014-conversation-anchored-identity-with-scopes.md`. The fictional product is being renamed from AcmeFlow to **MewFlow** (a separate PR; the repo and prompts still say AcmeFlow until then).
 - **Observability:** self-hosted Langfuse tracing (graph/LLM/tool/retrieval spans + metadata) plus basic structured app logging. Replaced the planned LangSmith in Stage 8, see `docs/adr/0011-self-hosted-langfuse-for-tracing.md`.
 - **Packaging:** Docker Compose (backend, frontend, Postgres+pgvector), `.env.example` — never commit `.env` or real API keys.
 
@@ -38,7 +38,9 @@ backend/
     main.py          # FastAPI entry
     api/              # routers: chat, customers, evaluations, health
     core/             # config, llm provider abstraction (Claude/Gemini)
-    agent/            # graph.py, state.py, nodes/, prompts/        [owner writes]
+    agent/            # graph.py, state.py, nodes/, prompts/, permissions.py  [owner writes]
+    auth/             # scopes, tokens, login, one-time codes, conversations
+    chat/             # a conversation's stored messages, one turn at a time
     rag/               # loaders, chunking, ingestion.py, retriever.py [AI writes, per owner's Stage 3 call]
     tools/             # typed tool wrappers (get_customer_context, etc.)
     business/          # upsell_rules.py, pricing.py, eligibility.py  [AI writes]
@@ -162,7 +164,13 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 - [x] Stage 7 — Guardrails
 - [x] Stage 8 — FastAPI chat endpoint (streaming) + trace metadata tagging (customer_id, conversation_id, intent, env, model, app_version)
 - [x] Stage 9 — Evaluation dataset + script (AI-written per owner's call, like Stage 3 — the owner reviewed the design and the dataset; see `backend/evaluation/README.md` for methodology and known limitations) — run against the real API before the frontend exists, so agent quality is validated before UI polish
-- [ ] Stage 10 — Frontend chat UI
+- [ ] Stage 10 — Chat widget (**Mew**). Split in two: **10a backend (done, see below)** and **10b the widget** (not started; planned as five PRs: scaffold + loader + iframe + example page; data layer with streaming, persistence and the login callback; UI components; launcher badge, sound, attachments and renderers including the identity form; Docker and docs)
 - [ ] Stage 11 — README, diagrams, demo scenarios, polish
+
+### Stage 10a status (backend for the widget)
+
+Done (PRs #62 to #87; the last two, anonymous evaluation cases and allowed origins per tenant, may still be open when you read this): tenants with a public key and rotating secrets; the shop's signed token exchanged for a session (`POST /api/auth/login`); anonymous conversations (`POST /api/conversations`); the server holding each conversation's messages with idempotent retries and one turn at a time; `GET /api/conversations/{id}/messages`; one-time codes (`/api/auth/otp/request` and `/verify`); scopes per identity level and a per-intent permission table, with `request_identity` asking a visitor to identify when a scope is missing and `POST /api/chat/resume` answering the pending message afterwards; rate limits; allowed origins per tenant; a `small_talk` intent so a thank-you does not open a ticket; anonymous cases in the evaluation suite. The reasoning is in ADR-0013 and ADR-0014.
+
+Not built yet: `order_lookup` as a way to identify (it needs an order id plus a second factor, and a source of orders: a simulated `orders` table for now, the shop's API or a database later); an audit record of the identification steps that never stores the code; a real email provider; the retention job (archive old messages, purge anonymous conversations); the MewFlow rename, followed by a new evaluation run.
 
 Update this checklist as stages complete.

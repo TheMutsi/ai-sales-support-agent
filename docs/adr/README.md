@@ -26,6 +26,7 @@ links back to it.
 | [0011](0011-self-hosted-langfuse-for-tracing.md) | Self-hosted Langfuse for tracing, instead of LangSmith | Accepted |
 | [0012](0012-evaluation-against-the-real-api.md) | Evaluate the running API with a dev set, a held-out set and mostly deterministic metrics | Accepted |
 | [0013](0013-server-held-conversation-history.md) | The server holds the conversation; the client sends only the new message | Accepted |
+| [0014](0014-conversation-anchored-identity-with-scopes.md) | Identity hangs off the conversation, and what a visitor may do is a set of scopes | Accepted |
 
 For the system and agent-graph diagrams, see [`docs/architecture.md`](../architecture.md).
 

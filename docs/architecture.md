@@ -8,7 +8,7 @@ this page is the map.
 
 ```mermaid
 flowchart LR
-  client[Client<br/>frontend or run_eval] -- "POST /api/chat<br/>full history" --> api[FastAPI<br/>SSE stream]
+  client[Client<br/>widget or run_eval] -- "POST /api/chat<br/>new message + session" --> api[FastAPI<br/>SSE stream]
   api --> agent[LangGraph agent]
   agent --> tools[Tools]
   tools --> business[Business rules]
@@ -20,6 +20,9 @@ flowchart LR
   api -. traces .-> langfuse[Langfuse<br/>self-hosted]
 ```
 
+- A visitor has a session for a conversation, issued when it starts, when the shop vouches
+  for a customer, or when a one-time code is verified; what they may do is a set of scopes
+  ([ADR-0014](adr/0014-conversation-anchored-identity-with-scopes.md)).
 - The server holds each conversation's messages in Postgres; a request carries only
   the new message, and every turn runs the graph from an empty state, started from
   the stored history ([ADR-0013](adr/0013-server-held-conversation-history.md)).
@@ -39,10 +42,12 @@ flowchart TD
   sj -- unsafe --> stop
   ir --> dispatch{dispatch<br/>by intent}
   sj -- safe --> dispatch
-  dispatch -- "product / technical" --> rw
+  dispatch -- "needs a scope<br/>the visitor lacks" --> ri[request_identity<br/><i>fixed text, no LLM</i>]
+  ri --> stop
+  dispatch -- "product / technical / small_talk" --> rw
   dispatch -- pricing --> pc[get_plan_catalog<br/><i>prices from plans table</i>]
   dispatch -- "upgrade / billing / refund" --> cc[get_customer_context]
-  dispatch -- "human_escalation / unsupported" --> he
+  dispatch -- "human_escalation / unsupported<br/>(unsupported without ticket:create<br/>goes to response_writer)" --> he
   cc -- upgrade --> br[business_rules<br/><i>eligibility</i>]
   cc -- billing --> rw
   cc -- refund --> he[human_escalation<br/><i>creates ticket</i>]
@@ -77,8 +82,10 @@ Reading it:
 
 | Package | Responsibility | Depends on |
 |---|---|---|
-| `app/api` | HTTP and SSE: request validation, streaming, tracing span | `agent`, `core`, `schemas` |
-| `app/agent` | Graph, state, nodes, prompts, routing, LLM tool bindings | `tools`, `guardrails`, `core`, `schemas` |
+| `app/api` | HTTP and SSE: validation, streaming, tracing span, sessions, rate limits, allowed origins | `agent`, `auth`, `chat`, `core`, `schemas` |
+| `app/auth` | Scopes, shop and session tokens, login, one-time codes, conversations | `db`, `core`, `schemas` |
+| `app/chat` | A conversation's stored messages and the one-turn-at-a-time rule | `db` |
+| `app/agent` | Graph, state, nodes, prompts, routing, permissions, LLM tool bindings | `tools`, `guardrails`, `auth` (scopes), `core`, `schemas` |
 | `app/guardrails` | Input pattern checks, output claim checks | `schemas` |
 | `app/tools` | Typed, framework-agnostic operations the agent calls | `business`, `rag`, `db`, `schemas` |
 | `app/business` | Pure eligibility, pricing and upsell rules | `db` (models only), `schemas` |
@@ -93,13 +100,20 @@ Dependencies only point down this table, towards `schemas`
 
 ## One turn, end to end
 
-1. The client posts the full message history with its session in the `Authorization`
-   header; the customer is read from the session, not the body.
-2. The graph runs; `response_writer`'s tokens stream to the client as `delta` events.
+1. The client posts the new message and a `message_id` with its session in the
+   `Authorization` header; who is talking and in which conversation come from the
+   session, not the body. The server opens the turn (one at a time per conversation,
+   replaying the stored answer if the id was already handled) and starts the graph from
+   the stored history and the session's scopes.
+2. The graph runs; if the visitor lacks the scope the question needs, the turn ends with
+   an identity request (a stored form, `identity_required` in `done`) and resumes through
+   `POST /api/chat/resume` once they identify. Otherwise `response_writer`'s tokens
+   stream to the client as `delta` events.
 3. If `guardrail` rewrote the answer, a `correction` event carries the final text
    ([ADR-0010](adr/0010-stream-then-correct.md)).
 4. A `done` event closes the turn with a typed summary (intent, escalation, ticket,
-   flags, eligibility), read from graph state rather than from the text.
+   flags, eligibility, identity request), read from graph state rather than from the text.
+   The reply is stored in the conversation.
 5. With tracing on, the whole turn is one Langfuse span, with every node, model call
    and tool call nested under it
    ([ADR-0011](adr/0011-self-hosted-langfuse-for-tracing.md)).
