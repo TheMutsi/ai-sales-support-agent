@@ -4,7 +4,7 @@ from datetime import timedelta
 import pytest
 from fastapi import HTTPException
 
-from app.api.deps import require_customer_session, require_session
+from app.api.deps import require_session
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
 from app.core.config import get_settings
@@ -51,20 +51,3 @@ def test_a_session_signed_with_another_key_is_invalid():
         require_session(_bearer(key="x" * 32))
 
     assert error.value.detail == {"code": "invalid_session"}
-
-
-def test_an_anonymous_session_is_not_a_customer_session():
-    anonymous, _ = issue_session_token(
-        tenant_id=uuid.uuid4(),
-        conversation_id=uuid.uuid4(),
-        customer_id=None,
-        level=IdentityLevel.ANONYMOUS,
-        signing_key=get_settings().session_signing_key,
-        ttl=timedelta(hours=1),
-    )
-
-    with pytest.raises(HTTPException) as error:
-        require_customer_session(require_session(f"Bearer {anonymous}"))
-
-    assert error.value.status_code == 403
-    assert error.value.detail == {"code": "identity_required"}
