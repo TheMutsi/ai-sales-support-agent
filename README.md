@@ -52,6 +52,7 @@ flowchart TD
   sj -- safe --> dispatch
   dispatch -- "product / technical" --> rw
   dispatch -- pricing --> pc[get_plan_catalog]
+  dispatch -- "order status" --> os[get_order_status]
   dispatch -- "upgrade / billing / refund" --> cc[get_customer_context]
   dispatch -- "escalation / unsupported" --> he
   cc -- upgrade --> br[business_rules]
@@ -59,6 +60,7 @@ flowchart TD
   cc -- refund --> he[human_escalation]
   br --> rw[response_writer]
   pc --> rw
+  os --> rw
   he --> rw
   rw -- "tool call, rounds < 2" --> kt[knowledge_tool]
   kt --> rw

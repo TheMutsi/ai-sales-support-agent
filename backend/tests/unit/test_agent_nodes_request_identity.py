@@ -43,3 +43,24 @@ def test_a_customer_step_refuses_to_run_without_a_customer():
     for node in (get_customer_context_node, business_rules_node, human_escalation_node):
         with pytest.raises(PermissionError):
             node(state)
+
+
+def test_a_visitor_who_already_has_a_scope_but_no_order_is_offered_only_the_order_form():
+    """A customer verified with a code needs no second code to look an order up: what is
+    missing is the order, so only that method is offered."""
+    result = request_identity_node(
+        {
+            "intent": Intent.ORDER_STATUS,
+            "scopes": ["kb:read", "order:read", "customer:read"],
+            "scope_overrides": None,
+            "order_id": None,
+            "messages": [],
+        }
+    )
+
+    assert result["identity_methods"] == ["order_id"]
+
+
+def test_an_anonymous_visitor_asking_about_an_order_is_offered_both_methods():
+    assert _run(["kb:read"], intent=Intent.ORDER_STATUS)["identity_methods"] == ["otp", "order_id"]
+

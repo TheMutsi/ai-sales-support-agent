@@ -88,6 +88,8 @@ def _build_initial_state(
     return {
         "messages": messages,
         "customer_id": str(session.customer_id) if session.customer_id else None,
+        "tenant_id": str(session.tenant_id),
+        "order_id": session.order_id,
         "scopes": sorted(s.value for s in scopes_for(session.level, scope_overrides)),
         "scope_overrides": scope_overrides,
     }

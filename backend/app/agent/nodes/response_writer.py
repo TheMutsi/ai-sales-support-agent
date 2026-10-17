@@ -5,6 +5,7 @@ from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
 from app.agent.state import AgentState
 from app.core.llm import get_chat_model
 from app.schemas.agent import Intent
+from app.schemas.orders import OrderDetails
 from app.schemas.tools import PlanSummary
 
 # The intents where response_writer binds the knowledge-base tool. Billing is
@@ -56,6 +57,11 @@ def _build_context_blob(state: AgentState) -> str:
     if plan_catalog := state.get("plan_catalog"):
         sections.append(f"Plan catalog (list prices):\n{_format_plan_catalog(plan_catalog)}")
 
+    if order := state.get("order_details"):
+        sections.append(f"Order:\n{_format_order(order)}")
+    elif state.get("intent") == Intent.ORDER_STATUS:
+        sections.append("Order:\nThere is no order with that number for this customer.")
+
     if checkout_session := state.get("checkout_session"):
         sections.append(f"Checkout created:\n{checkout_session.model_dump_json(indent=2)}")
 
@@ -79,6 +85,15 @@ def _format_plan_catalog(plans: list[PlanSummary]) -> str:
         f"; seats: {limit(plan.seat_limit)}; API calls per month: {limit(plan.api_call_limit)}"
         f"; features: {', '.join(plan.features)}"
         for plan in plans
+    )
+
+
+def _format_order(order: OrderDetails) -> str:
+    """The amount in dollars, like the plan catalog: converting cents is not left to the model."""
+    return (
+        f"- Order {order.order_id}: plan {order.plan_slug}, "
+        f"${order.amount_cents / 100:,.2f} {order.currency}, status {order.status}, "
+        f"placed {order.created_at:%Y-%m-%d}"
     )
 
 

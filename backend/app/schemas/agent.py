@@ -22,6 +22,7 @@ class Intent(StrEnum):
     UPGRADE_REQUEST = "upgrade_request"
     REFUND_REQUEST = "refund_request"
     HUMAN_ESCALATION = "human_escalation"
+    ORDER_STATUS = "order_status"
     SMALL_TALK = "small_talk"
     UNSUPPORTED = "unsupported"
 

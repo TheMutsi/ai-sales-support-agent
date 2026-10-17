@@ -16,7 +16,12 @@ ASK_TO_LOG_IN = "To help with that, please log in to your account first."
 
 
 def request_identity_node(state: AgentState) -> dict:
-    methods = identity_methods_for(REQUIRED_SCOPE[state["intent"]], state.get("scope_overrides"))
+    scope = REQUIRED_SCOPE[state["intent"]]
+    methods = identity_methods_for(scope, state.get("scope_overrides"))
+    if scope in (state.get("scopes") or []):
+        # They already hold the scope (a customer verified with a code) and what is missing is
+        # the order itself, so a second code would not help: offer only the order form.
+        methods = [method for method in methods if method == "order_id"]
     text = ASK_TO_VERIFY if methods else ASK_TO_LOG_IN
     return {
         "identity_required": True,
