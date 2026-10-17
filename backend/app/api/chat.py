@@ -44,6 +44,7 @@ from starlette.background import BackgroundTask
 from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
 from app.api.deps import require_session
+from app.api.origins import origin_guard_for_session
 from app.api.rate_limit import limit_by_conversation
 from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
@@ -374,7 +375,7 @@ async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
 
 @router.post(
     "/chat",
-    dependencies=[limit_by_conversation("chat", limit=30, window_seconds=600)],
+    dependencies=[origin_guard_for_session, limit_by_conversation("chat", limit=30, window_seconds=600)],
 )
 async def chat(
     request: ChatRequest, session: Annotated[SessionClaims, Depends(require_session)]
@@ -384,7 +385,7 @@ async def chat(
 
 @router.post(
     "/chat/resume",
-    dependencies=[limit_by_conversation("chat", limit=30, window_seconds=600)],
+    dependencies=[origin_guard_for_session, limit_by_conversation("chat", limit=30, window_seconds=600)],
 )
 async def resume(
     session: Annotated[SessionClaims, Depends(require_session)],
@@ -437,7 +438,7 @@ async def _run_turn(session: SessionClaims, request: ChatRequest) -> StreamingRe
     return StreamingResponse(stream, media_type="text/event-stream", background=background)
 
 
-@router.get("/conversations/{conversation_id}/messages")
+@router.get("/conversations/{conversation_id}/messages", dependencies=[origin_guard_for_session])
 async def conversation_messages(
     conversation_id: uuid.UUID, session: Annotated[SessionClaims, Depends(require_session)]
 ) -> MessageList:
