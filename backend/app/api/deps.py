@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 from app.auth.session import SessionClaims, SessionError, verify_session_token
 from app.core.config import get_settings
@@ -27,3 +27,13 @@ def require_session(authorization: Annotated[str | None, Header()] = None) -> Se
         return verify_session_token(token.strip(), get_settings().session_signing_key)
     except SessionError as exc:
         raise _unauthorized(exc.code) from None
+
+
+def require_customer_session(
+    session: Annotated[SessionClaims, Depends(require_session)],
+) -> SessionClaims:
+    """A session for an identified customer. Anonymous ones are refused until the
+    agent has a path for visitors it doesn't know."""
+    if session.customer_id is None:
+        raise HTTPException(status_code=403, detail={"code": "identity_required"})
+    return session

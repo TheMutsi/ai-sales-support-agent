@@ -25,6 +25,7 @@ client = TestClient(app)
 def _auth(customer_id: uuid.UUID | None = None, ttl: timedelta = timedelta(hours=1)) -> dict:
     token, _ = issue_session_token(
         tenant_id=uuid.uuid4(),
+        conversation_id=uuid.uuid4(),
         customer_id=customer_id or uuid.uuid4(),
         level=IdentityLevel.STORE_LOGIN,
         signing_key=get_settings().session_signing_key,

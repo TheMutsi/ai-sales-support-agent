@@ -5,7 +5,7 @@ import pytest
 
 from app.auth.session import verify_session_token
 from app.core.config import get_settings
-from app.db.models import Customer, Tenant
+from app.db.models import Conversation, Customer, Tenant
 from app.db.seed import DEV_TENANT_API_KEY
 from evaluation.run_eval import resolve_session_tokens
 from tests.integration.conftest import customer_by_email
@@ -20,6 +20,8 @@ def test_each_email_gets_a_session_for_that_customer(seeded_db):
     customer = customer_by_email(seeded_db, EMAIL)
     assert claims.customer_id == customer.id
     assert claims.tenant_id == customer.tenant_id
+    # The session's conversation must exist, or the chat would refuse it.
+    assert seeded_db.get(Conversation, claims.conversation_id).customer_id == customer.id
 
 
 def test_an_unknown_email_fails_the_run_before_it_starts(seeded_db):

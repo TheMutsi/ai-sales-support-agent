@@ -36,6 +36,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.conversations import resolve_for_login
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
 from app.core.config import LLMProvider, get_settings
@@ -74,6 +75,9 @@ def resolve_session_tokens(session: Session, emails: Iterable[str]) -> dict[str,
     key instead of going through `/api/auth/login`: the runner already has the
     key and database access, and what's under test is the agent, not the login.
 
+    Each run inserts a small conversation row per customer; they pile up in a dev
+    database until the retention job (not written yet) purges old conversations.
+
     Only the seeded dev tenant's customers are used. Emails are unique per tenant,
     not globally, so selecting by email alone could sign a session for someone
     else's customer."""
@@ -95,16 +99,26 @@ def resolve_session_tokens(session: Session, emails: Iterable[str]) -> dict[str,
         )
 
     settings = get_settings()
-    return {
-        email: issue_session_token(
+    tokens = {}
+    for email, customer_id, tenant_id in rows:
+        # Every session belongs to a conversation, so each customer gets one.
+        conversation = resolve_for_login(
+            session,
             tenant_id=tenant_id,
+            customer_id=customer_id,
+            level=IdentityLevel.STORE_LOGIN,
+            conversation_id=None,
+            now=datetime.now(UTC),
+        )
+        tokens[email] = issue_session_token(
+            tenant_id=tenant_id,
+            conversation_id=conversation.id,
             customer_id=customer_id,
             level=IdentityLevel.STORE_LOGIN,
             signing_key=settings.session_signing_key,
             ttl=_SESSION_TTL,
         )[0]
-        for email, customer_id, tenant_id in rows
-    }
+    return tokens
 
 
 def run_suite(

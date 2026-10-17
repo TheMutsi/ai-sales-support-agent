@@ -39,7 +39,7 @@ from langfuse.langchain import CallbackHandler
 
 from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
-from app.api.deps import require_session
+from app.api.deps import require_customer_session
 from app.auth.session import SessionClaims
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
@@ -206,7 +206,7 @@ async def stream_chat_turn(
 
 @router.post("/chat")
 async def chat(
-    request: ChatRequest, session: Annotated[SessionClaims, Depends(require_session)]
+    request: ChatRequest, session: Annotated[SessionClaims, Depends(require_customer_session)]
 ) -> StreamingResponse:
     return StreamingResponse(
         stream_chat_turn(agent_graph, request, session), media_type="text/event-stream"

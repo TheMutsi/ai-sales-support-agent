@@ -7,13 +7,13 @@ from sqlalchemy.orm import Session
 from app.auth.login import LoginError, login_with_store_token
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.schemas.auth import LoginRequest, LoginResponse
+from app.schemas.auth import LoginRequest, SessionResponse
 
 router = APIRouter()
 
 
-@router.post("/auth/login", response_model=LoginResponse)
-def login(request: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> LoginResponse:
+@router.post("/auth/login", response_model=SessionResponse)
+def login(request: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> SessionResponse:
     settings = get_settings()
     try:
         return login_with_store_token(

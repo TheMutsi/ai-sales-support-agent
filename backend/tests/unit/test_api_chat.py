@@ -104,6 +104,7 @@ def _request(message: str = "how much is the pro plan?") -> ChatRequest:
 def _session() -> SessionClaims:
     return SessionClaims(
         tenant_id=uuid.uuid4(),
+        conversation_id=uuid.uuid4(),
         customer_id=uuid.uuid4(),
         level=IdentityLevel.STORE_LOGIN,
     )
