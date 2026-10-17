@@ -1,4 +1,4 @@
-"""Wire contracts for `POST /api/auth/login`."""
+"""Wire contracts for `POST /api/conversations` and `POST /api/auth/login`."""
 
 import uuid
 from datetime import datetime
@@ -6,6 +6,10 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.auth.scopes import IdentityLevel, Scope
+
+
+class ConversationRequest(BaseModel):
+    api_key: str = Field(min_length=1)
 
 
 class LoginRequest(BaseModel):

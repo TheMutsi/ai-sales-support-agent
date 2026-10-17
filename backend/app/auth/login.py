@@ -1,4 +1,4 @@
-"""Exchanging a shop's signed token for a session.
+"""Starting conversations and exchanging a shop's signed token for a session.
 
 Kept separate from the routers so the decision logic is plain Python over a DB
 session. Failures raise `LoginError` with a stable code and HTTP status:
@@ -17,16 +17,18 @@ A shop's token isn't single-use: it can be replayed until it expires (at most
 an hour, see `MAX_TOKEN_LIFETIME_SECONDS`), and each replay mints a fresh session.
 Enforcing one-time use would need a `jti` claim and a store of spent ones.
 
-Every session belongs to a conversation: logging in starts one already attached to
-the customer.
+Every session belongs to a conversation. Starting one is anonymous; logging in
+continues the conversation the caller presents (if it's usable) and attaches the
+customer to it, or starts an identified one.
 """
 
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.auth.conversations import resolve_for_login
+from app.auth.conversations import create_anonymous, resolve_for_login
 from app.auth.scopes import IdentityLevel, scopes_for
 from app.auth.session import issue_session_token
 from app.auth.store_token import StoreTokenError, verify_store_token
@@ -72,11 +74,23 @@ def _session_response(
     )
 
 
+def start_conversation(
+    db: Session, *, api_key: str, session_key: str, session_ttl: timedelta
+) -> SessionResponse:
+    tenant = _find_tenant(db, api_key)
+    conversation = create_anonymous(db, tenant_id=tenant.id, now=datetime.now(UTC))
+    return _session_response(
+        tenant, conversation, IdentityLevel.ANONYMOUS, session_key=session_key,
+        session_ttl=session_ttl,
+    )
+
+
 def login_with_store_token(
     db: Session,
     *,
     api_key: str,
     token: str,
+    conversation_id: uuid.UUID | None,
     session_key: str,
     session_ttl: timedelta,
 ) -> SessionResponse:
@@ -99,7 +113,7 @@ def login_with_store_token(
         tenant_id=tenant.id,
         customer_id=customer.id,
         level=level,
-        conversation_id=None,
+        conversation_id=conversation_id,
         now=datetime.now(UTC),
     )
     return _session_response(

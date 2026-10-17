@@ -29,6 +29,15 @@ def require_session(authorization: Annotated[str | None, Header()] = None) -> Se
         raise _unauthorized(exc.code) from None
 
 
+def optional_session(authorization: Annotated[str | None, Header()] = None) -> SessionClaims | None:
+    """The caller's session if it has a usable one, else `None` (never an error): for
+    endpoints like login, where a missing or stale session just means a fresh start."""
+    try:
+        return require_session(authorization)
+    except HTTPException:
+        return None
+
+
 def require_customer_session(
     session: Annotated[SessionClaims, Depends(require_session)],
 ) -> SessionClaims:
