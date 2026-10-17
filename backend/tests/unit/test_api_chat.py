@@ -317,7 +317,11 @@ async def test_done_event_reports_input_safety_outcome():
 
 @pytest.mark.asyncio
 async def test_done_event_hides_safety_confidence_in_production(monkeypatch):
-    monkeypatch.setattr(chat_module, "get_settings", lambda: Settings(app_env="production"))
+    monkeypatch.setattr(
+        chat_module,
+        "get_settings",
+        lambda: Settings(app_env="production", session_signing_key="a-real-session-signing-key-32-chars!"),
+    )
     final_state = {
         "messages": [HumanMessage(content="hi"), AIMessage(content="Hello!")],
         "intent": "product_question",

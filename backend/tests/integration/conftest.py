@@ -3,7 +3,16 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.db.models import Customer, Document, DocumentChunk, Plan, Subscription, Ticket
+from app.db.models import (
+    Customer,
+    Document,
+    DocumentChunk,
+    Plan,
+    Subscription,
+    Tenant,
+    TenantSecret,
+    Ticket,
+)
 from app.db.seed import seed as seed_fixtures
 from app.db.session import SessionLocal
 
@@ -35,8 +44,21 @@ def _wipe_commercial_tables(session: Session) -> None:
     session.query(Ticket).delete()
     session.query(Subscription).delete()
     session.query(Customer).delete()
+    session.query(TenantSecret).delete()
+    session.query(Tenant).delete()
     session.query(Plan).delete()
     session.commit()
+
+
+@pytest.fixture
+def tenant_wipe() -> None:
+    """Clears tenants and the customers that hang off them before and after a
+    test; the test builds its own tenant (see `test_api_auth_login.py`)."""
+    with SessionLocal() as session:
+        _wipe_commercial_tables(session)
+    yield
+    with SessionLocal() as session:
+        _wipe_commercial_tables(session)
 
 
 @pytest.fixture
