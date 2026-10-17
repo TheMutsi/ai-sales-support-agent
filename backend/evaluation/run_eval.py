@@ -3,7 +3,7 @@ case in the dataset, scores each turn, and writes a JSON report.
 
 The agent is treated as a black box behind its public API, so a running
 server (`uvicorn app.main:app`) and a seeded database are required. The only
-direct database access is resolving the dataset's customer emails to ids,
+direct database access is minting a session for each dataset customer email,
 done once up front so a missing customer fails the run before it starts.
 
 Two backends run the same cases through the same evaluators:
@@ -27,9 +27,8 @@ Usage:
 import argparse
 import subprocess
 import sys
-import uuid
 from collections.abc import Iterable, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import get_args
 
@@ -37,10 +36,13 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.scopes import IdentityLevel
+from app.auth.session import issue_session_token
 from app.core.config import LLMProvider, get_settings
 from app.core.llm import create_chat_model, get_chat_model_name
 from app.core.observability import configure_langfuse
-from app.db.models import Customer
+from app.db.models import Customer, Tenant
+from app.db.seed import DEV_TENANT_API_KEY
 from app.db.session import SessionLocal
 
 from .chat_client import run_chat_turn
@@ -63,21 +65,51 @@ from .schemas import CaseResult, EvalCase, EvalReport, PassRate
 
 _DEFAULT_RESULTS_DIR = Path(__file__).parent / "results"
 _SAFETY_THRESHOLDS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)
+# Long enough for a full run, including many trials against a slow local model.
+_SESSION_TTL = timedelta(hours=6)
 
 
-def resolve_customer_ids(session: Session, emails: Iterable[str]) -> dict[str, uuid.UUID]:
+def resolve_session_tokens(session: Session, emails: Iterable[str]) -> dict[str, str]:
+    """A session for each customer email, minted directly with the app's signing
+    key instead of going through `/api/auth/login`: the runner already has the
+    key and database access, and what's under test is the agent, not the login.
+
+    Only the seeded dev tenant's customers are used. Emails are unique per tenant,
+    not globally, so selecting by email alone could sign a session for someone
+    else's customer."""
     wanted = set(emails)
-    rows = session.execute(select(Customer.email, Customer.id).where(Customer.email.in_(wanted)))
-    resolved = {email: customer_id for email, customer_id in rows}
-    missing = sorted(wanted - resolved.keys())
+    dev_tenant = session.execute(
+        select(Tenant).where(Tenant.api_key == DEV_TENANT_API_KEY)
+    ).scalar_one_or_none()
+    rows = []
+    if dev_tenant is not None:
+        rows = session.execute(
+            select(Customer.email, Customer.id, Customer.tenant_id).where(
+                Customer.email.in_(wanted), Customer.tenant_id == dev_tenant.id
+            )
+        ).all()
+    missing = sorted(wanted - {email for email, _, _ in rows})
     if missing:
-        raise ValueError(f"customers not found (is the database seeded?): {missing}")
-    return resolved
+        raise ValueError(
+            f"customers not found in the dev tenant (re-run `python -m app.db.seed`): {missing}"
+        )
+
+    settings = get_settings()
+    return {
+        email: issue_session_token(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            level=IdentityLevel.STORE_LOGIN,
+            signing_key=settings.session_signing_key,
+            ttl=_SESSION_TTL,
+        )[0]
+        for email, customer_id, tenant_id in rows
+    }
 
 
 def run_suite(
     cases: Sequence[EvalCase],
-    customer_ids: dict[str, uuid.UUID],
+    session_tokens: dict[str, str],
     base_url: str,
     evaluators: Sequence[Evaluator],
 ) -> tuple[list[CaseResult], list[str]]:
@@ -88,7 +120,7 @@ def run_suite(
     with httpx.Client() as client:
         for case in cases:
             try:
-                turn = run_chat_turn(client, base_url, customer_ids[case.customer_email], case)
+                turn = run_chat_turn(client, base_url, session_tokens[case.customer_email], case)
                 result = score_case(case, turn, evaluators)
             except Exception as exc:  # noqa: BLE001 - transport, server and LLM-judge
                 # provider errors are heterogeneous; any of them fails this case only.
@@ -112,7 +144,7 @@ def label_trial(
 
 def run_langfuse_experiment(
     cases: Sequence[EvalCase],
-    customer_ids: dict[str, uuid.UUID],
+    session_tokens: dict[str, str],
     base_url: str,
     evaluators: Sequence[Evaluator],
     dataset: Path,
@@ -145,7 +177,7 @@ def run_langfuse_experiment(
     run_urls: list[str] = []
     try:
         with httpx.Client() as http:
-            runner = LangfuseExperimentRunner(client, http, base_url, customer_ids, evaluators)
+            runner = LangfuseExperimentRunner(client, http, base_url, session_tokens, evaluators)
             for trial in range(1, trials + 1):
                 suffix = f" trial {trial}/{trials}" if trials > 1 else ""
                 trial_results, trial_errored, run_url = runner.run(
@@ -309,7 +341,7 @@ def main() -> None:
     args = _parse_args()
     cases = load_dataset(args.dataset)
     with SessionLocal() as session:
-        customer_ids = resolve_customer_ids(session, (case.customer_email for case in cases))
+        session_tokens = resolve_session_tokens(session, (case.customer_email for case in cases))
 
     evaluators: list[Evaluator] = list(DEFAULT_EVALUATORS)
     judge_model: str | None = None
@@ -322,14 +354,14 @@ def main() -> None:
     run_urls: list[str] = []
     if args.backend == "langfuse":
         results, errored, run_urls = run_langfuse_experiment(
-            cases, customer_ids, args.base_url, evaluators, args.dataset, judge_model, args.trials
+            cases, session_tokens, args.base_url, evaluators, args.dataset, judge_model, args.trials
         )
     else:
         results, errored = [], []
         for trial in range(1, args.trials + 1):
             if args.trials > 1:
                 print(f"--- trial {trial}/{args.trials}")
-            trial_results, trial_errored = run_suite(cases, customer_ids, args.base_url, evaluators)
+            trial_results, trial_errored = run_suite(cases, session_tokens, args.base_url, evaluators)
             trial_results, trial_errored = label_trial(
                 trial_results, trial_errored, trial, args.trials
             )

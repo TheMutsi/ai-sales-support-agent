@@ -100,13 +100,13 @@ class LangfuseExperimentRunner:
         client: Langfuse,
         http: httpx.Client,
         base_url: str,
-        customer_ids: dict[str, uuid.UUID],
+        session_tokens: dict[str, str],
         evaluators: Sequence[Evaluator],
     ) -> None:
         self._client = client
         self._http = http
         self._base_url = base_url
-        self._customer_ids = customer_ids
+        self._session_tokens = session_tokens
         self._evaluators = evaluators
         self._cases: dict[str, EvalCase] = {}
         self._results: dict[str, CaseResult] = {}
@@ -158,7 +158,7 @@ class LangfuseExperimentRunner:
                 turn = run_chat_turn(
                     self._http,
                     self._base_url,
-                    self._customer_ids[case.customer_email],
+                    self._session_tokens[case.customer_email],
                     case,
                     conversation_id=conversation_id,
                 )

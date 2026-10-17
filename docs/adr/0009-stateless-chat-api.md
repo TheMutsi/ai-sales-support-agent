@@ -17,8 +17,11 @@ owned by whichever node ran in that turn (ADR-0001).
 the Anthropic and OpenAI chat APIs, and every request is an independent graph run
 starting from an empty state. The graph is not checkpointed.
 
-- `customer_id` is required: every tool the graph reaches takes a real customer, and
-  `tickets.customer_id` is a non-nullable foreign key. There is no anonymous path.
+- The customer comes from the authenticated session (`Authorization: Bearer ...`,
+  issued by `POST /api/auth/login`), never from the body, so a client can't act as
+  another customer by naming one. Every tool the graph reaches takes a real customer,
+  and `tickets.customer_id` is a non-nullable foreign key, so there is no anonymous
+  path yet.
 - The last message must come from the user; anything else is rejected at validation.
 - `conversation_id` is optional and only groups turns in traces (Langfuse session).
 

@@ -92,7 +92,8 @@ Dependencies only point down this table, towards `schemas`
 
 ## One turn, end to end
 
-1. The client posts `customer_id` and the full message history.
+1. The client posts the full message history with its session in the `Authorization`
+   header; the customer is read from the session, not the body.
 2. The graph runs; `response_writer`'s tokens stream to the client as `delta` events.
 3. If `guardrail` rewrote the answer, a `correction` event carries the final text
    ([ADR-0010](adr/0010-stream-then-correct.md)).
