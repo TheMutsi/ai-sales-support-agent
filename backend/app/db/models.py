@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
@@ -229,6 +229,26 @@ class Subscription(Base):
 
     customer: Mapped["Customer"] = relationship(back_populates="subscriptions")
     plan: Mapped["Plan"] = relationship(back_populates="subscriptions")
+
+
+class Order(Base):
+    """A purchase of a plan. In the real product these come from the shop's own orders API
+    (`app.orders.source`); this table is the simulated stand-in."""
+
+    __tablename__ = "orders"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    # What a customer is given and quotes: 20 alphanumeric characters, unique across tenants.
+    order_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id"))
+    amount_cents: Mapped[int]
+    currency: Mapped[str] = mapped_column(String(3), default="usd")
+    status: Mapped[str] = mapped_column(default="paid")  # paid | pending | refunded
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    customer: Mapped["Customer"] = relationship()
+    plan: Mapped["Plan"] = relationship()
 
 
 class Document(Base):

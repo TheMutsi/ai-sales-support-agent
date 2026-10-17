@@ -1,10 +1,11 @@
-"""Populate plans, customers, and subscriptions from the fixtures in `data/seed/`.
+"""Populate plans, customers, subscriptions and their orders from the fixtures in `data/seed/`.
 
 Documents, tickets, and evaluation runs are intentionally left empty here — they're
 produced by later stages (RAG ingestion, live agent runs, the evaluation suite), not
 by this fixture load.
 """
 
+import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,7 +13,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import LOCAL_ENVIRONMENTS, get_settings
-from app.db.models import Customer, Plan, Subscription, Tenant, TenantSecret
+from app.db.models import Customer, Order, Plan, Subscription, Tenant, TenantSecret
 from app.db.session import SessionLocal
 
 SEED_DIR = Path(__file__).resolve().parents[2] / "data" / "seed"
@@ -105,7 +106,42 @@ def seed(db: Session) -> None:
             )
         )
 
+    db.flush()
+    _ensure_orders(db, plans_by_slug, tenant_id)
     db.commit()
+
+
+def _order_id(email: str) -> str:
+    """Deterministic, so docs and tests can name an order: 20 hex characters, which is
+    alphanumeric. A real order id would be random."""
+    return hashlib.sha256(f"order:{email}".encode()).hexdigest()[:20]
+
+
+def _ensure_orders(db: Session, plans_by_slug: dict[str, Plan], tenant_id) -> None:
+    """One order per seeded customer, for the plan they are on. Idempotent."""
+    now = datetime.now(UTC)
+    have = {o.order_id for o in db.query(Order)}
+    entries = {e["email"]: e for e in _load("customers.json")}
+    customers = db.query(Customer).filter(Customer.email.in_(entries), Customer.tenant_id == tenant_id)
+    for customer in customers:
+        entry = entries[customer.email]
+        order_id = _order_id(customer.email)
+        if order_id in have:
+            continue
+        plan = plans_by_slug[entry["plan_slug"]]
+        status = {"past_due": "pending", "canceled": "refunded"}.get(
+            entry["subscription_status"], "paid"
+        )
+        db.add(
+            Order(
+                order_id=order_id,
+                customer_id=customer.id,
+                plan_id=plan.id,
+                amount_cents=plan.price_cents,
+                status=status,
+                created_at=now - timedelta(days=30),
+            )
+        )
 
 
 if __name__ == "__main__":
