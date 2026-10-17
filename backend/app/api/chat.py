@@ -43,9 +43,10 @@ from starlette.background import BackgroundTask
 
 from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
-from app.api.deps import require_customer_session
+from app.api.deps import require_customer_session, require_session
 from app.auth.session import SessionClaims
 from app.chat.turns import (
+    MessageIdReused,
     TurnAction,
     TurnInProgress,
     TurnStart,
@@ -53,12 +54,13 @@ from app.chat.turns import (
     abandon_turn,
     begin_turn,
     finish_turn,
+    list_messages,
 )
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
-from app.db.models import Conversation
+from app.db.models import Conversation, Message
 from app.db.session import SessionLocal
-from app.schemas.chat import ChatRequest, ChatTurnSummary
+from app.schemas.chat import ChatRequest, ChatTurnSummary, MessageList, StoredMessage
 from app.schemas.rag import SourceReference
 
 logger = logging.getLogger(__name__)
@@ -350,6 +352,8 @@ async def chat(
         turn = await run_in_threadpool(_open_turn, session, request)
     except TurnInProgress:
         raise HTTPException(status_code=409, detail={"code": "turn_in_progress"}) from None
+    except MessageIdReused:
+        raise HTTPException(status_code=409, detail={"code": "message_id_reused"}) from None
     except LookupError:
         raise HTTPException(
             status_code=401,
@@ -368,3 +372,22 @@ async def chat(
         # generator's cleanup never runs; this frees the turn then, and does nothing else.
         background = BackgroundTask(_abandon_if_unsettled, state, store, session.conversation_id)
     return StreamingResponse(stream, media_type="text/event-stream", background=background)
+
+
+@router.get("/conversations/{conversation_id}/messages")
+async def conversation_messages(
+    conversation_id: uuid.UUID, session: Annotated[SessionClaims, Depends(require_session)]
+) -> MessageList:
+    """The stored messages of the session's own conversation, so a reopened widget can
+    show the history. Any other id is a 404, the same as one that does not exist."""
+    if conversation_id != session.conversation_id:
+        raise HTTPException(status_code=404, detail={"code": "conversation_not_found"})
+
+    def read() -> list[Message]:
+        with SessionLocal() as db:
+            return list_messages(db, conversation_id=conversation_id)
+
+    stored = await run_in_threadpool(read)
+    return MessageList(
+        messages=[StoredMessage.model_validate(m, from_attributes=True) for m in stored]
+    )

@@ -35,6 +35,10 @@ class TurnInProgress(Exception):
     pass
 
 
+class MessageIdReused(Exception):
+    """A stored `client_message_id` came back with different text."""
+
+
 class TurnSuperseded(Exception):
     """The turn lost the conversation to a newer one and must not write its reply."""
 
@@ -121,6 +125,9 @@ def begin_turn(
     )
 
     if existing is not None:
+        if existing.content != content:
+            db.commit()
+            raise MessageIdReused
         reply = (
             db.query(Message)
             .filter_by(conversation_id=conversation_id, reply_to_seq=existing.seq)

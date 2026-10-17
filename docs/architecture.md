@@ -20,8 +20,9 @@ flowchart LR
   api -. traces .-> langfuse[Langfuse<br/>self-hosted]
 ```
 
-- The API is stateless: every request carries the whole conversation and runs the
-  graph from an empty state ([ADR-0009](adr/0009-stateless-chat-api.md)).
+- The server holds each conversation's messages in Postgres; a request carries only
+  the new message, and every turn runs the graph from an empty state, started from
+  the stored history ([ADR-0013](adr/0013-server-held-conversation-history.md)).
 - One Postgres holds plans, customers, subscriptions, tickets and the embedded
   knowledge base ([ADR-0005](adr/0005-postgres-pgvector-for-rag.md)).
 - The model provider is configuration, not code

@@ -19,7 +19,7 @@ from app.auth.conversations import resolve_for_login
 from app.auth.credentials import generate_api_key
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
-from app.chat.turns import begin_turn
+from app.chat.turns import begin_turn, finish_turn
 from app.core.config import get_settings
 from app.db.models import Conversation, Customer, Message, Tenant
 from app.db.session import SessionLocal
@@ -205,3 +205,84 @@ async def test_a_store_whose_save_fails_frees_the_conversation_by_itself(shop, m
 
     with SessionLocal() as db:
         assert db.get(Conversation, shop["conversation"].id).turn_id is None
+
+
+def test_reusing_a_message_id_with_different_text_is_refused(shop):
+    message_id = str(uuid.uuid4())
+    with SessionLocal() as db:
+        first = begin_turn(
+            db,
+            conversation_id=shop["conversation"].id,
+            client_message_id=uuid.UUID(message_id),
+            content="original",
+            now=datetime.now(UTC),
+        )
+        finish_turn(
+            db,
+            conversation_id=shop["conversation"].id,
+            turn=first,
+            content="answer",
+            now=datetime.now(UTC),
+        )
+
+    response = client.post(
+        "/api/chat", json={"message": "different", "message_id": message_id}, headers=_auth(shop)
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "message_id_reused"
+
+
+def _store(shop, user_text="hi", reply="Hello!"):
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        turn = begin_turn(
+            db,
+            conversation_id=shop["conversation"].id,
+            client_message_id=uuid.uuid4(),
+            content=user_text,
+            now=now,
+        )
+        finish_turn(db, conversation_id=shop["conversation"].id, turn=turn, content=reply, now=now)
+
+
+def test_the_session_can_read_its_conversations_messages_in_order(shop):
+    _store(shop, "hi", "Hello!")
+    _store(shop, "plans?", "Three plans.")
+
+    response = client.get(
+        f"/api/conversations/{shop['conversation'].id}/messages", headers=_auth(shop)
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [(m["seq"], m["role"], m["content"]) for m in body["messages"]] == [
+        (1, "user", "hi"),
+        (2, "assistant", "Hello!"),
+        (3, "user", "plans?"),
+        (4, "assistant", "Three plans."),
+    ]
+    assert "created_at" in body["messages"][0]
+
+
+def test_a_new_conversation_has_no_messages(shop):
+    response = client.get(
+        f"/api/conversations/{shop['conversation'].id}/messages", headers=_auth(shop)
+    )
+
+    assert response.status_code == 200 and response.json() == {"messages": []}
+
+
+def test_messages_need_a_session():
+    response = client.get(f"/api/conversations/{uuid.uuid4()}/messages")
+
+    assert response.status_code == 401
+
+
+def test_another_conversations_messages_are_not_readable_with_this_session(shop):
+    """Same answer as for a conversation that does not exist: no way to probe ids."""
+    other = uuid.uuid4()
+
+    response = client.get(f"/api/conversations/{other}/messages", headers=_auth(shop))
+
+    assert response.status_code == 404
