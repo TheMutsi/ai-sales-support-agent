@@ -14,6 +14,7 @@ conversation comes from the session (`Authorization: Bearer ...`), never from th
 """
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -26,6 +27,17 @@ from app.schemas.tools import CheckoutSession
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(min_length=1)
+
+
+class StoredMessage(BaseModel):
+    seq: int
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime
+
+
+class MessageList(BaseModel):
+    messages: list[StoredMessage]
 
 
 class ChatRequest(BaseModel):

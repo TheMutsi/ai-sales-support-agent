@@ -1,6 +1,6 @@
 # ADR-0009: The chat API is stateless; the client resends the conversation
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0013](0013-server-held-conversation-history.md)
 - **Introduced in:** PR #24 (Stage 8)
 
 ## Context

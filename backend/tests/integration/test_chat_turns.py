@@ -11,6 +11,7 @@ import pytest
 from app.auth.conversations import create_anonymous
 from app.auth.credentials import generate_api_key
 from app.chat.turns import (
+    MessageIdReused,
     TurnAction,
     TurnInProgress,
     TurnSuperseded,
@@ -92,6 +93,17 @@ def test_sending_the_same_message_again_replays_the_reply_without_a_new_turn(db,
     again = _begin(db, conversation, "hello", message_id=message_id)
 
     assert again.action is TurnAction.REPLAY and again.reply == "Hi there"
+    assert len(list_messages(db, conversation_id=conversation.id)) == 2
+
+
+def test_a_message_id_cannot_be_reused_for_different_text(db, conversation):
+    """Replaying the stored answer for other text would answer a question that was never asked."""
+    message_id = uuid.uuid4()
+    _finish(db, conversation, _begin(db, conversation, "hello", message_id=message_id), "Hi there")
+
+    with pytest.raises(MessageIdReused):
+        _begin(db, conversation, "something else", message_id=message_id)
+
     assert len(list_messages(db, conversation_id=conversation.id)) == 2
 
 
