@@ -26,7 +26,7 @@ The RAG pipeline (`backend/app/rag/`) is the one exception exercised so far: the
 - **LLM provider abstraction:** LangChain chat models, supporting **Anthropic Claude**, **Google Gemini**, and **Ollama** (local, free, no API key — for offline dev) interchangeably via `LLM_PROVIDER` env var. No OpenAI dependency.
 - **Embeddings:** Google `text-embedding-004` by default, or Ollama's `nomic-embed-text` (also 768-dim, no API key) via `EMBEDDING_PROVIDER`, behind the same swappable interface.
 - **Database:** PostgreSQL + pgvector — plans, customers, subscriptions (a customer's commercial state, kept separate from identity so plan/status changes have history), KB documents + chunks, tickets, evaluation runs.
-- **Frontend:** an embeddable chat widget named **Mew**, compiled to one script (`mew.js?key=<public api key>`), isolated in an iframe, with a queue-style global (`Mew('open')`, `show`, `hide`, `close`), a 24 hour conversation window shared across tabs, an unread badge, sound, and typed message parts (text, image, link now; cards and carousels later). The shop's server signs a short-lived token for its logged-in customer; anonymous visitors can ask knowledge-base questions and identify with an emailed code. Replaces the Vite + React SPA planned at the start; see `docs/adr/0014-conversation-anchored-identity-with-scopes.md`. The fictional product is being renamed from AcmeFlow to **MewFlow** (a separate PR; the repo and prompts still say AcmeFlow until then).
+- **Frontend:** an embeddable chat widget named **Mew**, compiled to one script (`mew.js?key=<public api key>`), isolated in an iframe, with a queue-style global (`Mew('open')`, `show`, `hide`, `close`), a 24 hour conversation window shared across tabs, an unread badge, sound, and typed message parts (text, image, link now; cards and carousels later). The shop's server signs a short-lived token for its logged-in customer; anonymous visitors can ask knowledge-base questions and identify with an emailed code. Replaces the Vite + React SPA planned at the start; see `docs/adr/0014-conversation-anchored-identity-with-scopes.md` and `docs/adr/0015-embeddable-widget-in-an-iframe.md`. The fictional product is being renamed from AcmeFlow to **MewFlow** (a separate PR; the repo and prompts still say AcmeFlow until then).
 - **Observability:** self-hosted Langfuse tracing (graph/LLM/tool/retrieval spans + metadata) plus basic structured app logging. Replaced the planned LangSmith in Stage 8, see `docs/adr/0011-self-hosted-langfuse-for-tracing.md`.
 - **Packaging:** Docker Compose (backend, frontend, Postgres+pgvector), `.env.example` — never commit `.env` or real API keys.
 
@@ -51,7 +51,7 @@ backend/
   data/seed/            # plans.json, customers.json, kb/*.md (markdown KB docs, loaded by app.rag.ingestion)
   evaluation/           # dataset.jsonl (dev), heldout.jsonl, run_eval.py, metrics.py, llm_judge.py [AI writes, per owner's Stage 9 call]
   tests/                # unit/, integration/, evaluation/
-frontend/               # Vite + React chat app                       [AI writes]
+frontend/               # Mew widget: Vite + React, one script mew.js [AI writes]
 docs/                   # architecture.md (diagrams) and adr/ (architecture decision records)
 docker-compose.yml, Dockerfile(s), .env.example, README.md
 ```
@@ -164,8 +164,14 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 - [x] Stage 7 — Guardrails
 - [x] Stage 8 — FastAPI chat endpoint (streaming) + trace metadata tagging (customer_id, conversation_id, intent, env, model, app_version)
 - [x] Stage 9 — Evaluation dataset + script (AI-written per owner's call, like Stage 3 — the owner reviewed the design and the dataset; see `backend/evaluation/README.md` for methodology and known limitations) — run against the real API before the frontend exists, so agent quality is validated before UI polish
-- [ ] Stage 10 — Chat widget (**Mew**). Split in two: **10a backend (done, see below)** and **10b the widget** (not started; planned as five PRs: scaffold + loader + iframe + example page; data layer with streaming, persistence and the login callback; UI components; launcher badge, sound, attachments and renderers including the identity form; Docker and docs)
+- [x] Stage 10 — Chat widget (**Mew**). **10a backend (done, see below)** and **10b the widget (done, see below)**
 - [ ] Stage 11 — README, diagrams, demo scenarios, polish
+
+### Stage 10b status (the widget)
+
+Done (PRs #89 to #95 and the Docker/docs PR): `frontend/` builds one script, `mew.js?key=...`, that renders into an `about:blank` iframe (ADR-0015). The `Mew('open' | 'close' | 'show' | 'hide' | 'config', ...)` queue, the server-held conversation streamed over `fetch` (SSE), a 24 hour conversation window shared across tabs, the shop's `getToken` login callback, the one-time-code identity form with `/api/chat/resume`, the unread badge, the sound, a safe markdown renderer (no HTML path), and image attachments as a **preview only** (nothing is uploaded). `docker compose up --build` serves an example shop page on `http://localhost:8080`, the origin the dev tenant allows. Verified in a real Chrome against the local backend; the sound was not heard, only that it is triggered.
+
+Known limits: an expired session retried mid-conversation opens a new conversation and leaves the old messages on screen; a reload offers only the one-time code because the stored identity request does not record its methods; the unread badge does not survive a reload; no italics, tables or code blocks in markdown.
 
 ### Stage 10a status (backend for the widget)
 

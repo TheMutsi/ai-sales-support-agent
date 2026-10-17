@@ -20,6 +20,9 @@ flowchart LR
   api -. traces .-> langfuse[Langfuse<br/>self-hosted]
 ```
 
+- The widget (`frontend/`, **Mew**) is one script that renders into an iframe on the shop's page
+  and streams each turn over `fetch`; the shop's server vouches for a logged-in customer with a
+  signed token ([ADR-0015](adr/0015-embeddable-widget-in-an-iframe.md)).
 - A visitor has a session for a conversation, issued when it starts, when the shop vouches
   for a customer, or when a one-time code is verified; what they may do is a set of scopes
   ([ADR-0014](adr/0014-conversation-anchored-identity-with-scopes.md)).
@@ -93,6 +96,7 @@ Reading it:
 | `app/db` | SQLAlchemy models, session, seed | `core` |
 | `app/core` | Settings, model and embedding factories, tracing setup | nothing in `app` |
 | `app/schemas` | Pydantic contracts shared across layers | nothing in `app` |
+| `frontend/` | The Mew widget: loader, API client and conversation state, React UI | the HTTP API only |
 | `evaluation/` | Dataset, evaluators, LLM judge, runner over HTTP | `app.schemas`, `app.core`, `app.db` |
 
 Dependencies only point down this table, towards `schemas`
