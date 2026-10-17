@@ -30,7 +30,7 @@ Both run the same cases through the same evaluators and write the same JSON repo
   inner loop while changing a prompt or a node.
 - **`langfuse`** runs the suite as a Langfuse **dataset experiment**
   (`langfuse_experiment.py`). Each JSONL file is upserted as a dataset
-  (`acmeflow-eval/dataset`, `acmeflow-eval/heldout`) under deterministic item ids,
+  (`mewflow-eval/dataset`, `mewflow-eval/heldout`) under deterministic item ids,
   so the files stay the source of truth and editing a case updates its item.
   Each invocation is a dataset run named `<git sha>[-dirty] <agent model> <timestamp>`.
   Every metric is a boolean score on the run's item, and `pass_rate.<metric>` plus
@@ -229,3 +229,14 @@ How to read it:
 
 `evaluation/results/` is for local run output. Report files are not an asset of the
 suite itself; only a run you deliberately choose to publish should be committed.
+
+## After the MewFlow rename (run 9)
+
+The rename from AcmeFlow touched the prompts, the KB documents and the dataset questions, so
+the suite was re-run in full (`results/run9-dev.json`, `results/run9-heldout.json`, one trial,
+judge `llama3`, paired against run 8). Dev: 65 of 66 cases passed; held-out: 12 of 16. Against
+run 8, dev fixed six cases and broke one (`wrongcust-003`, a forbidden phrase about the Starter
+plan), held-out fixed three and broke one (`heldout-012`, the known judge flip). Neither
+difference is significant (McNemar p = 0.125 and 0.625), and the dev set grew from 55 to 66
+cases since run 8, so these are not a before/after of the rename alone: they show it did not
+visibly break anything, not that anything improved.
