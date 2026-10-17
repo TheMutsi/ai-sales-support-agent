@@ -86,7 +86,7 @@ Captured from a real evaluation run (`qwen2.5:7b-instruct` through Ollama, the s
 
 ## Evaluation
 
-66 dev cases and 16 held-out cases run against the live `/api/chat` endpoint, scored by deterministic checks plus an LLM judge from a different model family. Latest run (run 9, after the MewFlow rename, one trial per case): **65/66 fully passed on dev and 12/16 on held-out**. The held-out set is the honest number: it was not used to tune anything, and its failures are listed case by case in [`backend/evaluation/README.md`](backend/evaluation/README.md). Single runs are one noisy sample (cases flip between runs, and the differences against the previous run are not statistically significant), and several limitations apply (small samples, English only, a small judge model), so read that file before trusting a number.
+70 dev cases and 16 held-out cases run against the live `/api/chat` endpoint, scored by deterministic checks plus an LLM judge from a different model family. Latest full run (run 9, after the MewFlow rename, one trial per case, when the dev set had 66 cases): **65/66 fully passed on dev and 12/16 on held-out**; four invoice cases were added since (see the evaluation README). The held-out set is the honest number: it was not used to tune anything, and its failures are listed case by case in [`backend/evaluation/README.md`](backend/evaluation/README.md). Single runs are one noisy sample (cases flip between runs, and the differences against the previous run are not statistically significant), and several limitations apply (small samples, English only, a small judge model), so read that file before trusting a number.
 
 ## Quick start
 

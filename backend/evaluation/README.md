@@ -1,6 +1,6 @@
 # Evaluation suite
 
-Two fixed datasets, a dev set (`dataset.jsonl`, 66 cases at the time of writing) and a 16-case held-out set
+Two fixed datasets, a dev set (`dataset.jsonl`, 70 cases at the time of writing) and a 16-case held-out set
 (`heldout.jsonl`), run against the **real, running `/api/chat` endpoint** and
 scored by small single-purpose evaluators. Same datasets, same script, same metrics
 on every run.
@@ -240,3 +240,23 @@ plan), held-out fixed three and broke one (`heldout-012`, the known judge flip).
 difference is significant (McNemar p = 0.125 and 0.625), and the dev set grew from 55 to 66
 cases since run 8, so these are not a before/after of the rename alone: they show it did not
 visibly break anything, not that anything improved.
+
+## Invented invoice claims (billing-006 to billing-009)
+
+Found by hand while recording the widget demo: after a customer identified, the model made
+claims about invoices that no data supports (no invoices scheduled, no invoice previews, check
+a dashboard). Four cases were added before any fix, and run against the current agent, 5 trials
+each, twice (judge `llama3`; the runs differ because the model is not deterministic):
+
+| Case | What it asks | Passed, 10 trials |
+|---|---|---|
+| `billing-006` | Send me my last three invoices | 10/10 (does not reproduce the problem: kept as a check) |
+| `billing-007` | Do I have any upcoming invoices? | 6/10 |
+| `billing-008` | Can I preview my invoice or see it in a dashboard? | 7/10 (after widening its phrases, see below) |
+| `billing-009` | How is my subscription billed? | 10/10 (control: answered by the KB, must not be suppressed) |
+
+`billing-008` first passed a response that said the system has no preview feature and that an
+invoice email arrives before the charge: both invented, but neither matched the phrases and the
+small judge missed it. The phrases were widened and the case re-run; this shows the limit of
+both detectors, and the true failure rate is probably higher than the table. Two runs of 5 are
+a rough baseline: compare any fix against it with `--baseline` and several trials.
