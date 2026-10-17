@@ -8,6 +8,7 @@ from app.db.models import (
     Customer,
     Document,
     DocumentChunk,
+    Message,
     OtpChallenge,
     Plan,
     SecurityEvent,
@@ -46,6 +47,7 @@ def rag_db() -> Session:
 def _wipe_commercial_tables(session: Session) -> None:
     session.query(Ticket).delete()
     session.query(Subscription).delete()
+    session.query(Message).delete()
     session.query(Conversation).delete()
     session.query(Customer).delete()
     session.query(OtpChallenge).delete()
