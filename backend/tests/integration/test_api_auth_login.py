@@ -3,6 +3,7 @@ our session out. The tenant is resolved from the public API key first, so a
 token can only be checked against its own tenant's secrets."""
 
 import time
+import uuid
 
 import jwt
 import pytest
@@ -10,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.credentials import generate_api_key, generate_secret
 from app.core.config import get_settings
-from app.db.models import Customer, Tenant, TenantSecret
+from app.db.models import Conversation, Customer, Tenant, TenantSecret
 from app.db.session import SessionLocal
 from app.main import app
 
@@ -129,3 +130,16 @@ def test_tenant_scope_overrides_are_applied_to_the_session(shop):
     response = _login(shop["api_key"], _store_token(shop["secret"]))
 
     assert response.json()["scopes"] == ["kb:read"]
+
+
+def test_login_starts_a_conversation_already_attached_to_the_customer(shop):
+    body = _login(shop["api_key"], _store_token(shop["secret"])).json()
+
+    claims = jwt.decode(
+        body["session_token"], get_settings().session_signing_key, algorithms=["HS256"]
+    )
+    assert claims["conv"] == body["conversation_id"]
+    with SessionLocal() as db:
+        conversation = db.get(Conversation, uuid.UUID(body["conversation_id"]))
+        assert conversation.customer_id == shop["customer"].id
+        assert conversation.linked_via == "store_login"

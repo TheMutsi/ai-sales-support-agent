@@ -21,7 +21,8 @@ from app.auth.scopes import IdentityLevel
 def issue_session_token(
     *,
     tenant_id: uuid.UUID,
-    customer_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    customer_id: uuid.UUID | None,
     level: IdentityLevel,
     signing_key: str,
     ttl: timedelta,
@@ -30,11 +31,13 @@ def issue_session_token(
     expires_at = now + ttl
     claims = {
         "tid": str(tenant_id),
-        "cid": str(customer_id),
+        "conv": str(conversation_id),
         "lvl": level.value,
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
+    if customer_id is not None:  # an anonymous session has no customer
+        claims["cid"] = str(customer_id)
     return jwt.encode(claims, signing_key, algorithm="HS256"), expires_at
 
 
@@ -49,7 +52,8 @@ class SessionError(Exception):
 @dataclass(frozen=True)
 class SessionClaims:
     tenant_id: uuid.UUID
-    customer_id: uuid.UUID
+    conversation_id: uuid.UUID
+    customer_id: uuid.UUID | None  # None exactly when the level is anonymous
     level: IdentityLevel
 
 
@@ -61,12 +65,17 @@ def verify_session_token(token: str, signing_key: str) -> SessionClaims:
             token,
             signing_key,
             algorithms=["HS256"],
-            options={"require": ["exp", "tid", "cid", "lvl"]},
+            options={"require": ["exp", "tid", "conv", "lvl"]},
         )
+        level = IdentityLevel(claims["lvl"])
+        # An anonymous session must not name a customer, and every other level must.
+        if (level is IdentityLevel.ANONYMOUS) == ("cid" in claims):
+            raise ValueError("customer claim inconsistent with the identity level")
         return SessionClaims(
             tenant_id=uuid.UUID(claims["tid"]),
-            customer_id=uuid.UUID(claims["cid"]),
-            level=IdentityLevel(claims["lvl"]),
+            conversation_id=uuid.UUID(claims["conv"]),
+            customer_id=uuid.UUID(claims["cid"]) if "cid" in claims else None,
+            level=level,
         )
     except jwt.ExpiredSignatureError:
         raise SessionError("session_expired") from None
