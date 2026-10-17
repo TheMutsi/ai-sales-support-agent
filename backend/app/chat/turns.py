@@ -26,6 +26,14 @@ DEFAULT_HISTORY_LIMIT = 20
 TURN_STALE_AFTER = timedelta(minutes=2)
 
 
+class MessageKind(StrEnum):
+    TEXT = "text"
+    # The assistant asked the visitor to identify (a form on the widget). It carries no
+    # `reply_to_seq`: the user's message still has no answer, and re-sending it with the
+    # same id after identifying is what resumes the turn.
+    IDENTITY_REQUEST = "identity_request"
+
+
 class TurnAction(StrEnum):
     RUN = "run"
     REPLAY = "replay"
@@ -75,7 +83,11 @@ def _busy(conversation: Conversation, now: datetime) -> bool:
 def _history_before(db: Session, conversation_id: uuid.UUID, seq: int, limit: int) -> list[Message]:
     rows = (
         db.query(Message)
-        .filter(Message.conversation_id == conversation_id, Message.seq < seq)
+        .filter(
+            Message.conversation_id == conversation_id,
+            Message.seq < seq,
+            Message.kind == MessageKind.TEXT,
+        )
         .order_by(Message.seq.desc())
         .limit(limit)
         .all()
@@ -91,6 +103,7 @@ def _append(
     now: datetime,
     client_message_id: uuid.UUID | None = None,
     reply_to_seq: int | None = None,
+    kind: MessageKind = MessageKind.TEXT,
 ) -> Message:
     conversation.last_seq += 1
     conversation.last_activity_at = now
@@ -98,6 +111,7 @@ def _append(
         conversation_id=conversation.id,
         seq=conversation.last_seq,
         role=role,
+        kind=kind.value,
         content=content,
         client_message_id=client_message_id,
         reply_to_seq=reply_to_seq,
@@ -158,13 +172,20 @@ def begin_turn(
 
 
 def finish_turn(
-    db: Session, *, conversation_id: uuid.UUID, turn: TurnStart, content: str, now: datetime
+    db: Session,
+    *,
+    conversation_id: uuid.UUID,
+    turn: TurnStart,
+    content: str,
+    now: datetime,
+    kind: MessageKind = MessageKind.TEXT,
 ) -> None:
     conversation = _lock(db, conversation_id)
     if conversation.turn_id != turn.turn_id:
         db.commit()
         raise TurnSuperseded
-    _append(db, conversation, "assistant", content, now, reply_to_seq=turn.user_seq)
+    reply_to = turn.user_seq if kind is MessageKind.TEXT else None
+    _append(db, conversation, "assistant", content, now, reply_to_seq=reply_to, kind=kind)
     conversation.turn_started_at = conversation.turn_id = None
     db.commit()
 
