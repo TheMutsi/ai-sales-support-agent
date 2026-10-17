@@ -8,7 +8,7 @@ score intent-classification accuracy against the labeled dataset.
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Intent(StrEnum):
@@ -22,6 +22,7 @@ class Intent(StrEnum):
     UPGRADE_REQUEST = "upgrade_request"
     REFUND_REQUEST = "refund_request"
     HUMAN_ESCALATION = "human_escalation"
+    SMALL_TALK = "small_talk"
     UNSUPPORTED = "unsupported"
 
 
@@ -41,6 +42,15 @@ class IntentClassification(BaseModel):
             "second opinion on every message."
         ),
     )
+
+    @field_validator("confidence", "safety_confidence", mode="before")
+    @classmethod
+    def _percentage_to_fraction(cls, value: object) -> object:
+        # The model sometimes answers on a 0-100 scale ("confidence": 100). That is
+        # unambiguous, so read it as a percentage instead of failing the turn.
+        if isinstance(value, int | float) and 1 < value <= 100:
+            return value / 100
+        return value
 
 
 class TicketDraft(BaseModel):

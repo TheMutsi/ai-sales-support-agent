@@ -15,6 +15,9 @@ Categories:
 - upgrade_request: wants to move to a higher plan, or asks how to do it.
 - refund_request: explicitly asks for money back, or asks to cancel.
 - human_escalation: explicitly asks to talk to a person.
+- small_talk: ONLY a greeting, a thank-you or a goodbye ("Thanks!", "Hi", "That's
+  all, bye"). It never asks for anything: any question or request, even an
+  off-topic one, is not small_talk.
 - unsupported: not about AcmeFlow, or there isn't enough information to tell.
 
 Boundaries that are easy to get wrong:
@@ -27,6 +30,12 @@ Boundaries that are easy to get wrong:
 - A hypothetical ("if I do X, would I get money back?") asks how the policy
   works, so it is billing_question. It becomes refund_request only when
   the customer asks for a refund of a charge they already paid.
+
+- A thank-you or goodbye is small_talk even when the conversation before it
+  contained an unanswered question: classify the latest message only.
+  small_talk is never a request for a human. Off-topic requests (weather,
+  recommendations, writing a poem) ask for something, so they are unsupported,
+  not small_talk.
 
 Use the full conversation history for context, not just the last message.
 If the message is ambiguous, lower your confidence instead of guessing a category.

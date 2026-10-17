@@ -91,6 +91,13 @@ def test_technical_support_goes_to_response_writer():
     assert route_after_intent(_state(Intent.TECHNICAL_SUPPORT)) == "response_writer"
 
 
+def test_small_talk_is_answered_directly_without_opening_a_ticket():
+    assert route_after_intent(_state(Intent.SMALL_TALK)) == "response_writer"
+    assert route_after_safety_judge({"input_blocked": False, "intent": Intent.SMALL_TALK}) == (
+        "response_writer"
+    )
+
+
 def test_human_escalation_goes_to_human_escalation():
     assert route_after_intent(_state(Intent.HUMAN_ESCALATION)) == "human_escalation"
 
