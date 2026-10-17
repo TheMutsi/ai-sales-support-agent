@@ -15,7 +15,7 @@ hour. Tripping them is recorded as a `SecurityEvent` for review.
 The code is stored only as an HMAC keyed with the server's secret: six digits are
 a million possibilities, so a plain hash would be reversed instantly if the table leaked.
 
-Not here yet: `verify_otp` (next PR), limits per IP, flagging codes never used.
+Not here yet: limits per IP, and flagging codes requested but never used.
 """
 
 import hashlib
@@ -36,6 +36,10 @@ logger = logging.getLogger(__name__)
 CODE_TTL = timedelta(minutes=10)
 MAX_ATTEMPTS = 5
 MAX_SENDS_PER_HOUR = 5
+
+
+class OtpError(Exception):
+    code = "invalid_code"
 
 
 def normalize_email(email: str) -> str:
@@ -108,3 +112,41 @@ def request_otp(
         sender.send(email=email, code=code)
     except Exception:
         logger.exception("could not deliver a one-time code (tenant %s)", tenant.id)
+
+
+def verify_otp(
+    db: Session, *, tenant: Tenant, email: str, code: str, key: str, now: datetime
+) -> Customer:
+    email = normalize_email(email)
+    challenge = (
+        db.query(OtpChallenge)
+        .filter(
+            OtpChallenge.tenant_id == tenant.id,
+            OtpChallenge.email == email,
+            OtpChallenge.consumed_at.is_(None),
+            OtpChallenge.expires_at > now,
+            OtpChallenge.attempts < MAX_ATTEMPTS,
+        )
+        .order_by(OtpChallenge.created_at.desc())
+        # Locks the row until commit: parallel guesses are counted one at a time, and
+        # a correct code can only be consumed by one of them.
+        .with_for_update()
+        .first()
+    )
+    if challenge is None:
+        raise OtpError
+
+    if not hmac.compare_digest(challenge.code_hash, _hash_code(key, challenge.id, code)):
+        challenge.attempts += 1
+        if challenge.attempts >= MAX_ATTEMPTS:
+            _record(db, tenant, "otp_max_attempts", email)
+        db.commit()
+        raise OtpError
+
+    customer = _find_customer(db, tenant, email)
+    if customer is None:
+        db.rollback()  # release the row lock instead of holding it until the session ends
+        raise OtpError
+    challenge.consumed_at = now
+    db.commit()
+    return customer
