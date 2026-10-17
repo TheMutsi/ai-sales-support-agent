@@ -32,6 +32,18 @@ services:
       db:
         condition: service_healthy
 
+  # The Mew widget (`mew.js`) and an example shop page that embeds it, on http://localhost:8080:
+  # the origin the dev tenant allows. VITE_API_URL is the address the visitor's browser uses.
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
   # Self-hosted Langfuse (observability/tracing — see CLAUDE.md's
   # Observability section for why this replaced LangSmith). Everything below
   # is internal-only except langfuse-web's UI on :3000 — nothing else needs

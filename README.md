@@ -89,7 +89,7 @@ python -m app.rag.ingestion       # embed the knowledge base (needs the embeddin
 pytest -q && ruff check .
 ```
 
-`docker compose up --build` starts the whole stack, including the API (`/api/health`) and the self-hosted Langfuse used for tracing.
+`docker compose up --build` starts the whole stack, including the API (`/api/health`), the self-hosted Langfuse used for tracing, and an example shop page with the Mew chat widget on <http://localhost:8080> (see [`frontend/README.md`](frontend/README.md)).
 
 ## Documentation
 
