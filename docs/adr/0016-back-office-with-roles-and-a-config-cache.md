@@ -50,7 +50,13 @@ the back office.
   It raises, and the API answers 503 `configuration_unavailable`; the chat reads the tenant's scope
   overrides before opening a turn, so ignoring overrides that may restrict a visitor never happens
   and no conversation is left locked. Requests with no `Origin` header, which were never checked,
-  do not need the cache at all, and the CORS layer (on the event loop) never waits for a reload.
+  do not need the cache at all. Known limits, accepted for now: the CORS layer runs on the event loop
+  and does not wait for another thread's reload, but when the snapshot is cold or stale and no one
+  is loading it, it loads it itself, so an unreachable database can stall the loop for the
+  connection timeout (the old registry did too; the fix is to never load there); a tenant created
+  in the last few seconds can look unknown, and skip the origin check, until the five-second
+  throttle on misses expires; after an `invalidate` with the database down, the old snapshot keeps
+  serving, a revoked origin included.
 - **Credentials entered in the back office (an SMTP password, a shop's orders API key) are
   encrypted at rest** with an application key, and are write-only: the back office can replace
   them and shows that one is set, never its value.

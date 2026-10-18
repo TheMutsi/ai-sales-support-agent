@@ -17,8 +17,13 @@ lookup instead of a query. The snapshot is reloaded:
 database is tried again after a short pause, not on every request. But a lookup that finds nothing
 cannot then be called "unknown": an unknown tenant skips the origin check, so mistaking a real one
 for it would open that check. It raises `TenantConfigUnavailable` instead, and the caller fails
-closed. Only `all_origins`, for the CORS layer, never raises and never waits for a reload (it runs
-on the event loop): it serves the current snapshot, or nothing.
+closed. Only `all_origins`, for the CORS layer, never raises and never waits for *another thread's*
+reload, but it is not free of I/O: it runs on the event loop, and if the snapshot is cold, stale
+or invalidated and no one else is loading, it loads it itself, so an unreachable database can stall
+the loop for the connection timeout, once per retry pause (the previous registry did the same).
+A tenant created in the last few seconds can look unknown, and so skip the origin check, until the
+throttle on misses expires. After `invalidate` with the database down, the old snapshot (a revoked
+origin included) keeps serving.
 
 Reloads are single-flight: threads that find the snapshot out of date at the same moment cause one
 query. Callers must treat what they get as read-only.
