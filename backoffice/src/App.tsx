@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, listTenants, type AdminSession, type TenantOption } from "./api";
+import { ConfigPage } from "./ConfigPage";
 import { LoginPage } from "./LoginPage";
 import { loadSession, saveSession } from "./session";
 
@@ -61,7 +62,7 @@ export function App() {
       </header>
       <main>
         {tenantId ? (
-          <p>Configuration of the selected tenant comes next.</p>
+          <ConfigPage key={tenantId} session={session} tenantId={tenantId} onExpired={leave} />
         ) : (
           <p>No tenant to show.</p>
         )}
