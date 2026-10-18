@@ -46,6 +46,7 @@ def _output_check_context(state: AgentState) -> OutputCheckContext:
         ticket_created=state.get("ticket_receipt") is not None,
         checkout_created=state.get("checkout_session") is not None,
         tool_call_rounds=state.get("tool_call_rounds", 0),
+        order_found=state.get("order_details") is not None,
         protected_prompt=RESPONSE_WRITER_SYSTEM_PROMPT,
     )
 

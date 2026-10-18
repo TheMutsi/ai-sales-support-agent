@@ -33,6 +33,8 @@ class OutputCheckContext(BaseModel):
     ticket_created: bool = False
     checkout_created: bool = False
     tool_call_rounds: int = 0
+    # An order was really read this turn (the order_status step found one).
+    order_found: bool = False
     # Instructions that must never appear verbatim in a reply.
     protected_prompt: str = ""
 

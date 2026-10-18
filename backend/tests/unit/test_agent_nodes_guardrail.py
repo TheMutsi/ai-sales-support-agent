@@ -71,3 +71,50 @@ def test_protects_the_response_writer_prompt():
     state = {"checkout_session": None, "ticket_receipt": None, "messages": [original]}
 
     assert guardrail_node(state)["guardrail_flags"] == ["system_prompt_leak"]
+
+
+def test_a_reply_that_asks_for_an_order_number_is_replaced_and_keeps_the_real_ticket():
+    """order-010 and order-012: a refund or cancellation that created a ticket, answered by asking
+    for an order number nothing can look up. The customer must still learn about the ticket."""
+    from app.schemas.tools import TicketReceipt
+
+    original = AIMessage(content="Could you please provide the order number?", id="m")
+    state = {
+        "intent": "refund_request",
+        "checkout_session": None,
+        "ticket_receipt": TicketReceipt(
+            ticket_id="11111111-1111-1111-1111-111111111111",
+            status="open",
+            created_at="2026-01-01T00:00:00",
+        ),
+        "messages": [original],
+    }
+
+    result = guardrail_node(state)
+
+    assert result["guardrail_flags"] == ["unbacked_order_lookup"]
+    text = result["messages"][0].content
+    assert "11111111-1111-1111-1111-111111111111" in text and "order number" not in text
+
+
+def test_an_order_that_was_really_read_is_not_taken_for_an_unbacked_lookup():
+    from app.schemas.orders import OrderDetails
+
+    order = OrderDetails(
+        order_id="a" * 20,
+        customer_email="ana@shop.test",
+        plan_slug="pro",
+        amount_cents=9900,
+        currency="usd",
+        status="paid",
+        created_at="2026-09-17T00:00:00Z",
+    )
+    state = {
+        "intent": "refund_request",
+        "checkout_session": None,
+        "order_details": order,
+        "messages": [AIMessage(content="I've checked your order: it is paid.")],
+    }
+
+    assert guardrail_node(state) == {}
+

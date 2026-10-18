@@ -211,6 +211,30 @@ def check_unverified_billing_explanation(
     return None
 
 
+# Orders: asking for an order number, claiming to have checked or to be able to check an order,
+# or saying there is none on the account. English and Spanish, like the checks above. A verb
+# that asks for it ("provide", "share"...) shortly before the noun; a bare "order number" (as in
+# "you can find your order number in the email") is not a request.
+_ORDER_NUMBER_REQUEST_PATTERN = re.compile(
+    r"\b(provide|share|send|give|tell|confirm|enter|type|paste|proporcion\w*|compart\w*|"
+    r"env[ií]\w*|ind[ií]c\w*|dime|dame)\b[^.?!]{0,40}"
+    r"\b(order (number|id|no\b)|n[uú]mero de (pedido|orden)|id del pedido)",
+    re.IGNORECASE,
+)
+_ORDER_CHECK_CLAIM_PATTERN = re.compile(
+    r"\b(i('ve| have)?|we('ve| have)?)\s+(checked|looked (at|into|up)|reviewed|verified)\s+"
+    r"(your|the)\s+(order|purchase)s?\b|"
+    r"\bi\s+(can|will|'ll)\s+(check|look up|look into|verify)\s+(the status of\s+)?"
+    r"(your|the)\s+(order|purchase)s?\b|"
+    r"\b(revis[eé]|verifiqu[eé]|consult[eé])\s+(tu|el)\s+(pedido|compra)\b",
+    re.IGNORECASE,
+)
+_NO_ORDER_ON_ACCOUNT_PATTERN = re.compile(
+    r"\b(don'?t|do not|no)\s+(have|see|find)?\s*(an?\s+)?orders?\s+(associated|on file|"
+    r"recorded|found|on your account)|no tengo (ning[uú]n )?pedido",
+    re.IGNORECASE,
+)
+
 # Any mention of an invoice, in either language the agent answers in.
 _INVOICE_MENTION_PATTERN = re.compile(r"\b(invoices?|facturas?)\b", re.IGNORECASE)
 
@@ -253,6 +277,34 @@ def check_ungrounded_invoice_claim(
     return None
 
 
+def check_unbacked_order_lookup(
+    context: OutputCheckContext, response_text: str
+) -> GuardrailViolation | None:
+    """Found by the evaluation suite (order-010 to order-012): a logged-in customer who said "a
+    refund for my order" was asked for an order number, told "I've checked your order" and told
+    "I don't have an order associated with your account". Outside `order_status` no step reads
+    an order and the session names none, so asking for a number that nothing can look up, saying
+    one was checked, or saying there is none are all things the agent cannot back. A prompt rule
+    only half worked on a 7B model, so this is a deterministic check on the reply.
+
+    `order_status` is exempt: its step did read the order (or learned there is none with that
+    number), and the writer may say so. Known false positive: an escalation that tells the
+    customer to give their order number to support would be replaced by the safe fallback."""
+    if context.intent == Intent.ORDER_STATUS or context.order_found:
+        return None
+    if (
+        _ORDER_NUMBER_REQUEST_PATTERN.search(response_text)
+        or _ORDER_CHECK_CLAIM_PATTERN.search(response_text)
+        or _NO_ORDER_ON_ACCOUNT_PATTERN.search(response_text)
+    ):
+        return GuardrailViolation(
+            code="unbacked_order_lookup",
+            severity=GuardrailSeverity.BLOCK,
+            message="Response asks for, or claims to have checked, an order nothing can look up.",
+        )
+    return None
+
+
 _ALL_CHECKS = (
     check_unconfirmed_refund_claim,
     check_checkout_without_eligibility,
@@ -263,6 +315,7 @@ _ALL_CHECKS = (
     check_system_prompt_leak,
     check_unverified_billing_explanation,
     check_ungrounded_invoice_claim,
+    check_unbacked_order_lookup,
 )
 
 
