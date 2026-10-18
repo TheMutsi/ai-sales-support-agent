@@ -3,12 +3,13 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.customers import router as customers_router
 from app.api.health import router as health_router
 from app.api.origins import TenantCORSMiddleware
-from app.core.config import get_settings
+from app.core.config import LOCAL_ENVIRONMENTS, get_settings
 from app.core.observability import configure_langfuse
 from app.core.tenant_config import TenantConfigUnavailable
 
@@ -25,7 +26,7 @@ app = FastAPI(title="MewFlow Agent API", version=settings.app_version)
 app.add_middleware(
     TenantCORSMiddleware,
     allow_origins=settings.cors_allow_origins,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -40,3 +41,8 @@ app.include_router(health_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
+
+# The back office login is a placeholder (anyone may ask for any role), so its API does not exist
+# outside local environments until a real login does (ADR-0016).
+if settings.app_env in LOCAL_ENVIRONMENTS:
+    app.include_router(admin_router, prefix="/api")
