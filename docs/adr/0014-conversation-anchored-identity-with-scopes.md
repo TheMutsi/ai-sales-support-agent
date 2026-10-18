@@ -90,8 +90,8 @@ which), and a request is then checked against its own tenant's list.
   names that one order and never the customer, and a conversation left unlinked so a one-time
   code can still claim it later); orders come from the async `OrderSource` interface, with a
   simulated table behind it. The agent's `order_status` intent reads that order (the tenant and
-  the order id come from the session, never from the message). Still missing: the widget form
-  for the `order_id` method. Two consequences to know: a customer verified with a code who asks
+  the order id come from the session, never from the message), and the widget form asks for the
+  email first and then a code or an order number. Two consequences to know: a customer verified with a code who asks
   about an order has no order in the session, so the agent asks for one and offers only the
   order form; and if they submit it, the new session is an `order_lookup` one with no customer,
   so they lose the account scopes until they verify again (a narrowing, not a leak).

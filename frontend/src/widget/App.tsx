@@ -39,8 +39,8 @@ export function App({
           <header>Mew</header>
           <MessageList messages={messages} waiting={waiting} />
           {identityRequest &&
-            (identityRequest.methods.includes("otp") ? (
-              <IdentityForm identity={identity} />
+            (identityRequest.methods.some((m) => m === "otp" || m === "order_id") ? (
+              <IdentityForm identity={identity} methods={identityRequest.methods} />
             ) : (
               <div className="mew-error" role="status">Please log in on the shop's site to continue.</div>
             ))}

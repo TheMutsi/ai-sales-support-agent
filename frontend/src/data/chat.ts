@@ -50,10 +50,10 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
     async load() {
       try {
         const messages = await withSession((session) => api.messages(session));
-        // The stored request does not say which methods it offered; one-time codes are the one
-        // the backend supports for now, so a reload offers that again.
+        // The stored request does not say which methods it offered, so a reload offers both: the
+        // server decides what a proof is worth, and a method the tenant removed just fails.
         const pending = messages.at(-1)?.kind === "identity_request";
-        update({ ...state, messages, error: null, identity: pending ? { methods: ["otp"] } : null });
+        update({ ...state, messages, error: null, identity: pending ? { methods: ["otp", "order_id"] } : null });
       } catch {
         update({ ...state, error: "Could not load the conversation." });
       }

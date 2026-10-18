@@ -64,6 +64,18 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
       return toSession(await response.json());
     },
 
+    /**
+     * A weaker proof than a code: an email and one of its orders. The session it gives can read
+     * that order and nothing about the customer. Any mismatch is the same generic 401.
+     */
+    async orderLookup(email: string, orderId: string, current?: string): Promise<Session> {
+      const response = await request("/auth/order-lookup", {
+        body: { api_key: apiKey, email, order_id: orderId },
+        token: current,
+      });
+      return toSession(await response.json());
+    },
+
     async messages(session: Session): Promise<ChatMessage[]> {
       const response = await request(`/conversations/${session.conversationId}/messages`, {
         method: "GET",

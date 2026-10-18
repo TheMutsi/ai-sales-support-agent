@@ -149,7 +149,7 @@ describe("chat", () => {
     const stored = (kind: "text" | "identity_request") => [{ id: "seq-2", role: "assistant" as const, kind, content: "Please verify" }];
     const pending = setup(fakeApi({ messages: vi.fn(async () => stored("identity_request")) }));
     await pending.load();
-    expect(pending.getState().identity).toEqual({ methods: ["otp"] });
+    expect(pending.getState().identity).toEqual({ methods: ["otp", "order_id"] });
     const answered = setup(fakeApi({ messages: vi.fn(async () => stored("text")) }));
     await answered.load();
     expect(answered.getState().identity).toBeNull();

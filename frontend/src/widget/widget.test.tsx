@@ -88,8 +88,8 @@ describe("IdentityForm", () => {
   };
 
   it("asks for the email, then the code, and verifies both", async () => {
-    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => {}) };
-    mount(<IdentityForm identity={identity} />);
+    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => {}), verifyOrder: vi.fn(async () => {}) };
+    mount(<IdentityForm identity={identity} methods={["otp"]} />);
     set(container.querySelector("input")!, "ana@example.com");
     await submit();
     expect(identity.requestCode).toHaveBeenCalledWith("ana@example.com");
@@ -99,8 +99,8 @@ describe("IdentityForm", () => {
   });
 
   it("rejects a malformed email or short code without calling the server", async () => {
-    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => {}) };
-    mount(<IdentityForm identity={identity} />);
+    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => {}), verifyOrder: vi.fn(async () => {}) };
+    mount(<IdentityForm identity={identity} methods={["otp"]} />);
     set(container.querySelector("input")!, "not-an-email");
     await submit();
     expect(identity.requestCode).not.toHaveBeenCalled();
@@ -108,8 +108,8 @@ describe("IdentityForm", () => {
   });
 
   it("says only that the code did not work when verification fails", async () => {
-    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => { throw new Error("401"); }) };
-    mount(<IdentityForm identity={identity} />);
+    const identity = { requestCode: vi.fn(async () => {}), verify: vi.fn(async () => { throw new Error("401"); }), verifyOrder: vi.fn(async () => {}) };
+    mount(<IdentityForm identity={identity} methods={["otp"]} />);
     set(container.querySelector("input")!, "ana@example.com");
     await submit();
     set(container.querySelector("input")!, "123456");
@@ -187,3 +187,100 @@ describe("Composer attachments", () => {
     expect(container.querySelector('[role="alert"]')!.textContent).toMatch(/only png/i);
   });
 });
+
+describe("IdentityForm with an order number", () => {
+  const ORDER = "A1b2C3d4E5f6G7h8I9j0";
+  const stub = (overrides = {}) => ({
+    requestCode: vi.fn(async () => {}),
+    verify: vi.fn(async () => {}),
+    verifyOrder: vi.fn(async () => {}),
+    ...overrides,
+  });
+  const set = (input: HTMLInputElement, value: string) =>
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  const submit = async () => {
+    await act(async () => void container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  };
+  const click = async (label: RegExp) => {
+    const button = [...container.querySelectorAll("button")].find((b) => label.test(b.textContent ?? ""))!;
+    await act(async () => void button.click());
+  };
+
+  it("asks for the email first and then lets the visitor choose how to prove it", async () => {
+    const identity = stub();
+    mount(<IdentityForm identity={identity} methods={["otp", "order_id"]} />);
+    set(container.querySelector("input")!, "ana@example.com");
+    await submit();
+
+    expect(identity.requestCode).not.toHaveBeenCalled(); // nothing is sent until they choose
+    expect(container.textContent).toMatch(/email me a code/i);
+    expect(container.textContent).toMatch(/order number/i);
+
+    await click(/order number/i);
+    set(container.querySelector("input")!, ORDER);
+    await submit();
+    expect(identity.verifyOrder).toHaveBeenCalledWith("ana@example.com", ORDER);
+    expect(identity.requestCode).not.toHaveBeenCalled();
+  });
+
+  it("sends the code when the visitor chooses the code", async () => {
+    const identity = stub();
+    mount(<IdentityForm identity={identity} methods={["otp", "order_id"]} />);
+    set(container.querySelector("input")!, "ana@example.com");
+    await submit();
+    await click(/email me a code/i);
+
+    expect(identity.requestCode).toHaveBeenCalledWith("ana@example.com");
+    expect(container.textContent).toMatch(/code we emailed/i);
+  });
+
+  it("goes straight to the order number when it is the only method (a customer who has no order in the session)", async () => {
+    const identity = stub();
+    mount(<IdentityForm identity={identity} methods={["order_id"]} />);
+    set(container.querySelector("input")!, "ana@example.com");
+    await submit();
+
+    expect(container.textContent).toMatch(/order number/i);
+    expect(identity.requestCode).not.toHaveBeenCalled();
+  });
+
+  it("rejects an order number of the wrong shape without calling the server", async () => {
+    const identity = stub();
+    mount(<IdentityForm identity={identity} methods={["order_id"]} />);
+    set(container.querySelector("input")!, "ana@example.com");
+    await submit();
+    // The field keeps only letters and digits, so what is left of these is too short.
+    for (const bad of ["short", "A1b2C3d4E5f6G7h8I9j-", "é".repeat(20), ""]) {
+      set(container.querySelector("input")!, bad);
+      await submit();
+      expect(identity.verifyOrder).not.toHaveBeenCalled();
+      expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    }
+  });
+
+  it("keeps only the first 20 letters and digits of what is typed or pasted", () => {
+    mount(<IdentityForm identity={stub()} methods={["order_id"]} />);
+    set(container.querySelector("input")!, "ana@example.com");
+    act(() => void container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    set(container.querySelector("input")!, `  ${ORDER}-extra `);
+
+    expect(container.querySelector("input")!.value).toBe(ORDER);
+  });
+
+  it("says only that the email and order did not match, whatever went wrong", async () => {
+    const identity = stub({ verifyOrder: vi.fn(async () => { throw new Error("401"); }) });
+    mount(<IdentityForm identity={identity} methods={["order_id"]} />);
+    set(container.querySelector("input")!, "ana@example.com");
+    await submit();
+    set(container.querySelector("input")!, ORDER);
+    await submit();
+
+    expect(container.querySelector('[role="alert"]')!.textContent).toBe(
+      "We couldn't match that email and order number.",
+    );
+  });
+});
+
