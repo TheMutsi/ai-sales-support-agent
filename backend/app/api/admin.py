@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,14 +19,13 @@ from app.admin.permissions import (
     ROLE_PERMISSIONS,
     Permission,
     Role,
-    can_access_tenant,
 )
 from app.admin.session import (
     AdminSession,
-    AdminSessionError,
     issue_admin_token,
-    verify_admin_token,
 )
+from app.api.admin_conversations import router as conversations_router
+from app.api.admin_deps import error, require_permission, require_tenant_permission
 from app.auth.scopes import scope_override_problems
 from app.core.config import get_settings
 from app.core.origins import normalize_origin
@@ -37,48 +36,6 @@ from app.db.session import get_db
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 _ADMIN_SESSION_TTL = timedelta(hours=8)
-
-
-def _error(status: int, code: str) -> HTTPException:
-    return HTTPException(status_code=status, detail={"code": code})
-
-
-def _admin_session(authorization: Annotated[str | None, Header()] = None) -> AdminSession:
-    scheme, _, token = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise _error(401, "missing_session")
-    try:
-        return verify_admin_token(token.strip(), get_settings().session_signing_key)
-    except AdminSessionError as exc:
-        raise _error(401, exc.code) from None
-
-
-def require_permission(permission: Permission):
-    """A dependency that lets through a session whose role holds `permission`."""
-
-    def check(session: Annotated[AdminSession, Depends(_admin_session)]) -> AdminSession:
-        if permission not in ROLE_PERMISSIONS[session.role]:
-            raise _error(403, "forbidden")
-        return session
-
-    check.permission = permission  # type: ignore[attr-defined]  # read by the route-coverage test
-    return check
-
-
-def require_tenant_permission(permission: Permission):
-    """`require_permission` for routes about one tenant (`{tenant_id}` in the path): the session
-    must also be allowed to see that tenant."""
-
-    def check(
-        tenant_id: uuid.UUID,
-        session: Annotated[AdminSession, Depends(require_permission(permission))],
-    ) -> AdminSession:
-        if not can_access_tenant(session.role, session.tenant_id, tenant_id):
-            raise _error(403, "wrong_tenant")
-        return session
-
-    check.permission = permission  # type: ignore[attr-defined]
-    return check
 
 
 class TenantOption(BaseModel):
@@ -114,7 +71,7 @@ def placeholder_login(
     tenant_id = None
     if request.role is not Role.OPERATOR:
         if request.tenant_id is None or db.get(Tenant, request.tenant_id) is None:
-            raise _error(422, "tenant_required")
+            raise error(422, "tenant_required")
         tenant_id = request.tenant_id
     token, expires_at = issue_admin_token(
         role=request.role,
@@ -185,7 +142,7 @@ class TenantConfigUpdate(BaseModel):
 def _tenant_or_404(db: Session, tenant_id: uuid.UUID) -> Tenant:
     tenant = db.get(Tenant, tenant_id)
     if tenant is None:
-        raise _error(404, "tenant_not_found")
+        raise error(404, "tenant_not_found")
     return tenant
 
 
@@ -208,7 +165,7 @@ def update_config(
     tenant = _tenant_or_404(db, tenant_id)
     if "allowed_origins" in update.model_fields_set:
         if update.allowed_origins is None:  # unlike scope_overrides, there is no "clear"
-            raise _error(422, "allowed_origins_cannot_be_null")
+            raise error(422, "allowed_origins_cannot_be_null")
         tenant.allowed_origins = update.allowed_origins
     if "scope_overrides" in update.model_fields_set:
         tenant.scope_overrides = update.scope_overrides or None
@@ -216,3 +173,8 @@ def update_config(
     # The writer sees its own change at once; other instances within the TTL (ADR-0016).
     tenant_configs.invalidate()
     return tenant
+
+
+# Mounted one by one (not nested with `include_router`) so the route-coverage test can read each
+# route's dependencies; see tests/unit/test_admin_routes.py.
+ADMIN_ROUTERS = [router, conversations_router]
