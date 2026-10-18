@@ -37,8 +37,11 @@ class CaseSession:
 
 
 class CaseSessions:
-    def __init__(self, db: Session, emails: Iterable[str]):
+    def __init__(
+        self, db: Session, emails: Iterable[str], order_lookup_emails: Iterable[str] = ()
+    ):
         wanted = {email for email in emails if email}
+        order_lookup_emails = {email for email in order_lookup_emails if email}
         tenant = db.execute(
             select(Tenant).where(Tenant.api_key == DEV_TENANT_API_KEY)
         ).scalar_one_or_none()
@@ -60,6 +63,11 @@ class CaseSessions:
                     .where(Customer.email.in_(wanted), Customer.tenant_id == tenant.id)
                 ).all()
             }
+        # A customer with no seeded order cannot back an order lookup case: fail before the run
+        # starts, like a missing customer, not with a KeyError in the middle of it.
+        without_order = sorted(self._customers.keys() - self._orders.keys())
+        if without_order and tenant is not None and order_lookup_emails & set(without_order):
+            raise ValueError(f"customers with no order to look up (re-run the seed): {without_order}")
         missing = sorted(wanted - self._customers.keys())
         if missing:
             raise ValueError(

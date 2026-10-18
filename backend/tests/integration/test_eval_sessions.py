@@ -151,3 +151,12 @@ def test_an_order_lookup_case_can_name_an_order_that_does_not_exist(seeded_db):
 
     assert _claims(session).order_id == "n" * 20
 
+
+def test_a_customer_with_no_order_fails_an_order_lookup_run_before_it_starts(seeded_db):
+    seeded_db.query(Order).delete()
+    seeded_db.commit()
+
+    with pytest.raises(ValueError, match="no order to look up"):
+        CaseSessions(seeded_db, [EMAIL], order_lookup_emails=[EMAIL])
+    CaseSessions(seeded_db, [EMAIL])  # a logged-in case needs no order
+

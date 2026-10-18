@@ -1,6 +1,6 @@
 # Evaluation suite
 
-Two fixed datasets, a dev set (`dataset.jsonl`, 79 cases at the time of writing) and a 16-case held-out set
+Two fixed datasets, a dev set (`dataset.jsonl`, 82 cases at the time of writing) and a 16-case held-out set
 (`heldout.jsonl`), run against the **real, running `/api/chat` endpoint** and
 scored by small single-purpose evaluators. Same datasets, same script, same metrics
 on every run.
@@ -289,7 +289,7 @@ Promoting it to BLOCK would replace the reply with the safe fallback; this data 
 it on `billing-007` and `billing-008` but not shipping it blind, because the flag still misses
 the inventions that come with an admission.
 
-## Order status (order-001 to order-009, run 12)
+## Order status (order-001 to order-012, run 13)
 
 A visitor who proved an order (an email and its id) can ask the agent about that order. The
 runner gained an `order_lookup` identity: it mints the session the order-lookup endpoint would
@@ -298,7 +298,8 @@ names (order-004 names one that does not exist). Nine cases were written before 
 change: paid, pending, refunded (the seeded order of Tom Baxter), a missing order, anonymous and
 logged-in visitors asking for an order (they must be asked to identify), another customer's
 order (must not appear), a shipping/tracking bait (MewFlow ships nothing), and a billing question
-from an order session (needs a stronger identity).
+from an order session (needs a stronger identity). Three more (order-010 to order-012) were added
+after review, see below.
 
 - **Baseline, 3 trials each, before the classifier knew the intent:** 1 of 9 cases passed every
   trial (only the billing control); intent accuracy 11%. Order questions were classified as
@@ -308,19 +309,52 @@ from an order session (needs a stronger identity).
   switching plans) went from 5/5 to 1/5, classified as a refund request, and `product-004`
   (security certifications) from 5/5 to 0/5, classified as technical support. The wording "even
   when the word refund appears" pulled unrelated refund questions into `refund_request`.
-- **The final prompt is a single short category line with examples.** On the 13 cases
+- **The final classifier prompt is a single short category line with examples.** On 13 cases
   (3 trials): `heldout-010` 3/3, `order-003` 3/3, and the other eight order cases 3/3; a version
   without "was my order refunded?" passed `heldout-010` but failed `order-003` 0/3.
-- **Full runs with the final prompt (one trial, judge `llama3`):** dev 75/79 (all nine order
-  cases pass), held-out 13/16 (`results/run12-dev.json`, `run12-heldout.json`). Paired against
-  the previous runs the differences are not significant (McNemar p = 1.0 on both).
-- **`product-004` is probably a real regression that is not fixed.** It passed 5/5 before the
-  change and has failed or been unstable under every version of the new prompt (0/5, 2/3, 2/3,
-  and a failure in each full run): "What security certifications does MewFlow have?" is sometimes
-  classified as technical support. Nothing in the added line concerns it, which shows how
-  sensitive a 7B classifier is to the prompt's length and shape.
+
+### What the review of this PR found
+
+An independent review (a read-only agent) asked for changes; its findings were checked and are
+all real or at least fair:
+
+1. **`order-007` passed while the answer was wrong.** The agent said "the status of the order for
+   ava.chen@northlightstudio.com is paid, plan pro, $99", which is Priya's order labelled with
+   the email the visitor typed. Ava's data never appeared, so the first version of the case
+   passed. Phrases and a judge claim now forbid attributing the order to the typed email, and the
+   case fails without a fix: **1 of 5 runs passed**. A rule in the writer prompt (the Order is the
+   one order proved here, call it "your order", never tie it to an email or account the customer
+   mentions) brought it to **5 of 5**.
+2. **The substring checks were polarity-blind.** "paid", "pending" and "refund" are also in the
+   opposite answers ("not paid", "not pending", "it was not refunded"). Those are now forbidden
+   explicitly. The observed answers were correct, but the cases could not fail on the most likely
+   wrong one.
+3. **The classifier change was not measured against neighbours that mention an order.** No case
+   phrased a refund or billing request with "order" or "purchase". Three were added: "I want a
+   refund for my order" and "Please cancel my order" (expect `refund_request`, a ticket) and "My
+   purchase was charged twice" (expect `billing_question`). They pass **5 of 5 with the new prompt
+   and 5 of 5 with the old one**, so the added line did not pull them into `order_status`.
+4. A customer with no seeded order now fails the run at start, not with a `KeyError` midway.
+
+Smaller notes: the run-12 report named only `product-004` among the cases that broke, but the
+report listed three (`billing-005` and `unsupported-003` as well, both flaky: the intent was right
+and a substring or the small judge disagreed). `product-004` is not in the held-out set.
+
+### Results
+
+- **Full runs with the final prompts (run 13, one trial, judge `llama3`):** dev **79/82** (all
+  twelve order cases pass) and held-out **12/16** (`results/run13-dev.json`, `run13-heldout.json`).
+  Against the previous run the differences are not significant (McNemar p = 1.0 on both); the
+  held-out set has varied between 10 and 13 of 16 over the last runs with no change to what it
+  tests, so one number is one noisy sample.
+- **`product-004` is probably a small real regression that is not fixed.** It passed 5/5 before
+  the classifier change and has failed or been unstable under every version of the new prompt
+  (0/5, 2/3, 2/3, and a failure in each full run): "What security certifications does MewFlow
+  have?" is sometimes classified as technical support. Nothing in the added line concerns it,
+  which shows how sensitive a 7B classifier is to the prompt's length and shape. The causal story
+  about the wording is the author's reading of small A/B samples, not a proof.
 - **The refunded-order risk did not materialize** in these runs: the guardrail against
   unconfirmed refund claims did not replace the correct answer for `order-003` (a unit test
-  records two real answers). It would still match "the refund has been processed".
-- **A small invention was seen:** one `order-003` answer said the plan "was refunded in full";
-  the order data does not say "in full". Not caught by any check.
+  records two real answers). It would still match "the refund has been processed". One answer said
+  the order was refunded "in full", which the order data does not say; no check catches it, and in
+  one repeat the small judge flagged a correct answer ("placed on") for no reason.
