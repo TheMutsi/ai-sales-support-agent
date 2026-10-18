@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.customers import router as customers_router
@@ -40,3 +41,9 @@ app.include_router(health_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
+
+# The back office login is a placeholder (anyone may ask for any role), so its API exists only when
+# switched on in a local environment, until a real login does (ADR-0016). It is not in the CORS
+# methods on purpose: the back office reaches it through its dev server's proxy.
+if settings.admin_api_is_mounted:
+    app.include_router(admin_router, prefix="/api")

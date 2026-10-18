@@ -78,3 +78,25 @@ def scopes_for(
             granted -= _CUSTOMER_BOUND
         return granted
     return DEFAULT_LEVEL_SCOPES[level]
+
+
+def scope_override_problems(overrides: Mapping[str, Sequence[str]]) -> list[str]:
+    """What is wrong with a tenant's overrides, for the back office to refuse them up front.
+    `scopes_for` drops these silently at request time (a typo must never widen access); an
+    administrator saving them should be told instead of believing they took effect."""
+    known_scopes = {s.value for s in Scope}
+    levels = {level.value: level for level in IdentityLevel}
+    problems = []
+    for level_name, scope_names in overrides.items():
+        if level_name not in levels:
+            problems.append(f"unknown identity level {level_name!r}")
+            continue
+        for name in scope_names:
+            if name not in known_scopes:
+                problems.append(f"unknown scope {name!r} for {level_name}")
+            elif (
+                levels[level_name] in _LEVELS_WITHOUT_A_CUSTOMER
+                and Scope(name) in _CUSTOMER_BOUND
+            ):
+                problems.append(f"{name} cannot be granted at {level_name}: it proves no customer")
+    return problems
