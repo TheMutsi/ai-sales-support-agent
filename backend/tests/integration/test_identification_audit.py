@@ -204,17 +204,58 @@ def test_an_unknown_api_key_leaves_no_record_because_there_is_no_shop_to_attribu
 
 
 def test_no_record_holds_a_code_the_email_an_order_id_or_a_token(shop, sender):
+    """Every outcome of every method, successes and failures: a failure path that stored what the
+    visitor typed would otherwise go unnoticed."""
     _request_code(shop["api_key"])
     _verify(shop["api_key"], sender.sent[0][1])
+    _verify(shop["api_key"], "000000")
+    _request_code(shop["api_key"], "mallory@shop.test")
     _lookup(shop["api_key"])
+    _lookup(shop["api_key"], email="mallory@shop.test")
+    _lookup(shop["api_key"], order_id="n" * 20)
     token = _store_token(shop["secret"])
     _store_login(shop["api_key"], token)
+    expired = _store_token(shop["secret"], exp=1)
+    _store_login(shop["api_key"], expired)
+    _store_login(shop["api_key"], _store_token(shop["secret"], sub="ghost"))
 
-    secrets_ = [sender.sent[0][1], EMAIL, "ana", ORDER_ID, token, shop["secret"]]
-    for event in _events():
+    secrets_ = [
+        sender.sent[0][1], EMAIL, "ana", "mallory", ORDER_ID, "n" * 20, token, expired, shop["secret"],
+    ]
+    events = _events()
+    assert {(e.method, e.outcome) for e in events} >= {
+        ("otp", "code_sent"), ("otp", "succeeded"), ("otp", "failed"),
+        ("order_id", "succeeded"), ("order_id", "failed"),
+        ("store_login", "succeeded"), ("store_login", "failed"),
+    }
+    for event in events:
         stored = " ".join(str(v) for v in vars(event).values() if not str(v).startswith("<"))
         for secret in secrets_:
             assert secret not in stored, f"{secret!r} found in {event.method}/{event.outcome}"
+
+
+def test_an_order_is_grouped_by_what_the_visitor_typed_whatever_the_shop_calls_it(shop):
+    """The shop may return its own spelling of an id (case, a prefix); the failure path can only
+    hash what was typed, so the success path must too or one order would get two hashes."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.auth.login import login_with_order
+    from app.schemas.orders import OrderDetails, OrderStatus
+
+    canonical = OrderDetails(
+        order_id="A" * 20, customer_email=EMAIL, plan_slug="starter", amount_cents=2900,
+        currency="usd", status=OrderStatus.PAID, created_at=datetime.now(UTC),
+    )
+    with SessionLocal() as db:
+        login_with_order(
+            db, api_key=shop["api_key"], email=EMAIL, order_id="a" * 20, order=canonical,
+            conversation_id=None, session_key=get_settings().session_signing_key,
+            session_ttl=timedelta(hours=1),
+        )
+
+    assert _only_event().order_hmac == audit.hmac_value(
+        get_settings().session_signing_key, "order", "a" * 20
+    )
 
 
 # --- the audit never decides ---------------------------------------------------------------------
@@ -231,3 +272,17 @@ def test_a_failure_to_write_the_record_does_not_stop_a_login_and_is_logged(shop,
 
     assert response.status_code == 200
     assert "identification audit" in caplog.text
+
+
+def test_a_failure_while_building_the_record_does_not_stop_a_login_either(shop, monkeypatch, caplog):
+    def broken(email):
+        raise ValueError("odd input")
+
+    monkeypatch.setattr(audit, "mask_email", broken)
+
+    with caplog.at_level("ERROR"):
+        response = _lookup(shop["api_key"])
+
+    assert response.status_code == 200
+    assert "identification audit" in caplog.text
+

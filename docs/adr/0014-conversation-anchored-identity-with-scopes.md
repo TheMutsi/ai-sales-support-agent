@@ -72,11 +72,14 @@ which), and a request is then checked against its own tenant's list.
 **Audit record.** Every attempt to identify (a code requested or checked, an order looked up, the
 shop's login) writes one row to `identification_events`: how, what came of it and, for a failure,
 why (`unknown_customer`, `email_mismatch`, `order_not_found`, `token_expired`...). The reason stays
-in the table; the visitor still gets the same generic answer. A row holds the tenant, the
+in the table. For codes and orders the visitor still gets the same generic answer; the shop's
+login keeps its existing distinct codes (`token_expired` is how the widget knows to ask the shop
+for a fresh token), which are not new information. A row holds the tenant, the
 conversation, the customer when a code or the shop's login proved one (never for an order), the
 email **masked** (`a***@n***.com`) and an **HMAC** of the email (to group attempts by the same
-address) and of an order id. It never holds a code, a token, a full email or a full order id, and
-a test scans every column for them. With the identity requests already stored as messages
+address) and of an order id (hashed as the visitor typed it, in successes and failures alike). It never holds a code, a token, a full email or a full order id, and
+a test scans every column of the rows of every outcome (a success and a failure for each
+method) for them. With the identity requests already stored as messages
 (`kind=identity_request`), the timeline of a conversation is those messages joined with these rows
 by `conversation_id`. Writing a row never decides a login: if it fails, the attempt carries on
 and the failure is logged. The caller's session on the code request ties that row to its

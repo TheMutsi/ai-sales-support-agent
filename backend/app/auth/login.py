@@ -229,8 +229,10 @@ def login_with_order(
     The session names the order and nothing else: the customer behind it is not attached, so
     an order id, which leaks easily, can never open the account."""
     tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
+    # The hash is of what the visitor typed, in the failure and the success branch alike: the shop
+    # may spell the id its own way, and one order must not get two hashes.
     reason = (
-        "unknown_key"
+        "unknown_key"  # (never written: with no tenant there is nothing to attribute it to)
         if tenant is None
         else "order_not_found"
         if order is None
@@ -250,7 +252,7 @@ def login_with_order(
     )
     audit.record(
         db, key=session_key, tenant_id=tenant.id, method="order_id", outcome="succeeded",
-        email=email, order_id=order.order_id, conversation_id=conversation.id,
+        email=email, order_id=order_id, conversation_id=conversation.id,
     )
     return _session_response(
         tenant,
