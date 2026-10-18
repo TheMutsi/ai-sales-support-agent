@@ -187,6 +187,7 @@ Known and deliberately left for later; none of it matters for the portfolio demo
 
 - **Retention job.** Archive messages of conversations inactive for more than 7 days to another table, purge anonymous conversations sooner (about 5k conversations a day x 10 messages), and purge `identification_events` after 90 days. Until it exists the audit table and the messages only grow.
 - **Real email provider for one-time codes.** An SMTP sender behind the existing `OtpSender` interface; its settings (host, port, credentials, from address) are to live in the back office, per tenant or global. Outside local environments the API refuses to send codes at all until then, and the dev sender prints the code to the log.
+- **A real back office login.** The back office starts with a placeholder login (an "Enter" button and a role picker) and its API is mounted only in local environments; passwords, one-time codes or SSO still have to be chosen and built, and until then it must not be reachable in a deployment (ADR-0016).
 - **Real secrets.** `SESSION_SIGNING_KEY` and `AUDIT_HMAC_KEY`, each at least 32 characters and different from each other (the API refuses to start otherwise outside local environments); the dev tenant's public key and secret must not exist in a real database (the seed already skips them).
 - **Tenant secrets at rest.** HS256 needs the raw key, so tenant secrets are stored in the clear; encrypt them at rest.
 - **Rate limits and origins** are estimates without traffic behind them; set `TRUSTED_PROXY_COUNT` for the real proxy chain.

@@ -3,6 +3,7 @@
 import pytest
 from sqlalchemy.orm import Session
 
+from app.core.tenant_config import tenant_configs
 from app.db.models import (
     Conversation,
     Customer,
@@ -62,6 +63,15 @@ def _wipe_commercial_tables(session: Session) -> None:
     session.query(Tenant).delete()
     session.query(Plan).delete()
     session.commit()
+
+
+@pytest.fixture(autouse=True)
+def fresh_tenant_configs():
+    """The tenants' configuration is cached; every test builds its own tenants, so none may see a
+    snapshot a previous one loaded."""
+    tenant_configs.clear()
+    yield
+    tenant_configs.clear()
 
 
 @pytest.fixture

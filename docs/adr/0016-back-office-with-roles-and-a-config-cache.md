@@ -1,6 +1,6 @@
 # ADR-0016: The back office has roles from the start, a placeholder login, and a cache for tenant configuration
 
-- **Status:** Proposed (agreed with the owner; implementation in progress)
+- **Status:** Proposed (agreed with the owner; the cache is built, the rest is in progress)
 - **Introduced in:** Stage 12 (the back office)
 
 ## Context
@@ -37,9 +37,20 @@ the back office.
   another's id.
 - **A cache for tenant configuration** (`TenantConfigCache`): origins, scope overrides and the
   identity of a tenant by API key, read through a small in-process cache with a short TTL, and
-  **invalidated explicitly when the back office writes**. The origin guard and the scope lookup
-  hit the database on every request today, and the CORS layer reads every tenant's origins on
-  every preflight.
+  **invalidated explicitly when the back office writes**. The origin guard (per request) and the
+  scope lookup (per chat turn) read the database every time: 99 reads of `tenants` for 100
+  authenticated requests, measured (`backend/scripts/count_tenant_reads.sh` reproduces it). The CORS layer already had its own one-minute cache of the
+  origin list; the new cache replaces it, so there is one cache, not two. One snapshot of every
+  tenant serves all the lookups; it also reloads, at most once every few seconds, when a lookup
+  finds nothing, because an unknown tenant skips the origin check and a tenant created a moment
+  ago must not look unknown.
+  **When the database cannot be read it fails closed**: known tenants keep working from the old
+  snapshot and the database is tried again after a pause (not on every request), but a lookup that
+  finds nothing cannot be reported as "unknown", because an unknown tenant skips the origin check.
+  It raises, and the API answers 503 `configuration_unavailable`; the chat reads the tenant's scope
+  overrides before opening a turn, so ignoring overrides that may restrict a visitor never happens
+  and no conversation is left locked. Requests with no `Origin` header, which were never checked,
+  do not need the cache at all, and the CORS layer (on the event loop) never waits for a reload.
 - **Credentials entered in the back office (an SMTP password, a shop's orders API key) are
   encrypted at rest** with an application key, and are write-only: the back office can replace
   them and shows that one is set, never its value.
@@ -75,7 +86,7 @@ Everything above. See the roadmap in `CLAUDE.md`.
 - **A shared cache (Redis) from the start.** Fixes the delay across instances but adds a service
   for configuration that rarely changes; the in-process cache has the same interface and can be
   swapped.
-- **No cache.** Simple, and the origin guard keeps reading every tenant on every request.
+- **No cache.** Simple, and the origin guard keeps reading the database on every request.
 
 ## References
 
