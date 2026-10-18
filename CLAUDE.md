@@ -53,6 +53,7 @@ backend/
   evaluation/           # dataset.jsonl (dev), heldout.jsonl, run_eval.py, metrics.py, llm_judge.py [AI writes, per owner's Stage 9 call]
   tests/                # unit/, integration/, evaluation/
 frontend/               # Mew widget: Vite + React, one script mew.js [AI writes]
+backoffice/             # the back office: Vite + React app over /api/admin (placeholder login, ADR-0016) [AI writes]
 docs/                   # architecture.md (diagrams) and adr/ (architecture decision records)
 docker-compose.yml, Dockerfile(s), .env.example, README.md
 ```
@@ -168,6 +169,10 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 - [x] Stage 9 — Evaluation dataset + script (AI-written per owner's call, like Stage 3 — the owner reviewed the design and the dataset; see `backend/evaluation/README.md` for methodology and known limitations) — run against the real API before the frontend exists, so agent quality is validated before UI polish
 - [x] Stage 10 — Chat widget (**Mew**). **10a backend (done, see below)** and **10b the widget (done, see below)**
 - [x] Stage 11 — README, diagrams, demo scenarios (`docs/demo.md`), known limitations. The visual design pass of the widget and the README is left for later (the owner will define it); the open backlog is below
+
+### Stage 12 status (the back office, in progress)
+
+Built: the tenant configuration cache, the admin API (`/api/admin`: roles and permissions per action, placeholder login, tenant list, tenant configuration; mounted only with `ADMIN_API_ENABLED=true` in a local environment) and the `backoffice/` shell (login pending page with a role picker, tenant combo, configuration page). Next: secrets and integrations, a viewer of conversations and messages, an inbox of escalations (ADR-0016).
 
 ### Stage 10b status (the widget)
 

@@ -72,3 +72,25 @@ jobs:
 
       - name: Typecheck and build
         run: npm run build
+
+  backoffice:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backoffice
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backoffice/package-lock.json
+
+      - run: npm ci
+
+      - name: Test (vitest)
+        run: npm test
+
+      - name: Typecheck and build
+        run: npm run build

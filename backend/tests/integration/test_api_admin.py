@@ -40,6 +40,12 @@ def test_a_request_without_a_session_is_refused(shops):
     assert client.get(f"/api/admin/tenants/{a}/config").status_code == 401
 
 
+def test_the_login_lists_tenants_by_name_only(shops):
+    options = client.get("/api/admin/login-options").json()
+    assert sorted(o["name"] for o in options) == ["Shop A", "Shop B"]
+    assert all(set(o) == {"id", "name"} for o in options)
+
+
 def test_a_non_operator_must_name_an_existing_tenant(shops):
     assert client.post("/api/admin/session", json={"role": "admin"}).status_code == 422
     missing = "00000000-0000-0000-0000-000000000000"

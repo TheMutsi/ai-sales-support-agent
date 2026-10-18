@@ -81,6 +81,18 @@ def require_tenant_permission(permission: Permission):
     return check
 
 
+class TenantOption(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+@router.get("/login-options", response_model=list[TenantOption])
+def placeholder_login_options(db: Annotated[Session, Depends(get_db)]) -> list[Tenant]:
+    """The tenants a placeholder login can pick, before there is a session to list them with.
+    Goes away with the placeholder."""
+    return list(db.scalars(select(Tenant).order_by(Tenant.name)))
+
+
 class AdminLoginRequest(BaseModel):
     role: Role
     tenant_id: uuid.UUID | None = None  # required for every role but the operator
