@@ -89,8 +89,12 @@ which), and a request is then checked against its own tenant's list.
   an email plus the id of one of its orders, one generic 401 for every failure, a session that
   names that one order and never the customer, and a conversation left unlinked so a one-time
   code can still claim it later); orders come from the async `OrderSource` interface, with a
-  simulated table behind it. Still missing: an `order_status` intent and tool that read the
-  order, and the widget form for the `order_id` method.
+  simulated table behind it. The agent's `order_status` intent reads that order (the tenant and
+  the order id come from the session, never from the message). Still missing: the widget form
+  for the `order_id` method. Two consequences to know: a customer verified with a code who asks
+  about an order has no order in the session, so the agent asks for one and offers only the
+  order form; and if they submit it, the new session is an `order_lookup` one with no customer,
+  so they lose the account scopes until they verify again (a narrowing, not a leak).
 - An audit record of the identification steps (the email asked for, given, and which
   method proved identity), without ever storing the code.
 - A real email provider for the codes (outside local environments sending fails loudly).

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, computed_field, model_validator
 
 from app.schemas.agent import Intent
 from app.schemas.chat import ChatMessage, ChatTurnSummary
+from app.schemas.orders import ORDER_ID_PATTERN
 
 
 class EvalScenario(StrEnum):
@@ -40,6 +41,8 @@ class EvalScenario(StrEnum):
     # An anonymous visitor: what they can ask without identifying, and when the assistant
     # must ask them to identify first.
     ANONYMOUS_VISITOR = "anonymous_visitor"
+    # Asking about an order: what the agent may read, say and refuse for someone who proved one.
+    ORDER_STATUS = "order_status"
 
 
 class EvalIdentity(StrEnum):
@@ -48,6 +51,8 @@ class EvalIdentity(StrEnum):
 
     STORE_LOGIN = "store_login"
     ANONYMOUS = "anonymous"
+    # Proved an order (an email and its id): the session names that order and no customer.
+    ORDER_LOOKUP = "order_lookup"
 
 
 class EvalMetric(StrEnum):
@@ -75,8 +80,11 @@ class EvalCase(BaseModel):
     id: str
     scenario: EvalScenario
     identity: EvalIdentity = EvalIdentity.STORE_LOGIN
-    # Required for a logged-in case, ignored for an anonymous one.
+    # Required for a logged-in case, ignored for an anonymous one. For an order lookup it names
+    # whose seeded order the session proves.
     customer_email: str | None = None
+    # An order lookup can name an order directly instead (e.g. one that does not exist).
+    order_id: str | None = Field(default=None, pattern=ORDER_ID_PATTERN)
     messages: list[ChatMessage] = Field(min_length=1)
 
     expected_intent: Intent | None = None
@@ -103,6 +111,12 @@ class EvalCase(BaseModel):
     def _logged_in_cases_name_their_customer(self) -> "EvalCase":
         if self.identity is EvalIdentity.STORE_LOGIN and not self.customer_email:
             raise ValueError("a logged-in case needs a customer_email")
+        return self
+
+    @model_validator(mode="after")
+    def _order_lookup_cases_name_an_order(self) -> "EvalCase":
+        if self.identity is EvalIdentity.ORDER_LOOKUP and not (self.customer_email or self.order_id):
+            raise ValueError("an order lookup case needs a customer_email or an order_id")
         return self
 
     @model_validator(mode="after")

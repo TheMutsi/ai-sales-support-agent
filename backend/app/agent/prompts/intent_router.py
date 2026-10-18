@@ -18,6 +18,9 @@ Categories:
 - small_talk: ONLY a greeting, a thank-you or a goodbye ("Thanks!", "Hi", "That's
   all, bye"). It never asks for anything: any question or request, even an
   off-topic one, is not small_talk.
+- order_status: asks about the state of one order or purchase they made ("what is the
+  status of my order?", "has my order gone through?", "where is my order?", "was my
+  order refunded?").
 - unsupported: not about MewFlow, or there isn't enough information to tell.
 
 Boundaries that are easy to get wrong:
