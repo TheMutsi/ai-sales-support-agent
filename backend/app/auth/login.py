@@ -105,7 +105,7 @@ def login_with_store_token(
 
     def failed(reason: str, code: str, status_code: int) -> LoginError:
         audit.record(
-            db, key=session_key, tenant_id=tenant.id, method="store_login", outcome="failed",
+            db, tenant_id=tenant.id, method="store_login", outcome="failed",
             reason=reason, conversation_id=conversation_id,
         )
         return LoginError(code, status_code)
@@ -132,7 +132,7 @@ def login_with_store_token(
         now=datetime.now(UTC),
     )
     audit.record(
-        db, key=session_key, tenant_id=tenant.id, method="store_login", outcome="succeeded",
+        db, tenant_id=tenant.id, method="store_login", outcome="succeeded",
         customer_id=customer.id, conversation_id=conversation.id,
     )
     return _session_response(
@@ -157,7 +157,7 @@ def send_otp(
         return
     result = request_otp(db, tenant=tenant, email=email, sender=sender, key=key, now=datetime.now(UTC))
     audit.record(
-        db, key=key, tenant_id=tenant.id, method="otp",
+        db, tenant_id=tenant.id, method="otp",
         outcome="code_sent" if result == "sent" else "failed",
         reason=None if result == "sent" else result, email=email, conversation_id=conversation_id,
     )
@@ -181,7 +181,7 @@ def login_with_otp(
         customer = verify_otp(db, tenant=tenant, email=email, code=code, key=session_key, now=now)
     except OtpError as exc:
         audit.record(
-            db, key=session_key, tenant_id=tenant.id, method="otp", outcome="failed",
+            db, tenant_id=tenant.id, method="otp", outcome="failed",
             reason=exc.code, email=email, conversation_id=conversation_id,
         )
         raise
@@ -195,7 +195,7 @@ def login_with_otp(
         now=now,
     )
     audit.record(
-        db, key=session_key, tenant_id=tenant.id, method="otp", outcome="succeeded", email=email,
+        db, tenant_id=tenant.id, method="otp", outcome="succeeded", email=email,
         customer_id=customer.id, conversation_id=conversation.id,
     )
     return _session_response(
@@ -242,7 +242,7 @@ def login_with_order(
     )
     if reason is not None:
         audit.record(
-            db, key=session_key, tenant_id=tenant.id if tenant else None, method="order_id",
+            db, tenant_id=tenant.id if tenant else None, method="order_id",
             outcome="failed", reason=reason, email=email, order_id=order_id,
             conversation_id=conversation_id,
         )
@@ -251,7 +251,7 @@ def login_with_order(
         db, tenant_id=tenant.id, conversation_id=conversation_id, now=datetime.now(UTC)
     )
     audit.record(
-        db, key=session_key, tenant_id=tenant.id, method="order_id", outcome="succeeded",
+        db, tenant_id=tenant.id, method="order_id", outcome="succeeded",
         email=email, order_id=order_id, conversation_id=conversation.id,
     )
     return _session_response(

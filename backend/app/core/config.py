@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Signs the sessions `POST /api/auth/login` issues. The default is a local-dev
     # convenience only; `_require_real_session_key` refuses it outside local envs.
     session_signing_key: str = _DEV_SESSION_KEY
+    # Keys the email and order hashes of `identification_events`, so rotating the session key does
+    # not change every hash and a leaked session key does not make them guessable. Empty means
+    # "use the session key", allowed in local environments only.
+    audit_hmac_key: str = ""
     session_ttl_seconds: int = 24 * 3600
     # How many reverse proxies sit in front of the API and append to X-Forwarded-For. 0 means
     # the header is ignored (anyone can send it) and the socket peer is the client.
@@ -86,6 +90,23 @@ class Settings(BaseSettings):
                 f"SESSION_SIGNING_KEY must be at least {_MIN_SESSION_KEY_LENGTH} characters."
             )
         return self
+
+    @model_validator(mode="after")
+    def _require_a_real_audit_key(self) -> "Settings":
+        key = self.audit_hmac_key
+        if not key:
+            if self.app_env not in LOCAL_ENVIRONMENTS:
+                raise ValueError("AUDIT_HMAC_KEY must be set to a real secret outside local envs.")
+            return self
+        if len(key) < _MIN_SESSION_KEY_LENGTH:
+            raise ValueError(f"AUDIT_HMAC_KEY must be at least {_MIN_SESSION_KEY_LENGTH} characters.")
+        if key == self.session_signing_key:
+            raise ValueError("AUDIT_HMAC_KEY must differ from SESSION_SIGNING_KEY.")
+        return self
+
+    @property
+    def audit_key(self) -> str:
+        return self.audit_hmac_key or self.session_signing_key
 
 
 @lru_cache

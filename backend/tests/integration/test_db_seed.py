@@ -87,7 +87,7 @@ def test_seed_skips_the_dev_tenant_outside_local_environments(db: Session, monke
     """A well-known secret must never be written to a real deployment's database."""
     from app.db import seed as seed_module
 
-    production = Settings(app_env="production", session_signing_key="p" * 32)
+    production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32)
     monkeypatch.setattr(seed_module, "get_settings", lambda: production)
 
     seed(db)
