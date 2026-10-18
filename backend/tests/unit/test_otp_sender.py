@@ -18,7 +18,7 @@ def test_local_environments_get_the_dev_sender():
 
 
 def test_other_environments_refuse_to_log_codes_until_a_real_provider_exists():
-    production = Settings(app_env="production", session_signing_key="p" * 32)
+    production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32)
 
     with pytest.raises(RuntimeError, match="email provider"):
         get_otp_sender(production)

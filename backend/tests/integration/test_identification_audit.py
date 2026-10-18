@@ -103,7 +103,7 @@ def test_asking_for_a_code_is_recorded_with_the_email_masked_and_hashed(shop, se
     assert (event.method, event.outcome) == ("otp", "code_sent")
     assert event.tenant_id == shop["tenant"].id
     assert event.email_masked == "a***@s***.test"
-    assert event.email_hmac == audit.hmac_value(get_settings().session_signing_key, "email", EMAIL)
+    assert event.email_hmac == audit.hmac_value(get_settings().audit_key, "email", EMAIL)
 
 
 def test_asking_for_a_code_for_an_unknown_email_is_recorded_as_failed_and_looks_the_same_outside(
@@ -162,7 +162,7 @@ def test_a_matching_order_is_recorded_without_the_order_id(shop):
     event = _only_event()
     assert (event.method, event.outcome) == ("order_id", "succeeded")
     assert event.email_masked == "a***@s***.test"
-    assert event.order_hmac == audit.hmac_value(get_settings().session_signing_key, "order", ORDER_ID)
+    assert event.order_hmac == audit.hmac_value(get_settings().audit_key, "order", ORDER_ID)
     assert str(event.conversation_id) == started["conversation_id"]
     assert event.customer_id is None, "an order proves one order, not the customer"
 
@@ -254,7 +254,7 @@ def test_an_order_is_grouped_by_what_the_visitor_typed_whatever_the_shop_calls_i
         )
 
     assert _only_event().order_hmac == audit.hmac_value(
-        get_settings().session_signing_key, "order", "a" * 20
+        get_settings().audit_key, "order", "a" * 20
     )
 
 
@@ -285,4 +285,20 @@ def test_a_failure_while_building_the_record_does_not_stop_a_login_either(shop, 
 
     assert response.status_code == 200
     assert "identification audit" in caplog.text
+
+
+def test_the_hashes_use_the_audit_key_not_the_session_key(shop, sender, monkeypatch):
+    from app.core.config import Settings
+
+    own = Settings(
+        app_env="production",
+        session_signing_key="s" * 40,
+        audit_hmac_key="a" * 40,
+    )
+    monkeypatch.setattr(audit, "get_settings", lambda: own)
+
+    _request_code(shop["api_key"])
+
+    assert _only_event().email_hmac == audit.hmac_value("a" * 40, "email", EMAIL)
+    assert _only_event().email_hmac != audit.hmac_value("s" * 40, "email", EMAIL)
 

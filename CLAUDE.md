@@ -181,6 +181,16 @@ Done (PRs #62 to #87; the last two, anonymous evaluation cases and allowed origi
 
 Identifying with an email and an order id is built end to end (PRs #102 to #106 and the widget form): the orders come from an async `OrderSource` interface with a simulated `orders` table behind it until the shop's API is wired, the session names that one order and never the customer, and the agent's `order_status` intent reads it. Identification attempts are recorded in `identification_events` (masked and hashed email, no code, no token, no full order id; see ADR-0014). Not built yet: a real email provider; the retention job (archive old messages, purge anonymous conversations).
 
+### Before production
+
+Known and deliberately left for later; none of it matters for the portfolio demo, all of it matters for a real deployment.
+
+- **Retention job.** Archive messages of conversations inactive for more than 7 days to another table, purge anonymous conversations sooner (about 5k conversations a day x 10 messages), and purge `identification_events` after 90 days. Until it exists the audit table and the messages only grow.
+- **Real email provider for one-time codes.** An SMTP sender behind the existing `OtpSender` interface; its settings (host, port, credentials, from address) are to live in the back office, per tenant or global. Outside local environments the API refuses to send codes at all until then, and the dev sender prints the code to the log.
+- **Real secrets.** `SESSION_SIGNING_KEY` and `AUDIT_HMAC_KEY`, each at least 32 characters and different from each other (the API refuses to start otherwise outside local environments); the dev tenant's public key and secret must not exist in a real database (the seed already skips them).
+- **Tenant secrets at rest.** HS256 needs the raw key, so tenant secrets are stored in the clear; encrypt them at rest.
+- **Rate limits and origins** are estimates without traffic behind them; set `TRUSTED_PROXY_COUNT` for the real proxy chain.
+
 ### Open backlog
 
 - Product-fact guardrail: `ungrounded_invoice_claim` flags invented invoice claims (FLAG only, it does not change the reply) and `unbacked_order_lookup` blocks order requests nothing can back. Open: decide whether to promote the invoice flag to BLOCK, and a check for the same kind of invention outside billing and for an admission followed by an invented detail. Written by the AI at the owner's request.

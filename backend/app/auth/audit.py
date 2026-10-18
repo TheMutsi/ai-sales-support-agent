@@ -16,6 +16,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.models import IdentificationEvent
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,6 @@ def _write(db: Session, event: IdentificationEvent) -> None:
 def record(
     db: Session,
     *,
-    key: str,
     tenant_id: uuid.UUID | None,
     method: str,
     outcome: str,
@@ -62,6 +62,7 @@ def record(
     if tenant_id is None:
         return
     try:
+        key = get_settings().audit_key
         _write(
             db,
             IdentificationEvent(
