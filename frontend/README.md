@@ -23,7 +23,9 @@ loaded; the real script replays the queue in order.
 | `Mew('config', { getToken, sound })` | `getToken`: see below. `sound: false` turns off the new-message ping |
 
 Without `getToken` the visitor is anonymous: they can ask knowledge-base questions, and
-identify with an emailed one-time code when the assistant needs to know who they are.
+identify when the assistant needs to know who they are: the email always comes first, then either an
+emailed one-time code or the number of one of their orders (which only lets the assistant read
+that order, not the account).
 
 ## Logging in a shop's customer
 
@@ -86,6 +88,6 @@ the dev tenant allows. A page opened from `file://` has the origin `null`, which
 - Image attachments are a preview only: nothing is uploaded or stored yet.
 - If a session expires mid-conversation, the retry opens a new conversation and the old
   messages stay on screen.
-- After a reload, the identity form offers the one-time code only (the stored request does not
-  record which methods it offered).
+- After a reload, the identity form offers both methods (the stored request does not record which
+  it offered); the server decides what a proof is worth.
 - The unread badge does not survive a page reload.

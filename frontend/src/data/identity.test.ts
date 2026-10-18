@@ -28,3 +28,30 @@ describe("identity with a one-time code", () => {
     expect(chat.resume).not.toHaveBeenCalled();
   });
 });
+
+describe("identity with an order number", () => {
+  const ORDER = "A1b2C3d4E5f6G7h8I9j0";
+
+  it("looks the order up with the current session, adopts the new one, then answers the waiting message", async () => {
+    const order: string[] = [];
+    const api = { orderLookup: vi.fn(async () => (order.push("lookup"), upgraded)) } as unknown as Api;
+    const auth = { currentToken: () => "anon", adopt: vi.fn(() => void order.push("adopt")) } as unknown as Auth;
+    const chat = { resume: vi.fn(async () => void order.push("resume")) } as unknown as Chat;
+
+    await createIdentity(api, auth, chat).verifyOrder("ana@example.com", ORDER);
+
+    expect(api.orderLookup).toHaveBeenCalledWith("ana@example.com", ORDER, "anon");
+    expect(order).toEqual(["lookup", "adopt", "resume"]);
+  });
+
+  it("changes nothing when the email and the order do not match", async () => {
+    const api = { orderLookup: vi.fn(async () => { throw new Error("401"); }) } as unknown as Api;
+    const auth = { currentToken: () => "anon", adopt: vi.fn() } as unknown as Auth;
+    const chat = { resume: vi.fn() } as unknown as Chat;
+
+    await expect(createIdentity(api, auth, chat).verifyOrder("ana@example.com", ORDER)).rejects.toThrow();
+    expect(auth.adopt).not.toHaveBeenCalled();
+    expect(chat.resume).not.toHaveBeenCalled();
+  });
+});
+
