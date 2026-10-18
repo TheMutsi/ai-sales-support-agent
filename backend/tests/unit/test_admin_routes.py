@@ -5,8 +5,8 @@ from fastapi.routing import APIRoute
 from app.admin.permissions import Permission
 from app.api.admin import router
 
-# The one route that cannot ask for a permission: it is how a session is obtained.
-OPEN_ROUTES = {("POST", "/admin/session")}
+# The routes that cannot ask for a permission: they are how a session is obtained.
+OPEN_ROUTES = {("POST", "/admin/session"), ("GET", "/admin/login-options")}
 
 
 def _permission_of(route: APIRoute) -> Permission | None:

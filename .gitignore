@@ -30,3 +30,4 @@ frontend/.env*.local
 
 # Local evaluation run output
 backend/evaluation/results/
+backoffice/dist/
