@@ -7,12 +7,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api import origins as origins_module
 from app.auth.conversations import resolve_for_login
 from app.auth.credentials import generate_api_key
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
 from app.core.config import get_settings
+from app.core.tenant_config import tenant_configs
 from app.db.models import Customer, Tenant
 from app.db.session import SessionLocal
 from app.main import app
@@ -21,13 +21,6 @@ client = TestClient(app)
 SHOP_A = "https://shop-a.example"
 SHOP_B = "https://shop-b.example"
 FIRST_PARTY = "http://localhost:5173"  # the app's own frontend, from CORS_ALLOW_ORIGINS
-
-
-@pytest.fixture(autouse=True)
-def fresh_registry():
-    origins_module.registry.clear()
-    yield
-    origins_module.registry.clear()
 
 
 def _tenant(db, origins):
@@ -129,25 +122,62 @@ def test_a_session_is_only_usable_from_its_tenants_origins(shops):
     assert stolen.status_code == 403 and stolen.json()["detail"] == {"code": "origin_not_allowed"}
 
 
-def test_a_new_origin_is_accepted_once_the_cache_expires(tenant_wipe, monkeypatch):
+def test_a_new_origin_is_accepted_once_the_cache_expires_or_is_invalidated(tenant_wipe, monkeypatch):
     now = [1000.0]
-    monkeypatch.setattr(origins_module.registry, "_clock", lambda: now[0])
+    monkeypatch.setattr(tenant_configs, "_clock", lambda: now[0])
     assert "access-control-allow-origin" not in _preflight(SHOP_A).headers
 
     with SessionLocal() as db:
         _tenant(db, [SHOP_A])
         db.commit()
     assert "access-control-allow-origin" not in _preflight(SHOP_A).headers  # still cached
-    now[0] += origins_module.CACHE_SECONDS + 1
+    now[0] += get_settings().tenant_config_ttl_seconds + 1
 
     assert _preflight(SHOP_A).headers["access-control-allow-origin"] == SHOP_A
+
+
+def test_an_origin_change_applies_at_once_when_the_cache_is_invalidated(tenant_wipe):
+    with SessionLocal() as db:
+        tenant = _tenant(db, [SHOP_A])
+        db.commit()
+        tenant_id = tenant.id
+    assert _preflight(SHOP_A).headers["access-control-allow-origin"] == SHOP_A
+
+    with SessionLocal() as db:
+        db.get(Tenant, tenant_id).allowed_origins = [SHOP_B]
+        db.commit()
+    assert _preflight(SHOP_A).headers.get("access-control-allow-origin") == SHOP_A  # cached
+    tenant_configs.invalidate()
+
+    assert "access-control-allow-origin" not in _preflight(SHOP_A).headers
+    assert _preflight(SHOP_B).headers["access-control-allow-origin"] == SHOP_B
+
+
+def test_a_tenant_created_a_moment_ago_is_not_treated_as_unknown(tenant_wipe, monkeypatch):
+    """An unknown tenant skips the origin check, so a stale snapshot must not make a real one look
+    unknown: a miss reloads (throttled), and the new tenant's origin check applies."""
+    now = [1000.0]
+    monkeypatch.setattr(tenant_configs, "_clock", lambda: now[0])
+    client.get("/api/health")
+    assert tenant_configs.all_origins() == frozenset()  # snapshot loaded, no tenants yet
+    with SessionLocal() as db:
+        tenant = _tenant(db, [SHOP_A])
+        db.commit()
+        api_key = tenant.api_key
+
+    now[0] += 6  # past the throttle for reloading on a miss
+    response = client.post(
+        "/api/conversations", json={"api_key": api_key}, headers={"Origin": SHOP_B}
+    )
+
+    assert response.status_code == 403  # the new tenant's origin list was applied, not skipped
 
 
 def test_a_database_failure_leaves_the_apps_own_origins_working(shops, monkeypatch):
     def broken():
         raise RuntimeError("db down")
 
-    monkeypatch.setattr(origins_module.registry, "_load", broken)
+    monkeypatch.setattr(tenant_configs, "_loader", broken)
 
     assert "access-control-allow-origin" not in _preflight(SHOP_A).headers
     assert _preflight(FIRST_PARTY).headers["access-control-allow-origin"] == FIRST_PARTY

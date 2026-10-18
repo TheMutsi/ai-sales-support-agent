@@ -63,7 +63,8 @@ from app.chat.turns import (
 )
 from app.core.config import get_settings
 from app.core.llm import get_chat_model_name
-from app.db.models import Conversation, Message, Tenant
+from app.core.tenant_config import tenant_configs
+from app.db.models import Conversation, Message
 from app.db.session import SessionLocal
 from app.schemas.chat import ChatRequest, ChatTurnSummary, MessageList, StoredMessage
 from app.schemas.rag import SourceReference
@@ -363,10 +364,11 @@ def _open_turn(session: SessionClaims, request: ChatRequest) -> TurnStart:
 
 
 def _scope_overrides(session: SessionClaims) -> dict | None:
-    """The tenant's per-level scope overrides: what this session may do depends on them."""
-    with SessionLocal() as db:
-        tenant = db.get(Tenant, session.tenant_id)
-        return tenant.scope_overrides if tenant is not None else None
+    """The tenant's per-level scope overrides: what this session may do depends on them. Read
+    from the configuration cache, so a change in the back office applies at once on the instance
+    that made it and within the cache's TTL on the others."""
+    tenant = tenant_configs.get(session.tenant_id)
+    return tenant.scope_overrides if tenant is not None else None
 
 
 async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
