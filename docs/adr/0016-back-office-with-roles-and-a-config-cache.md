@@ -29,7 +29,7 @@ the back office.
 - **The login is a placeholder, and the admin API refuses to exist outside local environments
   while it is.** The entry page says "login pending" and lets the person pick a role; the session
   it gives is a signed token carrying that role. Because that is no authentication at all, the
-  admin router is mounted only when `APP_ENV` is local, and "a real back office login" is on the
+  admin router is mounted only when `ADMIN_API_ENABLED` is set **and** `APP_ENV` is local (an opt-in, because `APP_ENV` defaults to `development` and a deployment that forgot it must not get the API), and "a real back office login" is on the
   before-production list. Replacing the placeholder changes how the role is obtained, not who may
   do what.
 - **A tenant selector.** Everything in the back office is scoped to the tenant chosen in a
@@ -79,6 +79,9 @@ the back office.
   does not make it safe to expose.
 - Reading messages in a back office is access to personal data: viewing is permissioned, and an
   audit of who looked at what is a follow-up.
+
+- The back office reaches the admin API through its dev server's proxy, so `PATCH` is not in the
+  CORS methods: a shop's page script cannot call it from the shop's origin.
 
 ## Not built yet
 

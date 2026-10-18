@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # How long tenant configuration (origins, scope overrides) may be served from memory before it
     # is read again; a write from the back office invalidates it at once on that instance.
     tenant_config_ttl_seconds: int = 60
+    # The back office's placeholder login lets anyone ask for any role, so its API exists only when
+    # this is switched on explicitly AND the environment is local (`admin_api_is_mounted`). An
+    # opt-in, because `app_env` defaults to "development": a deployment that forgot APP_ENV must
+    # not get an admin API.
+    admin_api_enabled: bool = False
     # How many reverse proxies sit in front of the API and append to X-Forwarded-For. 0 means
     # the header is ignored (anyone can send it) and the socket peer is the client.
     trusted_proxy_count: int = 0
@@ -106,6 +111,10 @@ class Settings(BaseSettings):
         if key == self.session_signing_key:
             raise ValueError("AUDIT_HMAC_KEY must differ from SESSION_SIGNING_KEY.")
         return self
+
+    @property
+    def admin_api_is_mounted(self) -> bool:
+        return self.admin_api_enabled and self.app_env in LOCAL_ENVIRONMENTS
 
     @property
     def audit_key(self) -> str:

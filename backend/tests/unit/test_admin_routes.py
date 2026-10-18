@@ -32,6 +32,25 @@ def test_every_admin_route_declares_a_permission():
     assert missing == []
 
 
+# Declaring *a* permission is not enough: a PATCH guarded by a read permission would pass that.
+EXPECTED = {
+    ("GET", "/admin/tenants"): Permission.TENANTS_READ,
+    ("GET", "/admin/tenants/{tenant_id}/config"): Permission.CONFIG_READ,
+    ("PATCH", "/admin/tenants/{tenant_id}/config"): Permission.CONFIG_WRITE,
+}
+
+
+def test_each_route_needs_the_right_permission():
+    found = {
+        (method, route.path): _permission_of(route)
+        for route in router.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+        if (method, route.path) not in OPEN_ROUTES
+    }
+    assert found == EXPECTED
+
+
 def test_the_open_routes_are_real_routes():
     paths = {(m, r.path) for r in router.routes if isinstance(r, APIRoute) for m in r.methods}
     assert OPEN_ROUTES <= paths

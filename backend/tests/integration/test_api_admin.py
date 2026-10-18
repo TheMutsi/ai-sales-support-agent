@@ -3,14 +3,18 @@
 import uuid
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.api.admin import router
 from app.auth.credentials import generate_api_key
 from app.core.tenant_config import tenant_configs
 from app.db.models import Tenant
 from app.db.session import SessionLocal
-from app.main import app
 
+# The router alone: `main` mounts it only when switched on, which a test of the routes must not need.
+app = FastAPI()
+app.include_router(router, prefix="/api")
 client = TestClient(app)
 
 
@@ -88,6 +92,27 @@ def test_an_admin_changes_origins_and_the_cache_sees_it_at_once(shops):
     assert response.status_code == 200
     assert response.json()["allowed_origins"] == ["https://new.example", "https://a.example"]
     assert "https://new.example" in tenant_configs.all_origins()
+
+
+def test_a_removed_origin_stops_being_allowed_at_once(shops):
+    a, _ = shops
+    assert "https://a.example" in tenant_configs.all_origins()
+    client.patch(
+        f"/api/admin/tenants/{a}/config",
+        json={"allowed_origins": ["https://other.example"]},
+        headers=_login("admin", a),
+    )
+    assert "https://a.example" not in tenant_configs.all_origins()
+
+
+def test_origins_cannot_be_cleared_with_null(shops):
+    a, _ = shops
+    response = client.patch(
+        f"/api/admin/tenants/{a}/config", json={"allowed_origins": None}, headers=_login("admin", a)
+    )
+    assert response.status_code == 422
+    with SessionLocal() as db:
+        assert db.get(Tenant, a).allowed_origins == ["https://a.example"]
 
 
 def test_scope_overrides_are_saved_cleared_and_validated(shops):

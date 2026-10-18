@@ -194,7 +194,9 @@ def update_config(
     db: Annotated[Session, Depends(get_db)],
 ) -> Tenant:
     tenant = _tenant_or_404(db, tenant_id)
-    if "allowed_origins" in update.model_fields_set and update.allowed_origins is not None:
+    if "allowed_origins" in update.model_fields_set:
+        if update.allowed_origins is None:  # unlike scope_overrides, there is no "clear"
+            raise _error(422, "allowed_origins_cannot_be_null")
         tenant.allowed_origins = update.allowed_origins
     if "scope_overrides" in update.model_fields_set:
         tenant.scope_overrides = update.scope_overrides or None
