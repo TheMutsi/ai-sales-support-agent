@@ -10,7 +10,7 @@ import type { Chat } from "./chat";
  */
 export function createIdentity(api: Api, auth: Auth, chat: Chat) {
   return {
-    requestCode: (email: string) => api.requestOtp(email),
+    requestCode: (email: string) => api.requestOtp(email, auth.currentToken()),
     async verify(email: string, code: string) {
       auth.adopt(await api.verifyOtp(email, code, auth.currentToken()));
       await chat.resume();

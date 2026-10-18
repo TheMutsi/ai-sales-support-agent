@@ -102,17 +102,25 @@ def login_with_store_token(
     session_ttl: timedelta,
 ) -> SessionResponse:
     tenant = _find_tenant(db, api_key)
+
+    def failed(reason: str, code: str, status_code: int) -> LoginError:
+        audit.record(
+            db, key=session_key, tenant_id=tenant.id, method="store_login", outcome="failed",
+            reason=reason, conversation_id=conversation_id,
+        )
+        return LoginError(code, status_code)
+
     active_secrets = db.query(TenantSecret).filter_by(tenant_id=tenant.id, active=True).all()
     try:
         claims = verify_store_token(token, {s.kid: s.secret for s in active_secrets})
     except StoreTokenError as exc:
-        raise LoginError(exc.code, 401) from None
+        raise failed(exc.code, exc.code, 401) from None
 
     customer = (
         db.query(Customer).filter_by(tenant_id=tenant.id, external_id=claims.sub).one_or_none()
     )
     if customer is None:
-        raise LoginError("customer_not_found", 403)
+        raise failed("customer_not_found", "customer_not_found", 403)
 
     level = IdentityLevel.STORE_LOGIN
     conversation = resolve_for_login(
@@ -122,6 +130,10 @@ def login_with_store_token(
         level=level,
         conversation_id=conversation_id,
         now=datetime.now(UTC),
+    )
+    audit.record(
+        db, key=session_key, tenant_id=tenant.id, method="store_login", outcome="succeeded",
+        customer_id=customer.id, conversation_id=conversation.id,
     )
     return _session_response(
         tenant, conversation, level, session_key=session_key, session_ttl=session_ttl
@@ -202,6 +214,7 @@ def login_with_order(
     *,
     api_key: str,
     email: str,
+    order_id: str,
     order: OrderDetails | None,
     conversation_id: uuid.UUID | None,
     session_key: str,
@@ -216,10 +229,30 @@ def login_with_order(
     The session names the order and nothing else: the customer behind it is not attached, so
     an order id, which leaks easily, can never open the account."""
     tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
-    if tenant is None or order is None or not _same_email(email, order.customer_email):
+    # The hash is of what the visitor typed, in the failure and the success branch alike: the shop
+    # may spell the id its own way, and one order must not get two hashes.
+    reason = (
+        "unknown_key"  # (never written: with no tenant there is nothing to attribute it to)
+        if tenant is None
+        else "order_not_found"
+        if order is None
+        else None
+        if _same_email(email, order.customer_email)
+        else "email_mismatch"
+    )
+    if reason is not None:
+        audit.record(
+            db, key=session_key, tenant_id=tenant.id if tenant else None, method="order_id",
+            outcome="failed", reason=reason, email=email, order_id=order_id,
+            conversation_id=conversation_id,
+        )
         raise LoginError("invalid_order_lookup", 401)
     conversation = resolve_for_order_lookup(
         db, tenant_id=tenant.id, conversation_id=conversation_id, now=datetime.now(UTC)
+    )
+    audit.record(
+        db, key=session_key, tenant_id=tenant.id, method="order_id", outcome="succeeded",
+        email=email, order_id=order_id, conversation_id=conversation.id,
     )
     return _session_response(
         tenant,

@@ -69,6 +69,22 @@ only for `TRUSTED_PROXY_COUNT` hops from the right). Each tenant lists the origi
 widget runs on: the CORS headers go to an origin any tenant lists (a preflight cannot say
 which), and a request is then checked against its own tenant's list.
 
+**Audit record.** Every attempt to identify (a code requested or checked, an order looked up, the
+shop's login) writes one row to `identification_events`: how, what came of it and, for a failure,
+why (`unknown_customer`, `email_mismatch`, `order_not_found`, `token_expired`...). The reason stays
+in the table. For codes and orders the visitor still gets the same generic answer; the shop's
+login keeps its existing distinct codes (`token_expired` is how the widget knows to ask the shop
+for a fresh token), which are not new information. A row holds the tenant, the
+conversation, the customer when a code or the shop's login proved one (never for an order), the
+email **masked** (`a***@n***.com`) and an **HMAC** of the email (to group attempts by the same
+address) and of an order id (hashed as the visitor typed it, in successes and failures alike). It never holds a code, a token, a full email or a full order id, and
+a test scans every column of the rows of every outcome (a success and a failure for each
+method) for them. With the identity requests already stored as messages
+(`kind=identity_request`), the timeline of a conversation is those messages joined with these rows
+by `conversation_id`. Writing a row never decides a login: if it fails, the attempt carries on
+and the failure is logged. The caller's session on the code request ties that row to its
+conversation. The `security_events` log line now carries the masked email too.
+
 ## Consequences
 
 - The agent never decides access, and a forgotten setting fails closed.
@@ -76,6 +92,8 @@ which), and a request is then checked against its own tenant's list.
   Postgres.
 - The origin check is a browser-side defence, not authentication: a script can omit or
   forge `Origin`.
+- The audit table has no retention yet: the planned 90 days need the retention job, which is
+  not written. Until then it only grows.
 - Rate limits are a fixed window (up to twice the limit across a boundary) with no global
   per-tenant budget, and their numbers are estimates with no traffic behind them.
 - The shop's token can be replayed until it expires (at most an hour); one-time use would
@@ -95,8 +113,6 @@ which), and a request is then checked against its own tenant's list.
   about an order has no order in the session, so the agent asks for one and offers only the
   order form; and if they submit it, the new session is an `order_lookup` one with no customer,
   so they lose the account scopes until they verify again (a narrowing, not a leak).
-- An audit record of the identification steps (the email asked for, given, and which
-  method proved identity), without ever storing the code.
 - A real email provider for the codes (outside local environments sending fails loudly).
 - Flagging codes requested and never used, and the retention job that archives old
   messages and purges anonymous conversations.

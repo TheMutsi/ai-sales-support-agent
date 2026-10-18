@@ -54,7 +54,11 @@ def record(
     conversation_id: uuid.UUID | None = None,
 ) -> None:
     """Records one attempt. Without a tenant there is no shop to attribute it to (an unknown API
-    key), so nothing is written."""
+    key), so nothing is written.
+
+    It commits the caller's session, and a failed write rolls it back, so the caller must have
+    committed whatever it needs before calling (every current caller has). Anything pending would
+    be lost with the rollback."""
     if tenant_id is None:
         return
     try:

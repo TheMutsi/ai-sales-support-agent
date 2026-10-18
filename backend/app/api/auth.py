@@ -171,6 +171,7 @@ async def order_lookup(
                 db,
                 api_key=request.api_key,
                 email=request.email,
+                order_id=request.order_id,
                 order=order,
                 conversation_id=current.conversation_id if current else None,
                 session_key=settings.session_signing_key,
