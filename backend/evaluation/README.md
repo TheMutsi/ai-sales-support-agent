@@ -377,8 +377,8 @@ The second review of this PR asked for two more changes, both right:
   sample. Against run 13 the differences are not significant (McNemar p = 0.45 and 1.0).
 - **`order-001` to `order-009` pass** in this run. The measurements taken before the review (the
   5-trial results for `order-007`, the neighbour baselines) were separate, smaller runs.
-- **Run 13 is kept** (`results/run13-dev.json`, `run13-heldout.json`) because run 16 is compared
-  against it; runs 12, 14 and 15 are not kept (superseded or invalid).
+- **Run 16 is kept** (with run 17, which is compared against it): `results/run16-dev.json`,
+  `run16-heldout.json`; older runs 12 to 15 are not kept (superseded or invalid).
 - **`product-004` is probably a small real regression that is not fixed.** It passed 5/5 before
   the classifier change and has failed or been unstable under every version of the new prompt
   (0/5, 2/3, 2/3, and a failure in valid full runs): "What security certifications does MewFlow
@@ -389,3 +389,33 @@ The second review of this PR asked for two more changes, both right:
   unconfirmed refund claims did not replace the correct answer for `order-003` (a unit test
   records two real answers). It would still match "the refund has been processed". One answer said
   the order was refunded "in full", which the order data does not say; no check catches it.
+
+### The guard for the order requests (`unbacked_order_lookup`, run 17)
+
+The three neighbour cases failed because the agent asks for an order number it cannot look up,
+says it checked an order, or says there is none on the account. A prompt rule only half worked, so
+`check_unbacked_order_lookup` (`app/guardrails/output_checks.py`) is a deterministic BLOCK check:
+outside `order_status`, and when no order was really read this turn, a reply that asks for an
+order number, claims to have checked or to be able to check an order, or says there is no order on
+the account is replaced by the safe fallback (which keeps a real ticket id). English and Spanish.
+
+- **Run 17 (one trial, judge `llama3`, against run 16):** dev **80/82**, held-out **12/16**
+  (`results/run17-dev.json`, `run17-heldout.json`). `order-010` and `order-011` now pass; the
+  differences against run 16 are not significant (McNemar p = 0.22 and 1.0), and `product-001`,
+  `product-004` and `tooledge-002` flipped to pass while `tooledge-001` flipped to fail, all of
+  them unstable before this change and unrelated to it.
+- **An offline audit of the guard, which needs no model:** applied to the 98 original replies of
+  run 16 (made without the guard) it would fire on 5, and all 5 ask for an order number that
+  nothing can look up (`billing-003`, `ambiguous-002`, `order-011`, `order-012`, `heldout-009`).
+  No false positive among them.
+- **What is not verified:** in run 17 the guard also fired on `refund-001` and `refund-003`, whose
+  run 16 replies were fine (they created a ticket). The reply the guard replaced is not kept (the
+  log records only the violation, on purpose, so no customer text is written), so those two
+  firings cannot be checked. The safe fallback keeps their ticket id.
+- **`order-012` still fails on purpose:** the reply now invents "your order isn't related to a
+  subscription purchase" and does not mention the ticket, which no pattern here recognizes. A
+  check built on wording will always miss some reply; the evaluation case is what keeps that gap
+  visible.
+- **Cost:** a blocked reply is replaced by a generic one, so the customer gets less help than a
+  good answer would give. Known false positive by construction: an escalation that tells the
+  customer to give their order number to support would be replaced too.

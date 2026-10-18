@@ -8,6 +8,7 @@ from app.guardrails.output_checks import (
     check_checkout_without_eligibility,
     check_fabricated_ticket_claim,
     check_system_prompt_leak,
+    check_unbacked_order_lookup,
     check_unconfirmed_refund_claim,
     check_ungrounded_invoice_claim,
     check_unverified_billing_explanation,
@@ -297,4 +298,66 @@ def test_a_correct_answer_about_a_refunded_order_is_not_taken_for_an_unconfirmed
         ),
     ):
         assert check_unconfirmed_refund_claim(OutputCheckContext(), answer) is None, answer
+
+
+# --- check_unbacked_order_lookup -------------------------------------------------------------
+# Real replies from the evaluation (order-010 to order-012, a logged-in customer saying "refund
+# for my order", "cancel my order", "my purchase was charged twice"). No tool reads orders on
+# these paths and the session names no order, so asking for an order number, saying one was
+# checked, or saying there is none on the account are all things the agent cannot back.
+
+_NO_ORDER = OutputCheckContext(intent=Intent.REFUND_REQUEST, order_found=False)
+
+
+def test_blocks_asking_for_an_order_number_that_cannot_be_looked_up():
+    for reply in (
+        (
+            "I understand you'd like a refund for your order. Could you please provide me with "
+            "the order number so I can check the details?"
+        ),
+        "Could you please provide the order number so I can assist you further?",
+        "¿Podrías compartir el número de pedido para revisarlo?",
+    ):
+        violation = check_unbacked_order_lookup(_NO_ORDER, reply)
+        assert violation is not None and violation.severity == GuardrailSeverity.BLOCK, reply
+        assert violation.code == "unbacked_order_lookup"
+
+
+def test_blocks_claiming_to_have_checked_or_to_be_able_to_check_an_order():
+    for reply in (
+        "I've checked your order, but it seems there is only one purchase recorded.",
+        "I can check the status of your order to see if there were any charges applied twice.",
+        "Revisé tu pedido y no encuentro cargos duplicados.",
+    ):
+        assert check_unbacked_order_lookup(_NO_ORDER, reply) is not None, reply
+
+
+def test_blocks_saying_there_is_no_order_on_the_account_when_nothing_could_say_so():
+    reply = "I'm sorry, but I don't have an order associated with your account."
+    assert check_unbacked_order_lookup(_NO_ORDER, reply) is not None
+
+
+def test_an_order_status_answer_may_say_it_could_not_find_the_order():
+    """The order_status step did read the order: "no order with that number" is a fact there."""
+    context = OutputCheckContext(intent=Intent.ORDER_STATUS, order_found=False)
+    for reply in (
+        "I could not find an order with that number. Could you check the order number?",
+        "I don't have an order associated with that number.",
+    ):
+        assert check_unbacked_order_lookup(context, reply) is None, reply
+
+
+def test_a_reply_may_talk_about_an_order_the_agent_really_read():
+    context = OutputCheckContext(intent=Intent.REFUND_REQUEST, order_found=True)
+    assert check_unbacked_order_lookup(context, "I've checked your order: it is paid.") is None
+
+
+def test_ordinary_replies_that_mention_orders_in_passing_are_left_alone():
+    for reply in (
+        "Your refund request is with our team. Your ticket ID is 123.",
+        "You can find your order number in the confirmation email we sent you.",
+        "We checked your account and your Starter plan is active until November 6, 2026.",
+        "I understand you'd like to cancel your order. A human will follow up with you.",
+    ):
+        assert check_unbacked_order_lookup(_NO_ORDER, reply) is None, reply
 
