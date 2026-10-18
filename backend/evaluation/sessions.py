@@ -21,13 +21,25 @@ from app.auth.conversations import create_anonymous, resolve_for_login, resolve_
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
 from app.core.config import get_settings
-from app.db.models import Customer, Message, Order, Tenant
+from app.db.models import Customer, DocumentChunk, Message, Order, Tenant
 from app.db.seed import DEV_TENANT_API_KEY
 from app.db.session import SessionLocal
 
 from .schemas import EvalCase, EvalIdentity
 
 _SESSION_TTL = timedelta(hours=6)  # outlasts a full run of many trials on a slow model
+
+
+def require_knowledge_base(db: Session) -> None:
+    """The agent answers from the knowledge base, so a run against an empty one measures nothing
+    useful and looks like a regression (answers missing facts). The integration tests wipe it,
+    and so does anything that runs them, so check before a run instead of finding out in the
+    results."""
+    if db.query(DocumentChunk).count() == 0:
+        raise ValueError(
+            "the knowledge base is empty: run `python -m app.rag.ingestion` before an evaluation "
+            "(the integration tests clear it)"
+        )
 
 
 @dataclass(frozen=True)

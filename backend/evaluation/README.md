@@ -289,7 +289,7 @@ Promoting it to BLOCK would replace the reply with the safe fallback; this data 
 it on `billing-007` and `billing-008` but not shipping it blind, because the flag still misses
 the inventions that come with an admission.
 
-## Order status (order-001 to order-012, run 13)
+## Order status (order-001 to order-012, run 16)
 
 A visitor who proved an order (an email and its id) can ask the agent about that order. The
 runner gained an `order_lookup` identity: it mints the session the order-lookup endpoint would
@@ -340,21 +340,49 @@ Smaller notes: the run-12 report named only `product-004` among the cases that b
 report listed three (`billing-005` and `unsupported-003` as well, both flaky: the intent was right
 and a substring or the small judge disagreed). `product-004` is not in the held-out set.
 
+### The second review, and a mistake of mine
+
+The second review of this PR asked for two more changes, both right:
+
+- **`order-010`, `order-011` and `order-012` passed with bad answers.** The agent asked for an
+  "order number" it cannot look up, said "I don't have an order associated with your account"
+  (false), said "I've checked your order" (no tool did), and did not mention the support ticket
+  it had created. The cases only checked intent, escalation and ticket, so they passed. They now
+  forbid those phrases and require the ticket to be mentioned, and **they fail: 0 of 5 each**.
+  This behaviour is older than the classifier change (a refund or billing request that says
+  "order" invites the question); the cases made it visible.
+- **A rule in the writer prompt only half-worked.** Telling the writer that without an Order it
+  cannot look orders up (3 trials, 20 cases): `order-010` 2/3, `order-011` 0/3, `order-012` 0/3.
+  A 7B model ignores such a rule much of the time, so the structural fix is a deterministic
+  output check, which is a separate change. The rule was **not adopted**.
+- **My mistake: two evaluation runs (14 and 15) were invalid.** The knowledge base was empty
+  during them: the integration tests clear it, and the independent reviewers ran the whole test
+  suite while I was measuring. I only re-seeded plans and customers, so answers lacked facts
+  ("Enterprise", "24", "SAML"), and I read that as a significant regression caused by the writer
+  rule (McNemar p = 0.021) and reverted the rule on that evidence. The regression was an artifact;
+  the rule is still not adopted, but for the reason above. The runner now refuses to start with
+  an empty knowledge base (a unit-level integration test covers it).
+
 ### Results
 
-- **Full runs with the final prompts (run 13, one trial, judge `llama3`):** dev **79/82** (all
-  twelve order cases pass) and held-out **12/16** (`results/run13-dev.json`, `run13-heldout.json`).
-  Against the previous run the differences are not significant (McNemar p = 1.0 on both); the
-  held-out set has varied between 10 and 13 of 16 over the last runs with no change to what it
-  tests, so one number is one noisy sample.
+- **Full runs with the final prompts and a loaded knowledge base (run 16, one trial, judge
+  `llama3`):** dev **76/82** and held-out **12/16** (`results/run16-dev.json`,
+  `run16-heldout.json`). The dev failures are `product-001` and `tooledge-002` (unstable before
+  this work), `product-004` (below), and the three neighbour cases above, which fail on purpose;
+  without them, 76 of 79. The held-out failures are `heldout-004`, `heldout-005`, `heldout-007`
+  and `heldout-016`, all failing in earlier runs too. The held-out set has varied between 10 and 13
+  of 16 over the last valid runs with no change to what it tests, so one number is one noisy
+  sample. Against run 13 the differences are not significant (McNemar p = 0.45 and 1.0).
+- **`order-001` to `order-009` pass** in this run; the
+  measurements before the review (the 5-trial results for `order-007`, the neighbour baselines)
+  were taken in separate, smaller runs.
 - **`product-004` is probably a small real regression that is not fixed.** It passed 5/5 before
   the classifier change and has failed or been unstable under every version of the new prompt
-  (0/5, 2/3, 2/3, and a failure in each full run): "What security certifications does MewFlow
+  (0/5, 2/3, 2/3, and a failure in valid full runs): "What security certifications does MewFlow
   have?" is sometimes classified as technical support. Nothing in the added line concerns it,
   which shows how sensitive a 7B classifier is to the prompt's length and shape. The causal story
   about the wording is the author's reading of small A/B samples, not a proof.
 - **The refunded-order risk did not materialize** in these runs: the guardrail against
   unconfirmed refund claims did not replace the correct answer for `order-003` (a unit test
   records two real answers). It would still match "the refund has been processed". One answer said
-  the order was refunded "in full", which the order data does not say; no check catches it, and in
-  one repeat the small judge flagged a correct answer ("placed on") for no reason.
+  the order was refunded "in full", which the order data does not say; no check catches it.

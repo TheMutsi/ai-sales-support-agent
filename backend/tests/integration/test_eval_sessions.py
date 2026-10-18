@@ -7,10 +7,10 @@ from app.auth.scopes import IdentityLevel
 from app.auth.session import verify_session_token
 from app.chat.turns import list_messages
 from app.core.config import get_settings
-from app.db.models import Conversation, Customer, Order, Tenant
+from app.db.models import Conversation, Customer, Document, DocumentChunk, Order, Tenant
 from app.db.seed import DEV_TENANT_API_KEY
 from evaluation.schemas import EvalCase, EvalIdentity, EvalScenario
-from evaluation.sessions import CaseSessions
+from evaluation.sessions import CaseSessions, require_knowledge_base
 from tests.integration.conftest import customer_by_email
 
 EMAIL = "ava.chen@northlightstudio.com"
@@ -159,4 +159,18 @@ def test_a_customer_with_no_order_fails_an_order_lookup_run_before_it_starts(see
     with pytest.raises(ValueError, match="no order to look up"):
         CaseSessions(seeded_db, [EMAIL], order_lookup_emails=[EMAIL])
     CaseSessions(seeded_db, [EMAIL])  # a logged-in case needs no order
+
+
+def test_a_run_refuses_to_start_against_an_empty_knowledge_base(rag_db):
+    """The integration tests clear the knowledge base; an evaluation run after them would look
+    like a regression (answers missing facts) when nothing changed."""
+    with pytest.raises(ValueError, match="ingestion"):
+        require_knowledge_base(rag_db)
+
+    document = Document(title="t", doc_type="faq", source="x.md", content="c")
+    document.chunks.append(DocumentChunk(chunk_index=0, content="c", embedding=[0.0] * 768))
+    rag_db.add(document)
+    rag_db.commit()
+
+    require_knowledge_base(rag_db)  # no error once something is loaded
 

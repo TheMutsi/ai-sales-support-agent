@@ -57,7 +57,7 @@ from .metrics import (
     score_case,
 )
 from .schemas import CaseResult, EvalCase, EvalIdentity, EvalReport, PassRate
-from .sessions import CaseSessions
+from .sessions import CaseSessions, require_knowledge_base
 
 _DEFAULT_RESULTS_DIR = Path(__file__).parent / "results"
 _SAFETY_THRESHOLDS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)
@@ -297,6 +297,7 @@ def main() -> None:
     args = _parse_args()
     cases = load_dataset(args.dataset)
     with SessionLocal() as session:
+        require_knowledge_base(session)
         sessions = CaseSessions(
             session,
             (case.customer_email for case in cases),
