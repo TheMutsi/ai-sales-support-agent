@@ -2,6 +2,7 @@
 tenant is known (a preflight carries neither key nor token), so an origin any tenant lists
 gets them; the real request is then checked against its own tenant's list."""
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -195,3 +196,54 @@ def test_origins_are_stored_normalized(tenant_wipe):
     )
 
     assert tenant.allowed_origins == ["https://shop.example"]
+
+
+# --- when the configuration cannot be read ---------------------------------------------------------
+
+
+@pytest.fixture
+def config_unavailable(monkeypatch):
+    def broken():
+        raise RuntimeError("db down")
+
+    tenant_configs.clear()
+    monkeypatch.setattr(tenant_configs, "_loader", broken)
+
+
+def test_the_origin_check_fails_closed_when_the_tenant_cannot_be_looked_up(config_unavailable):
+    """An unknown tenant skips the origin check, so "I cannot tell" must not look like "unknown"."""
+    response = client.post(
+        "/api/conversations", json={"api_key": "pk_any"}, headers={"Origin": SHOP_A}
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": {"code": "configuration_unavailable"}}
+
+
+def test_a_request_with_no_origin_does_not_need_the_configuration_to_pass_the_guard(
+    config_unavailable,
+):
+    """No `Origin` means no browser cross-origin call, which the guard never checked: it must not
+    start failing just because the cache cannot answer."""
+    response = client.post("/api/conversations", json={"api_key": "pk_any"})
+
+    assert response.status_code != 503
+
+
+def test_a_chat_turn_fails_closed_and_leaves_no_turn_open_when_the_scopes_cannot_be_read(
+    shops, config_unavailable
+):
+    """The scope overrides can restrict what a visitor may do: ignoring them would widen it. And
+    the failure must come before the turn is opened, or the conversation stays locked."""
+    from app.db.models import Conversation
+
+    headers = _session_headers(shops, None)
+    body = {"message": "hello", "message_id": str(uuid.uuid4())}
+
+    response = client.post("/api/chat", json=body, headers=headers)
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": {"code": "configuration_unavailable"}}
+    with SessionLocal() as db:
+        assert db.get(Conversation, shops["conversation"].id).turn_id is None
+

@@ -39,14 +39,26 @@ def check_origin(request: Request, tenant: TenantConfig | None) -> None:
         raise HTTPException(status_code=403, detail={"code": "origin_not_allowed"})
 
 
+def _needs_a_check(request: Request) -> bool:
+    """Only a browser calling cross-origin is checked, so only then is the tenant looked up: a
+    request without an `Origin` (or from the app's own frontend) neither needs the configuration
+    nor fails when it cannot be read."""
+    origin = request.headers.get("origin")
+    return origin is not None and origin not in get_settings().cors_allow_origins
+
+
 def check_origin_for_api_key(request: Request, api_key: str) -> None:
-    check_origin(request, tenant_configs.get_by_api_key(api_key))
+    """Raises `TenantConfigUnavailable` (a 503) if the tenant cannot be looked up: an unknown
+    tenant skips the check, so "cannot tell" must not be answered as "unknown"."""
+    if _needs_a_check(request):
+        check_origin(request, tenant_configs.get_by_api_key(api_key))
 
 
 def _check_origin_for_session(
     request: Request, session: Annotated[SessionClaims, Depends(require_session)]
 ) -> None:
-    check_origin(request, tenant_configs.get(session.tenant_id))
+    if _needs_a_check(request):
+        check_origin(request, tenant_configs.get(session.tenant_id))
 
 
 origin_guard_for_session = Depends(_check_origin_for_session)
