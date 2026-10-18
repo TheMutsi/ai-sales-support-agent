@@ -72,3 +72,35 @@ export const updateConfig = (token: string, tenantId: string, update: ConfigUpda
     { method: "PATCH", body: JSON.stringify(update) },
     token,
   );
+
+export interface ConversationSummary {
+  id: string;
+  identity_level: string;
+  customer: { name: string; email_masked: string } | null;
+  created_at: string;
+  last_activity_at: string;
+  message_count: number;
+  first_message: string | null;
+}
+
+export interface ConversationDetail extends Omit<ConversationSummary, "message_count" | "first_message"> {
+  linked_via: string | null;
+  messages: { seq: number; role: string; kind: string; content: string; created_at: string }[];
+  identification: {
+    method: string;
+    outcome: string;
+    reason: string | null;
+    email_masked: string | null;
+    created_at: string;
+  }[];
+}
+
+export const listConversations = (token: string, tenantId: string, before?: string) =>
+  request<ConversationSummary[]>(
+    `/tenants/${tenantId}/conversations${before ? `?before=${encodeURIComponent(before)}` : ""}`,
+    {},
+    token,
+  );
+
+export const readConversation = (token: string, tenantId: string, conversationId: string) =>
+  request<ConversationDetail>(`/tenants/${tenantId}/conversations/${conversationId}`, {}, token);

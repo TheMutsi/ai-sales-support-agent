@@ -12,3 +12,14 @@ textarea { width: 100%; font-family: ui-monospace, monospace; }
 fieldset { margin: 0.5rem 0; }
 .scope { display: inline-block; margin-right: 1rem; }
 button { padding: 0.4rem 1rem; }
+nav { display: flex; gap: 0.25rem; padding: 0 1.5rem; background: #fff; border-bottom: 1px solid #ddd; }
+.tab { border: 0; background: none; border-bottom: 3px solid transparent; padding: 0.6rem 1rem; cursor: pointer; }
+.tab.active { border-bottom-color: #4a4ae0; font-weight: 600; }
+main.wide { max-width: 70rem; }
+.conversations { display: grid; grid-template-columns: 22rem 1fr; gap: 1.5rem; }
+.conversations ul { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: 0.4rem; }
+.item { width: 100%; display: grid; gap: 0.15rem; text-align: left; padding: 0.5rem 0.6rem; background: #fff; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; }
+.item.active { border-color: #4a4ae0; }
+.timeline { color: #555; font-size: 0.9rem; }
+.message { display: grid; gap: 0.1rem; max-width: 34rem; margin: 0.5rem 0; padding: 0.5rem 0.7rem; border-radius: 8px; white-space: pre-wrap; background: #fff; }
+.message.user { margin-left: auto; background: #e8e8ff; }
