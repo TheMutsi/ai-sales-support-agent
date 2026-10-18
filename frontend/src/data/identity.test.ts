@@ -55,3 +55,14 @@ describe("identity with an order number", () => {
   });
 });
 
+describe("asking for a code", () => {
+  it("sends the current session along, so the request belongs to the conversation", async () => {
+    const api = { requestOtp: vi.fn(async () => {}) } as unknown as Api;
+    const auth = { currentToken: () => "anon" } as unknown as Auth;
+
+    await createIdentity(api, auth, {} as Chat).requestCode("ana@example.com");
+
+    expect(api.requestOtp).toHaveBeenCalledWith("ana@example.com", "anon");
+  });
+});
+

@@ -1,22 +1,25 @@
-"""Every attempt to identify leaves a record a person can read: how (a code, here; an order and the
-shop's login in the next change), what came of it and, for a failure, why. The reason stays in our database: the response
+"""Every attempt to identify leaves a record a person can read: how (a code, an order, the shop's
+login), what came of it and, for a failure, why. The reason stays in our database: the response
 to the visitor is the same generic one as ever. Nothing in a record lets someone use it to get in:
 no code, no full email, no order id, no token."""
 
+import time
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api import auth as auth_module
 from app.auth import audit
-from app.auth.credentials import generate_api_key
+from app.auth.credentials import generate_api_key, generate_secret
 from app.core.config import get_settings
-from app.db.models import Customer, IdentificationEvent, Tenant
+from app.db.models import Customer, IdentificationEvent, Order, Plan, Tenant, TenantSecret
 from app.db.session import SessionLocal
 from app.main import app
 
 client = TestClient(app)
 EMAIL = "ana@shop.test"
+ORDER_ID = "A1b2C3d4E5f6G7h8I9j0"
 
 
 class FakeSender:
@@ -39,12 +42,17 @@ def shop(tenant_wipe):
     with SessionLocal() as db:
         db.query(IdentificationEvent).delete()
         tenant = Tenant(name="Shop", api_key=generate_api_key())
+        secret = generate_secret()
         db.add(tenant)
         db.flush()
+        db.add(TenantSecret(tenant_id=tenant.id, kid="k1", secret=secret))
         customer = Customer(name="Ana", email=EMAIL, tenant_id=tenant.id, external_id="c1")
-        db.add(customer)
+        plan = Plan(slug="starter", name="Starter", price_cents=2900, billing_period="monthly")
+        db.add_all([customer, plan])
+        db.flush()
+        db.add(Order(order_id=ORDER_ID, customer_id=customer.id, plan_id=plan.id, amount_cents=2900))
         db.commit()
-        yield {"tenant": tenant, "customer": customer, "api_key": tenant.api_key}
+        yield {"tenant": tenant, "customer": customer, "secret": secret, "api_key": tenant.api_key}
         db.query(IdentificationEvent).delete()
         db.commit()
 
@@ -67,6 +75,22 @@ def _verify(api_key, code, headers=None):
     return client.post(
         "/api/auth/otp/verify", json={"api_key": api_key, "email": EMAIL, "code": code}, headers=headers
     )
+
+
+def _lookup(api_key, order_id=ORDER_ID, email=EMAIL, headers=None):
+    return client.post(
+        "/api/auth/order-lookup",
+        json={"api_key": api_key, "email": email, "order_id": order_id},
+        headers=headers,
+    )
+
+
+def _store_login(api_key, token):
+    return client.post("/api/auth/login", json={"api_key": api_key, "token": token})
+
+
+def _store_token(secret, **claims):
+    return jwt.encode({"sub": "c1", "exp": int(time.time()) + 300, **claims}, secret, algorithm="HS256")
 
 
 # --- one-time codes ----------------------------------------------------------------------------
@@ -127,13 +151,51 @@ def test_a_wrong_code_is_recorded_with_its_reason_and_the_visitor_only_gets_the_
     assert (event.method, event.outcome, event.reason) == ("otp", "failed", "invalid_code")
 
 
-def test_an_unknown_api_key_leaves_no_record_because_there_is_no_shop_to_attribute_it_to(shop, sender):
+# --- an order -----------------------------------------------------------------------------------
+
+
+def test_a_matching_order_is_recorded_without_the_order_id(shop):
+    started = client.post("/api/conversations", json={"api_key": shop["api_key"]}).json()
+
+    _lookup(shop["api_key"], headers={"Authorization": f"Bearer {started['session_token']}"})
+
+    event = _only_event()
+    assert (event.method, event.outcome) == ("order_id", "succeeded")
+    assert event.email_masked == "a***@s***.test"
+    assert event.order_hmac == audit.hmac_value(get_settings().session_signing_key, "order", ORDER_ID)
+    assert str(event.conversation_id) == started["conversation_id"]
+    assert event.customer_id is None, "an order proves one order, not the customer"
+
+
+@pytest.mark.parametrize(
+    ("order_id", "email", "reason"),
+    [("n" * 20, EMAIL, "order_not_found"), (ORDER_ID, "mallory@shop.test", "email_mismatch")],
+)
+def test_a_failed_order_lookup_records_why_but_answers_with_one_generic_401(shop, order_id, email, reason):
+    response = _lookup(shop["api_key"], order_id=order_id, email=email)
+
+    assert response.status_code == 401 and response.json() == {"detail": {"code": "invalid_order_lookup"}}
+    event = _only_event()
+    assert (event.method, event.outcome, event.reason) == ("order_id", "failed", reason)
+
+
+# --- the shop's own login -------------------------------------------------------------------------
+
+
+def test_the_shops_login_is_recorded_as_a_success_and_as_failures_with_their_reasons(shop):
+    assert _store_login(shop["api_key"], _store_token(shop["secret"])).status_code == 200
+    assert _store_login(shop["api_key"], _store_token(shop["secret"], sub="ghost")).status_code == 403
+    assert _store_login(shop["api_key"], _store_token(shop["secret"], exp=1)).status_code == 401
+
+    ok, ghost, expired = _events()
+    assert (ok.method, ok.outcome, ok.customer_id) == ("store_login", "succeeded", shop["customer"].id)
+    assert (ghost.outcome, ghost.reason) == ("failed", "customer_not_found")
+    assert (expired.outcome, expired.reason) == ("failed", "token_expired")
+
+
+def test_an_unknown_api_key_leaves_no_record_because_there_is_no_shop_to_attribute_it_to(shop):
+    _lookup("pk_does_not_exist")
     _request_code("pk_does_not_exist")
-    with SessionLocal() as db:  # and the record itself refuses to write without a shop
-        audit.record(
-            db, key=get_settings().session_signing_key, tenant_id=None, method="order_id",
-            outcome="failed", reason="unknown_key",
-        )
 
     assert _events() == []
 
@@ -141,12 +203,14 @@ def test_an_unknown_api_key_leaves_no_record_because_there_is_no_shop_to_attribu
 # --- what a record must never hold ------------------------------------------------------------
 
 
-def test_no_record_holds_a_code_or_the_email(shop, sender):
+def test_no_record_holds_a_code_the_email_an_order_id_or_a_token(shop, sender):
     _request_code(shop["api_key"])
     _verify(shop["api_key"], sender.sent[0][1])
-    _verify(shop["api_key"], "000000")
+    _lookup(shop["api_key"])
+    token = _store_token(shop["secret"])
+    _store_login(shop["api_key"], token)
 
-    secrets_ = [sender.sent[0][1], EMAIL, "ana"]
+    secrets_ = [sender.sent[0][1], EMAIL, "ana", ORDER_ID, token, shop["secret"]]
     for event in _events():
         stored = " ".join(str(v) for v in vars(event).values() if not str(v).startswith("<"))
         for secret in secrets_:
@@ -156,18 +220,14 @@ def test_no_record_holds_a_code_or_the_email(shop, sender):
 # --- the audit never decides ---------------------------------------------------------------------
 
 
-def test_a_failure_to_write_the_record_does_not_stop_a_login_and_is_logged(
-    shop, sender, monkeypatch, caplog
-):
+def test_a_failure_to_write_the_record_does_not_stop_a_login_and_is_logged(shop, monkeypatch, caplog):
     def broken(*args, **kwargs):
         raise RuntimeError("audit store down")
 
     monkeypatch.setattr(audit, "_write", broken)
 
-    _request_code(shop["api_key"])
-    code = sender.sent[0][1]
     with caplog.at_level("ERROR"):
-        response = _verify(shop["api_key"], code)
+        response = _lookup(shop["api_key"])
 
     assert response.status_code == 200
     assert "identification audit" in caplog.text

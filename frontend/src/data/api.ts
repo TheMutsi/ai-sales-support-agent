@@ -54,8 +54,8 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
     },
 
     /** Emails a code. Always the same empty 202, whether or not the address is a customer. */
-    async requestOtp(email: string): Promise<void> {
-      await request("/auth/otp/request", { body: { api_key: apiKey, email } });
+    async requestOtp(email: string, current?: string): Promise<void> {
+      await request("/auth/otp/request", { body: { api_key: apiKey, email }, token: current });
     },
 
     /** Checks the code on the server (it never passes through the chat) and upgrades the session. */

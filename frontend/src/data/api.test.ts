@@ -40,3 +40,17 @@ describe("orderLookup", () => {
     expect(new ApiError(401, "x")).toBeInstanceOf(Error);
   });
 });
+
+describe("requestOtp", () => {
+  it("carries the current session so the audit record is tied to its conversation, and sends no code", async () => {
+    const fetchFn = vi.fn(async () => new Response(null, { status: 202 }));
+    const api = createApi("http://api.test", "pk_x", fetchFn as unknown as typeof fetch);
+
+    await api.requestOtp("ana@example.com", "anon-token");
+
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://api.test/api/auth/otp/request");
+    expect(JSON.parse(init.body as string)).toEqual({ api_key: "pk_x", email: "ana@example.com" });
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer anon-token");
+  });
+});
