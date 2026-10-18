@@ -280,3 +280,21 @@ def test_known_gap_an_honest_opening_hides_an_invented_follow_up():
         )
         is None
     )
+
+
+def test_a_correct_answer_about_a_refunded_order_is_not_taken_for_an_unconfirmed_refund():
+    """The order data says `refunded`, so saying so is grounded. Real answers from the
+    evaluation (order-003) must pass the guard that blocks invented refund confirmations.
+    Not a guarantee: "the refund has been processed" would still match its pattern."""
+    for answer in (
+        (
+            "Yes, your order was refunded. It was placed on 2026-09-17 and the plan starter was "
+            "refunded for $29.00 USD."
+        ),
+        (
+            "Yes, your order was refunded. The order details are as follows: plan starter, "
+            "$29.00 USD, status refunded, placed on 2026-09-17."
+        ),
+    ):
+        assert check_unconfirmed_refund_claim(OutputCheckContext(), answer) is None, answer
+

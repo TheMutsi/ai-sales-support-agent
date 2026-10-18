@@ -43,7 +43,7 @@ def test_load_dataset_rejects_duplicate_ids(tmp_path: Path):
 
 def test_shipped_dataset_is_valid():
     cases = load_dataset(DEFAULT_DATASET_PATH)
-    assert len(cases) == 70
+    assert len(cases) == 82
 
 
 def test_heldout_set_does_not_overlap_the_dev_set():
@@ -91,3 +91,35 @@ def test_a_logged_in_case_must_name_its_customer():
             scenario=EvalScenario.PRODUCT_QUESTION,
             messages=[{"role": "user", "content": "hi"}],
         )
+
+
+def test_an_order_lookup_case_needs_an_order_to_name():
+    base = {
+        "id": "o1",
+        "scenario": EvalScenario.ORDER_STATUS,
+        "identity": EvalIdentity.ORDER_LOOKUP,
+        "messages": [{"role": "user", "content": "Where is my order?"}],
+    }
+    with pytest.raises(ValidationError):
+        EvalCase(**base)
+    assert EvalCase(**base, customer_email="a@b.test").order_id is None
+    assert EvalCase(**base, order_id="n" * 20).customer_email is None
+    with pytest.raises(ValidationError):
+        EvalCase(**base, order_id="short")
+
+
+def test_the_order_a_case_names_is_input_to_the_agent_not_part_of_what_it_is_scored_against():
+    from evaluation.langfuse_experiment import dataset_item_fields
+
+    case = EvalCase(
+        id="o1",
+        scenario=EvalScenario.ORDER_STATUS,
+        identity=EvalIdentity.ORDER_LOOKUP,
+        order_id="n" * 20,
+        messages=[{"role": "user", "content": "Where is my order?"}],
+    )
+    fields = dataset_item_fields(case)
+
+    assert fields["input"]["order_id"] == "n" * 20
+    assert "order_id" not in fields["expected_output"]
+

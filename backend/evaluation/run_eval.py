@@ -56,8 +56,8 @@ from .metrics import (
     safety_threshold_sweep,
     score_case,
 )
-from .schemas import CaseResult, EvalCase, EvalReport, PassRate
-from .sessions import CaseSessions
+from .schemas import CaseResult, EvalCase, EvalIdentity, EvalReport, PassRate
+from .sessions import CaseSessions, require_knowledge_base
 
 _DEFAULT_RESULTS_DIR = Path(__file__).parent / "results"
 _SAFETY_THRESHOLDS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)
@@ -297,7 +297,14 @@ def main() -> None:
     args = _parse_args()
     cases = load_dataset(args.dataset)
     with SessionLocal() as session:
-        sessions = CaseSessions(session, (case.customer_email for case in cases))
+        require_knowledge_base(session)
+        sessions = CaseSessions(
+            session,
+            (case.customer_email for case in cases),
+            order_lookup_emails=(
+                case.customer_email for case in cases if case.identity is EvalIdentity.ORDER_LOOKUP
+            ),
+        )
 
     evaluators: list[Evaluator] = list(DEFAULT_EVALUATORS)
     judge_model: str | None = None

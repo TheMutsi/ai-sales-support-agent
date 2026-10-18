@@ -17,17 +17,29 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth.conversations import create_anonymous, resolve_for_login
+from app.auth.conversations import create_anonymous, resolve_for_login, resolve_for_order_lookup
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
 from app.core.config import get_settings
-from app.db.models import Customer, Message, Tenant
+from app.db.models import Customer, DocumentChunk, Message, Order, Tenant
 from app.db.seed import DEV_TENANT_API_KEY
 from app.db.session import SessionLocal
 
 from .schemas import EvalCase, EvalIdentity
 
 _SESSION_TTL = timedelta(hours=6)  # outlasts a full run of many trials on a slow model
+
+
+def require_knowledge_base(db: Session) -> None:
+    """The agent answers from the knowledge base, so a run against an empty one measures nothing
+    useful and looks like a regression (answers missing facts). The integration tests wipe it,
+    and so does anything that runs them, so check before a run instead of finding out in the
+    results."""
+    if db.query(DocumentChunk).count() == 0:
+        raise ValueError(
+            "the knowledge base is empty: run `python -m app.rag.ingestion` before an evaluation "
+            "(the integration tests clear it)"
+        )
 
 
 @dataclass(frozen=True)
@@ -37,13 +49,17 @@ class CaseSession:
 
 
 class CaseSessions:
-    def __init__(self, db: Session, emails: Iterable[str]):
+    def __init__(
+        self, db: Session, emails: Iterable[str], order_lookup_emails: Iterable[str] = ()
+    ):
         wanted = {email for email in emails if email}
+        order_lookup_emails = {email for email in order_lookup_emails if email}
         tenant = db.execute(
             select(Tenant).where(Tenant.api_key == DEV_TENANT_API_KEY)
         ).scalar_one_or_none()
         self._tenant_id = tenant.id if tenant else None
         self._customers: dict[str, uuid.UUID] = {}
+        self._orders: dict[str, str] = {}  # customer email -> the id of their seeded order
         if tenant is not None:
             rows = db.execute(
                 select(Customer.email, Customer.id).where(
@@ -51,6 +67,19 @@ class CaseSessions:
                 )
             ).all()
             self._customers = dict(rows)
+            self._orders = {
+                email: order_id
+                for email, order_id in db.execute(
+                    select(Customer.email, Order.order_id)
+                    .join(Order, Order.customer_id == Customer.id)
+                    .where(Customer.email.in_(wanted), Customer.tenant_id == tenant.id)
+                ).all()
+            }
+        # A customer with no seeded order cannot back an order lookup case: fail before the run
+        # starts, like a missing customer, not with a KeyError in the middle of it.
+        without_order = sorted(self._customers.keys() - self._orders.keys())
+        if without_order and tenant is not None and order_lookup_emails & set(without_order):
+            raise ValueError(f"customers with no order to look up (re-run the seed): {without_order}")
         missing = sorted(wanted - self._customers.keys())
         if missing:
             raise ValueError(
@@ -58,14 +87,23 @@ class CaseSessions:
             )
 
     def open(self, case: EvalCase) -> CaseSession:
-        anonymous = case.identity is EvalIdentity.ANONYMOUS
-        customer_id = None if anonymous else self._customers[case.customer_email]
-        level = IdentityLevel.ANONYMOUS if anonymous else IdentityLevel.STORE_LOGIN
         now = datetime.now(UTC)
+        order_id = None
+        customer_id = None
         with SessionLocal() as db:
-            if anonymous:
+            if case.identity is EvalIdentity.ANONYMOUS:
+                level = IdentityLevel.ANONYMOUS
                 conversation = create_anonymous(db, tenant_id=self._tenant_id, now=now)
+            elif case.identity is EvalIdentity.ORDER_LOOKUP:
+                # What the order-lookup endpoint would have minted: the order, and no customer.
+                level = IdentityLevel.ORDER_LOOKUP
+                order_id = case.order_id or self._orders[case.customer_email]
+                conversation = resolve_for_order_lookup(
+                    db, tenant_id=self._tenant_id, conversation_id=None, now=now
+                )
             else:
+                level = IdentityLevel.STORE_LOGIN
+                customer_id = self._customers[case.customer_email]
                 conversation = resolve_for_login(
                     db,
                     tenant_id=self._tenant_id,
@@ -83,6 +121,7 @@ class CaseSessions:
             level=level,
             signing_key=get_settings().session_signing_key,
             ttl=_SESSION_TTL,
+            order_id=order_id,
         )
         return CaseSession(token=token, conversation_id=conversation_id)
 

@@ -46,10 +46,12 @@ def dataset_item_fields(case: EvalCase) -> dict[str, Any]:
         "input": {
             "identity": case.identity.value,
             "customer_email": case.customer_email,
+            # Only when set, so the items of cases that name no order stay exactly as they were.
+            **({"order_id": case.order_id} if case.order_id else {}),
             "messages": [message.model_dump() for message in case.messages],
         },
         "expected_output": case.model_dump(
-            mode="json", exclude={"id", "scenario", "identity", "customer_email", "messages", "notes"}
+            mode="json", exclude={"id", "scenario", "identity", "customer_email", "order_id", "messages", "notes"}
         ),
         # `notes` stays out: the SDK copies item metadata onto every span and
         # drops values over 200 characters, which most notes exceed.

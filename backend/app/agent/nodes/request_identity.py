@@ -13,6 +13,10 @@ from app.agent.state import AgentState
 
 ASK_TO_VERIFY = "To help with that I need to verify it's you. Please use the form below."
 ASK_TO_LOG_IN = "To help with that, please log in to your account first."
+ASK_FOR_THE_ORDER = (
+    "To check an order I need its number, and I can't ask for it here. "
+    "Please contact support so they can help you with it."
+)
 
 
 def request_identity_node(state: AgentState) -> dict:
@@ -22,7 +26,15 @@ def request_identity_node(state: AgentState) -> dict:
         # They already hold the scope (a customer verified with a code) and what is missing is
         # the order itself, so a second code would not help: offer only the order form.
         methods = [method for method in methods if method == "order_id"]
-    text = ASK_TO_VERIFY if methods else ASK_TO_LOG_IN
+    already_has_scope = scope in (state.get("scopes") or [])
+    if methods:
+        text = ASK_TO_VERIFY
+    elif already_has_scope:
+        # Logged in already, and the tenant left no way to name an order: "log in" would be
+        # wrong, since they are.
+        text = ASK_FOR_THE_ORDER
+    else:
+        text = ASK_TO_LOG_IN
     return {
         "identity_required": True,
         "identity_methods": methods,

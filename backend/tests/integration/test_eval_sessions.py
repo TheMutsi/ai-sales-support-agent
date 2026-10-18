@@ -7,10 +7,10 @@ from app.auth.scopes import IdentityLevel
 from app.auth.session import verify_session_token
 from app.chat.turns import list_messages
 from app.core.config import get_settings
-from app.db.models import Conversation, Customer, Tenant
+from app.db.models import Conversation, Customer, Document, DocumentChunk, Order, Tenant
 from app.db.seed import DEV_TENANT_API_KEY
 from evaluation.schemas import EvalCase, EvalIdentity, EvalScenario
-from evaluation.sessions import CaseSessions
+from evaluation.sessions import CaseSessions, require_knowledge_base
 from tests.integration.conftest import customer_by_email
 
 EMAIL = "ava.chen@northlightstudio.com"
@@ -121,3 +121,56 @@ def test_an_anonymous_case_keeps_its_earlier_messages_as_history(seeded_db):
 
     stored = list_messages(seeded_db, conversation_id=session.conversation_id)
     assert [m.content for m in stored] == ["hello", "Hi there"]
+
+
+def _order_case(**fields) -> EvalCase:
+    return EvalCase(
+        id="o1",
+        scenario=EvalScenario.ORDER_STATUS,
+        identity=EvalIdentity.ORDER_LOOKUP,
+        messages=[{"role": "user", "content": "Where is my order?"}],
+        **fields,
+    )
+
+
+def test_an_order_lookup_case_gets_a_session_that_names_the_customers_order_and_not_the_customer(
+    seeded_db,
+):
+    session = CaseSessions(seeded_db, [EMAIL]).open(_order_case(customer_email=EMAIL))
+
+    claims = _claims(session)
+    order = seeded_db.query(Order).join(Customer).filter(Customer.email == EMAIL).one()
+    assert claims.level is IdentityLevel.ORDER_LOOKUP
+    assert claims.order_id == order.order_id and claims.customer_id is None
+    conversation = seeded_db.get(Conversation, session.conversation_id)
+    assert conversation.customer_id is None and conversation.identity_level == "order_lookup"
+
+
+def test_an_order_lookup_case_can_name_an_order_that_does_not_exist(seeded_db):
+    session = CaseSessions(seeded_db, []).open(_order_case(order_id="n" * 20))
+
+    assert _claims(session).order_id == "n" * 20
+
+
+def test_a_customer_with_no_order_fails_an_order_lookup_run_before_it_starts(seeded_db):
+    seeded_db.query(Order).delete()
+    seeded_db.commit()
+
+    with pytest.raises(ValueError, match="no order to look up"):
+        CaseSessions(seeded_db, [EMAIL], order_lookup_emails=[EMAIL])
+    CaseSessions(seeded_db, [EMAIL])  # a logged-in case needs no order
+
+
+def test_a_run_refuses_to_start_against_an_empty_knowledge_base(rag_db):
+    """The integration tests clear the knowledge base; an evaluation run after them would look
+    like a regression (answers missing facts) when nothing changed."""
+    with pytest.raises(ValueError, match="ingestion"):
+        require_knowledge_base(rag_db)
+
+    document = Document(title="t", doc_type="faq", source="x.md", content="c")
+    document.chunks.append(DocumentChunk(chunk_index=0, content="c", embedding=[0.0] * 768))
+    rag_db.add(document)
+    rag_db.commit()
+
+    require_knowledge_base(rag_db)  # no error once something is loaded
+

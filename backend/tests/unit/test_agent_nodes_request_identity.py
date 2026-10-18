@@ -64,3 +64,20 @@ def test_a_visitor_who_already_has_a_scope_but_no_order_is_offered_only_the_orde
 def test_an_anonymous_visitor_asking_about_an_order_is_offered_both_methods():
     assert _run(["kb:read"], intent=Intent.ORDER_STATUS)["identity_methods"] == ["otp", "order_id"]
 
+
+def test_someone_already_logged_in_is_not_told_to_log_in_when_no_order_form_is_left():
+    """Found in review: a tenant that removes `order_lookup` from `order:read` leaves no method,
+    and a customer who already holds the scope would be told to log in, which they have."""
+    result = request_identity_node(
+        {
+            "intent": Intent.ORDER_STATUS,
+            "scopes": ["kb:read", "order:read", "customer:read"],
+            "scope_overrides": {"order_lookup": ["kb:read"]},
+            "order_id": None,
+            "messages": [],
+        }
+    )
+
+    assert result["identity_methods"] == []
+    assert "log in" not in result["messages"][0].content.lower()
+
