@@ -29,6 +29,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.auth import audit
 from app.auth.conversations import create_anonymous, resolve_for_login, resolve_for_order_lookup
 from app.auth.otp import OtpError, request_otp, verify_otp
 from app.auth.otp_sender import OtpSender
@@ -127,12 +128,27 @@ def login_with_store_token(
     )
 
 
-def send_otp(db: Session, *, api_key: str, email: str, sender: OtpSender, key: str) -> None:
+def send_otp(
+    db: Session,
+    *,
+    api_key: str,
+    email: str,
+    sender: OtpSender,
+    key: str,
+    conversation_id: uuid.UUID | None = None,
+) -> None:
     """Sends a code if the email is a customer's. Returns nothing in every case, an unknown
-    API key included, so the response never says what exists."""
+    API key included, so the response never says what exists. What happened goes to the audit
+    record only."""
     tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
-    if tenant is not None:
-        request_otp(db, tenant=tenant, email=email, sender=sender, key=key, now=datetime.now(UTC))
+    if tenant is None:
+        return
+    result = request_otp(db, tenant=tenant, email=email, sender=sender, key=key, now=datetime.now(UTC))
+    audit.record(
+        db, key=key, tenant_id=tenant.id, method="otp",
+        outcome="code_sent" if result == "sent" else "failed",
+        reason=None if result == "sent" else result, email=email, conversation_id=conversation_id,
+    )
 
 
 def login_with_otp(
@@ -149,7 +165,14 @@ def login_with_otp(
     if tenant is None:
         raise OtpError
     now = datetime.now(UTC)
-    customer = verify_otp(db, tenant=tenant, email=email, code=code, key=session_key, now=now)
+    try:
+        customer = verify_otp(db, tenant=tenant, email=email, code=code, key=session_key, now=now)
+    except OtpError as exc:
+        audit.record(
+            db, key=session_key, tenant_id=tenant.id, method="otp", outcome="failed",
+            reason=exc.code, email=email, conversation_id=conversation_id,
+        )
+        raise
     level = IdentityLevel.OTP_LOGIN
     conversation = resolve_for_login(
         db,
@@ -158,6 +181,10 @@ def login_with_otp(
         level=level,
         conversation_id=conversation_id,
         now=now,
+    )
+    audit.record(
+        db, key=session_key, tenant_id=tenant.id, method="otp", outcome="succeeded", email=email,
+        customer_id=customer.id, conversation_id=conversation.id,
     )
     return _session_response(
         tenant, conversation, level, session_key=session_key, session_ttl=session_ttl

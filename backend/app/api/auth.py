@@ -92,9 +92,13 @@ def login(
     dependencies=[limit_by_ip("otp_request", limit=10, window_seconds=3600)],
 )
 def otp_request(
-    request: OtpRequest, http: Request, db: Annotated[Session, Depends(get_db)]
+    request: OtpRequest,
+    http: Request,
+    db: Annotated[Session, Depends(get_db)],
+    current: Annotated[SessionClaims | None, Depends(optional_session)],
 ) -> None:
-    """Emails a code when the address belongs to a customer. Always the same empty 202."""
+    """Emails a code when the address belongs to a customer. Always the same empty 202. The
+    caller's session, if it sends one, only ties the audit record to its conversation."""
     check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     send_otp(
@@ -103,6 +107,7 @@ def otp_request(
         email=request.email,
         sender=get_otp_sender(settings),
         key=settings.session_signing_key,
+        conversation_id=current.conversation_id if current else None,
     )
 
 
