@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # "use the session key", allowed in local environments only.
     audit_hmac_key: str = ""
     session_ttl_seconds: int = 24 * 3600
+    # How long tenant configuration (origins, scope overrides) may be served from memory before it
+    # is read again; a write from the back office invalidates it at once on that instance.
+    tenant_config_ttl_seconds: int = 60
     # How many reverse proxies sit in front of the API and append to X-Forwarded-For. 0 means
     # the header is ignored (anyone can send it) and the socket peer is the client.
     trusted_proxy_count: int = 0
