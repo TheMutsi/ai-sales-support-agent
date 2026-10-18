@@ -174,6 +174,38 @@ class SecurityEvent(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class IdentificationEvent(Base):
+    """One attempt to identify, for a person to read later: how (a code, an order, the shop's
+    login), what came of it and, for a failure, why. The reason stays in this table: the visitor
+    is always told the same generic thing.
+
+    Holds nothing that could be used to get in: no code, no token, no full email and no full order
+    id. The email is masked so a person can recognise it, and an HMAC of it (and of an order id)
+    lets attempts by the same address be grouped without keeping it. See `app.auth.audit`."""
+
+    __tablename__ = "identification_events"
+    __table_args__ = (Index("ix_identification_events_tenant_created", "tenant_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="SET NULL"), index=True
+    )
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), index=True
+    )
+    # Set when the attempt proved a customer (a code, the shop's login); never for an order.
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL")
+    )
+    method: Mapped[str]  # otp | order_id | store_login
+    outcome: Mapped[str]  # code_sent | succeeded | failed
+    reason: Mapped[str | None]
+    email_masked: Mapped[str | None]
+    email_hmac: Mapped[str | None] = mapped_column(index=True)
+    order_hmac: Mapped[str | None]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)
+
+
 class RateLimitCounter(Base):
     """How many requests a key (an address, a conversation) made in one fixed time
     window. In Postgres rather than memory so every server instance shares the count."""

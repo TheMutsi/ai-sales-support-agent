@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.auth.audit import mask_email
 from app.auth.otp_sender import OtpSender
 from app.db.models import Customer, OtpChallenge, SecurityEvent, Tenant
 
@@ -64,15 +65,20 @@ def _find_customer(db: Session, tenant: Tenant, email: str) -> Customer | None:
 
 def _record(db: Session, tenant: Tenant, kind: str, email: str) -> None:
     db.add(SecurityEvent(tenant_id=tenant.id, kind=kind, email=email))
-    logger.warning("security event %s for %s (tenant %s)", kind, email, tenant.id)
+    # The log gets the masked address: the SecurityEvent row keeps what a reviewer needs, the log
+    # is read by more people and for longer.
+    logger.warning("security event %s for %s (tenant %s)", kind, mask_email(email), tenant.id)
 
 
 def request_otp(
     db: Session, *, tenant: Tenant, email: str, sender: OtpSender, key: str, now: datetime
-) -> None:
+) -> str:
+    """Sends a code when the email is a customer's. Returns what happened (`sent`,
+    `unknown_customer` or `rate_limited`) for the audit record only: the caller must never
+    pass it on to the visitor, who is told the same in every case."""
     email = normalize_email(email)
     if _find_customer(db, tenant, email) is None:
-        return
+        return "unknown_customer"
 
     sent_last_hour = (
         db.query(OtpChallenge)
@@ -86,7 +92,7 @@ def request_otp(
     if sent_last_hour >= MAX_SENDS_PER_HOUR:
         _record(db, tenant, "otp_rate_limited", email)
         db.commit()
-        return
+        return "rate_limited"
 
     # A new code replaces any open one, so only the latest can be used.
     db.query(OtpChallenge).filter(
@@ -112,6 +118,7 @@ def request_otp(
         sender.send(email=email, code=code)
     except Exception:
         logger.exception("could not deliver a one-time code (tenant %s)", tenant.id)
+    return "sent"
 
 
 def verify_otp(
