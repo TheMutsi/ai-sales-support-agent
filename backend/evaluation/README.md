@@ -332,8 +332,10 @@ all real or at least fair:
 3. **The classifier change was not measured against neighbours that mention an order.** No case
    phrased a refund or billing request with "order" or "purchase". Three were added: "I want a
    refund for my order" and "Please cancel my order" (expect `refund_request`, a ticket) and "My
-   purchase was charged twice" (expect `billing_question`). They pass **5 of 5 with the new prompt
-   and 5 of 5 with the old one**, so the added line did not pull them into `order_status`.
+   purchase was charged twice" (expect `billing_question`). With their first, weak checks (intent,
+   escalation and ticket only) they passed **5 of 5 with the new prompt and 5 of 5 with the old
+   one**, so the added line did not pull them into `order_status`. Their checks were strengthened
+   after the second review and they now fail on purpose, see below.
 4. A customer with no seeded order now fails the run at start, not with a `KeyError` midway.
 
 Smaller notes: the run-12 report named only `product-004` among the cases that broke, but the
@@ -373,9 +375,10 @@ The second review of this PR asked for two more changes, both right:
   and `heldout-016`, all failing in earlier runs too. The held-out set has varied between 10 and 13
   of 16 over the last valid runs with no change to what it tests, so one number is one noisy
   sample. Against run 13 the differences are not significant (McNemar p = 0.45 and 1.0).
-- **`order-001` to `order-009` pass** in this run; the
-  measurements before the review (the 5-trial results for `order-007`, the neighbour baselines)
-  were taken in separate, smaller runs.
+- **`order-001` to `order-009` pass** in this run. The measurements taken before the review (the
+  5-trial results for `order-007`, the neighbour baselines) were separate, smaller runs.
+- **Run 13 is kept** (`results/run13-dev.json`, `run13-heldout.json`) because run 16 is compared
+  against it; runs 12, 14 and 15 are not kept (superseded or invalid).
 - **`product-004` is probably a small real regression that is not fixed.** It passed 5/5 before
   the classifier change and has failed or been unstable under every version of the new prompt
   (0/5, 2/3, 2/3, and a failure in valid full runs): "What security certifications does MewFlow
