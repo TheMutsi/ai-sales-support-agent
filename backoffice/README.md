@@ -1,8 +1,8 @@
 # MewFlow back office
 
 A separate React app (not part of the widget bundle, ADR-0016) for the people who run a shop's
-assistant. Today: a placeholder login (pick a role and a tenant, no authentication) and a tenant selector;
-the configuration page follows.
+assistant. Today: a placeholder login (pick a role and a tenant, no authentication) and the
+tenant configuration page (allowed origins, what each identity level may do).
 
 ```bash
 # backend, with the admin API switched on (it does not exist otherwise)
