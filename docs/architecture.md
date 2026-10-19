@@ -90,7 +90,7 @@ Reading it:
 |---|---|---|
 | `app/api` | HTTP and SSE: validation, streaming, tracing span, sessions, rate limits, allowed origins | `agent`, `auth`, `chat`, `core`, `schemas` |
 | `app/auth` | Scopes, shop and session tokens, login, one-time codes, conversations | `db`, `core`, `schemas` |
-| `app/orders` | An order's shape and where orders come from: an async `OrderSource` interface, with a simulated table-backed implementation until the shop's API is wired | `db`, `schemas` |
+| `app/orders` | An order's shape and where orders come from: an async `OrderSource` interface (reads, and cancelling or keeping an order), with a simulated table-backed implementation until the shop's API is wired | `business` (the retention rules), `db`, `schemas` |
 | `app/chat` | A conversation's stored messages and the one-turn-at-a-time rule | `db` |
 | `app/agent` | Graph, state, nodes, prompts, routing, permissions, LLM tool bindings | `tools`, `guardrails`, `auth` (scopes), `core`, `schemas` |
 | `app/guardrails` | Input pattern checks, output claim checks | `schemas` |

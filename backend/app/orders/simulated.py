@@ -11,12 +11,12 @@ from collections.abc import Callable
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.business.returns import retention_offer
 from app.db.models import Customer, Order, OrderAdjustment
 from app.schemas.orders import (
     OrderDetails,
     OrderStatus,
     RetentionChoice,
-    RetentionOffer,
     RetentionReceipt,
     is_valid_order_id,
 )
@@ -61,6 +61,8 @@ class SimulatedOrderSource:
             order = self._owned_order(db, tenant_id, customer_id, order_id)
             if order is None or order.status != OrderStatus.OPEN:
                 return None
+            if db.query(OrderAdjustment).filter_by(order_id=order.id).first() is not None:
+                return None  # kept with the offer: it is not cancelled any more
             order.status = OrderStatus.CANCELLED
             db.commit()
             return _details(order)
@@ -72,18 +74,20 @@ class SimulatedOrderSource:
         customer_id: uuid.UUID,
         order_id: str,
         choice: RetentionChoice,
-        offer: RetentionOffer,
     ) -> RetentionReceipt | None:
         if not is_valid_order_id(order_id):
             return None
-        return await asyncio.to_thread(
-            self._retain, tenant_id, customer_id, order_id, choice, offer
-        )
+        return await asyncio.to_thread(self._retain, tenant_id, customer_id, order_id, choice)
 
-    def _retain(self, tenant_id, customer_id, order_id, choice, offer) -> RetentionReceipt | None:
+    def _retain(
+        self, tenant_id: uuid.UUID, customer_id: uuid.UUID, order_id: str, choice: RetentionChoice
+    ) -> RetentionReceipt | None:
         with self._session_factory() as db:
             order = self._owned_order(db, tenant_id, customer_id, order_id)
             if order is None or order.status not in (OrderStatus.OPEN, OrderStatus.IN_DELIVERY):
+                return None
+            offer = retention_offer(order.amount_cents)
+            if offer is None:
                 return None
             refund = choice is RetentionChoice.REFUND
             db.add(

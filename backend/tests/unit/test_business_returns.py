@@ -64,3 +64,9 @@ def test_other_statuses_allow_and_offer_nothing(status):
     options = return_options(_order(status, 6999))
 
     assert (options.can_cancel, options.return_after_delivery, options.retention) == (False, False, None)
+
+
+def test_rounding_is_half_up_in_integer_cents():
+    offer = retention_offer(5005)  # 30% = 1501.5 cents
+
+    assert offer is not None and offer.credit_points == 1502

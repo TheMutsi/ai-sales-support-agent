@@ -5,7 +5,7 @@ as `OtpSender`)."""
 import uuid
 from typing import Protocol, runtime_checkable
 
-from app.schemas.orders import OrderDetails, RetentionChoice, RetentionOffer, RetentionReceipt
+from app.schemas.orders import OrderDetails, RetentionChoice, RetentionReceipt
 
 
 @runtime_checkable
@@ -26,8 +26,9 @@ class OrderSource(Protocol):
         self, *, tenant_id: uuid.UUID, customer_id: uuid.UUID, order_id: str
     ) -> OrderDetails | None:
         """Cancels the customer's order if it has not shipped. None when it is not theirs, does
-        not exist or can no longer be cancelled; the status is checked at the moment of the
-        change, so two requests cannot both succeed."""
+        not exist, can no longer be cancelled, or was already kept with the retention offer
+        (keeping an order means it is not cancelled); the state is checked under a lock at the
+        moment of the change, so two requests cannot both succeed."""
         ...
 
     async def keep_order_with_retention(
@@ -37,9 +38,9 @@ class OrderSource(Protocol):
         customer_id: uuid.UUID,
         order_id: str,
         choice: RetentionChoice,
-        offer: RetentionOffer,
     ) -> RetentionReceipt | None:
-        """Records that the customer kept the order for the refund or the points of `offer`. At
-        most once per order, and only while it is open or in delivery; None otherwise. Moves no
-        money in the simulation."""
+        """Records that the customer kept the order for the refund or the points the rules give
+        for its amount (computed here from the order itself, never taken from the caller). At
+        most once per order, only while it is open or in delivery and only for an order that
+        qualifies; None otherwise. Moves no money in the simulation."""
         ...
