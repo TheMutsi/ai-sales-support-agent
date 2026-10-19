@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.admin import router as admin_router
+from app.api.admin import ADMIN_ROUTERS
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.customers import router as customers_router
@@ -46,4 +46,5 @@ app.include_router(customers_router, prefix="/api")
 # switched on in a local environment, until a real login does (ADR-0016). It is not in the CORS
 # methods on purpose: the back office reaches it through its dev server's proxy.
 if settings.admin_api_is_mounted:
-    app.include_router(admin_router, prefix="/api")
+    for admin_router in ADMIN_ROUTERS:
+        app.include_router(admin_router, prefix="/api")

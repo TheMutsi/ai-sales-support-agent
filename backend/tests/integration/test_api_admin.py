@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.admin import router
+from app.api.admin import ADMIN_ROUTERS
 from app.auth.credentials import generate_api_key
 from app.core.tenant_config import tenant_configs
 from app.db.models import Tenant
@@ -14,7 +14,8 @@ from app.db.session import SessionLocal
 
 # The router alone: `main` mounts it only when switched on, which a test of the routes must not need.
 app = FastAPI()
-app.include_router(router, prefix="/api")
+for router in ADMIN_ROUTERS:
+    app.include_router(router, prefix="/api")
 client = TestClient(app)
 
 
