@@ -10,6 +10,29 @@
       Mew("hide"); // proves queued calls are replayed in order
       Mew("show");
     </script>
+    <script>
+      // A real shop signs this token on its server. The example page signs it here with the
+      // dev tenant's public secret (backend/app/db/seed.py), so a button can play each customer.
+      const DEV_SECRET = "dev-only-tenant-secret-never-use-in-production";
+      const SESSION_KEY = "mew:session:pk_dev_mewflow_local";
+      const b64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      const text = (value) => new TextEncoder().encode(JSON.stringify(value));
+      async function signToken(email) {
+        const head = b64(text({ alg: "HS256", typ: "JWT", kid: "dev-1" }));
+        const body = b64(text({ sub: email, exp: Math.floor(Date.now() / 1000) + 600 }));
+        const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(DEV_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${head}.${body}`));
+        return `${head}.${body}.${b64(signature)}`;
+      }
+      const currentUser = () => localStorage.getItem("demo:user");
+      Mew("config", { getToken: () => (currentUser() ? signToken(currentUser()) : null) });
+      // The widget keeps its conversation in localStorage: drop it so the next user starts clean.
+      function loginAs(email) {
+        email ? localStorage.setItem("demo:user", email) : localStorage.removeItem("demo:user");
+        localStorage.removeItem(SESSION_KEY);
+        location.reload();
+      }
+    </script>
     <script async src="/mew.js?key=pk_dev_mewflow_local"></script>
   </head>
   <body style="font-family: system-ui; max-width: 40rem; margin: 3rem auto">
@@ -19,5 +42,30 @@
     <button onclick="Mew('close')">Close</button>
     <button onclick="Mew('hide')">Hide</button>
     <button onclick="Mew('show')">Show</button>
+
+    <h2>Log in as a customer</h2>
+    <p>Each button signs a token for a demo customer who has one order. <span id="who"></span></p>
+    <div id="users" style="display: grid; gap: 0.5rem; max-width: 24rem"></div>
+    <script>
+      const USERS = [
+        ["mail1@gmail.com", "Open order, $29.99"],
+        ["mail2@gmail.com", "Open order, $69.99"],
+        ["mail3@gmail.com", "In delivery, $69.99"],
+        ["mail4@gmail.com", "In delivery, $29.99"],
+      ];
+      document.getElementById("who").textContent = currentUser() ? `Logged in as ${currentUser()}.` : "Not logged in (anonymous visitor).";
+      const users = document.getElementById("users");
+      for (const [email, label] of USERS) {
+        const button = document.createElement("button");
+        button.textContent = `${email}: ${label}`;
+        button.style.fontWeight = currentUser() === email ? "700" : "400";
+        button.onclick = () => loginAs(email);
+        users.appendChild(button);
+      }
+      const out = document.createElement("button");
+      out.textContent = "Log out (anonymous)";
+      out.onclick = () => loginAs(null);
+      users.appendChild(out);
+    </script>
   </body>
 </html>

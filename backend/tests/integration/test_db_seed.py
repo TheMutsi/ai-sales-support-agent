@@ -35,8 +35,8 @@ def test_seed_creates_plans_customers_and_subscriptions(db: Session):
     seed(db)
 
     assert db.query(Plan).count() == 3
-    assert db.query(Customer).count() == 6
-    assert db.query(Subscription).count() == 6
+    assert db.query(Customer).count() == 10
+    assert db.query(Subscription).count() == 10
 
 
 def test_seed_links_customers_to_the_right_plan(db: Session):
@@ -57,8 +57,8 @@ def test_seed_is_idempotent(db: Session):
     seed(db)
 
     assert db.query(Plan).count() == 3
-    assert db.query(Customer).count() == 6
-    assert db.query(Subscription).count() == 6
+    assert db.query(Customer).count() == 10
+    assert db.query(Subscription).count() == 10
 
 
 def test_seed_creates_a_dev_tenant_with_a_secret_and_links_every_customer(db: Session):
@@ -118,3 +118,21 @@ def test_seed_restores_a_dev_secret_that_was_deactivated(db: Session):
 
     secret = db.query(TenantSecret).one()
     assert secret.active and secret.secret == DEV_TENANT_SECRET
+
+
+def test_seed_creates_the_demo_shop_customers_with_one_order_each(db: Session):
+    seed(db)
+    seed(db)  # idempotent
+
+    orders = {
+        (o.customer.email, o.status, o.amount_cents)
+        for o in db.query(Order).join(Customer).filter(Customer.email.like("mail%@gmail.com"))
+    }
+    assert orders == {
+        ("mail1@gmail.com", "open", 2999),
+        ("mail2@gmail.com", "open", 6999),
+        ("mail3@gmail.com", "in_delivery", 6999),
+        ("mail4@gmail.com", "in_delivery", 2999),
+    }
+    mail1 = db.query(Customer).filter_by(email="mail1@gmail.com").one()
+    assert mail1.external_id == mail1.email and mail1.tenant_id is not None

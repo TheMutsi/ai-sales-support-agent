@@ -41,9 +41,9 @@ def test_the_simulated_source_satisfies_the_interface():
 
 
 def test_seed_gives_every_customer_one_order_and_is_idempotent(db: Session):
-    assert db.query(Order).count() == 6
+    assert db.query(Order).count() == 10  # the six customers' and the four demo shop ones
     seed(db)
-    assert db.query(Order).count() == 6
+    assert db.query(Order).count() == 10
 
 
 def test_finds_an_order_for_its_tenant_with_the_customer_and_plan(db: Session):

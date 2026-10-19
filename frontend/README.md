@@ -91,3 +91,7 @@ the dev tenant allows. A page opened from `file://` has the origin `null`, which
 - After a reload, the identity form offers both methods (the stored request does not record which
   it offered); the server decides what a proof is worth.
 - The unread badge does not survive a page reload.
+
+## Demo customers
+
+The example page has one login button per demo customer (`mail1@gmail.com` to `mail4@gmail.com`, created by `python -m app.db.seed` in local environments), each with one order: open $29.99, open $69.99, in delivery $69.99, in delivery $29.99. A button signs a token in the page with the dev tenant's public secret (a real shop signs on its server), clears the widget's stored conversation and reloads, so the next customer starts clean. The dev tenant also allows `http://127.0.0.1:8081`, for a second local server.
