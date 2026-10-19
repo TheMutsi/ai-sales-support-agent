@@ -10,6 +10,7 @@ from app.agent.nodes import order_return as module
 from app.agent.nodes.order_return import order_return_node, reply_for
 from app.business.returns import retention_offer
 from app.schemas.agent import ReturnChoice, ReturnReading
+from app.schemas.cards import CardAction
 from app.schemas.orders import (
     OrderDetails,
     OrderStatus,
@@ -354,3 +355,71 @@ async def test_the_other_outcomes_have_their_own_fixed_replies(setup):
 
     assert all(replies[o] for o in ReturnOutcome if o not in (ReturnOutcome.KEPT_WITH_REFUND, ReturnOutcome.KEPT_WITH_CREDITS))
     assert "go ahead" in replies[ReturnOutcome.CONFIRM_CANCEL] and "once it arrives" in replies[ReturnOutcome.RETURN_LATER]
+
+
+async def _click(setup, orders, action, pending=None, order_id=None):
+    """The node answering a button click: the model must not be asked (it has no reading to give)."""
+    shop, reader = setup(*orders, reading=None)
+    state = {**_state(pending), "action": action, "action_order_id": order_id}
+    return await order_return_node(state), shop, reader
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stage", "action", "outcome"),
+    [
+        (CHECK, CardAction.CONFIRM_ORDER, ReturnOutcome.OFFER),
+        (CHECK, CardAction.KEEP_ORDER, ReturnOutcome.KEPT_AS_IS),
+        (OFFER, CardAction.TAKE_REFUND, ReturnOutcome.KEPT_WITH_REFUND),
+        (OFFER, CardAction.TAKE_CREDITS, ReturnOutcome.KEPT_WITH_CREDITS),
+        (OFFER, CardAction.DECLINE_OFFER, ReturnOutcome.FINAL_OFFER),
+        (FINAL, CardAction.DECLINE_OFFER, ReturnOutcome.CANCELLED),
+        (FINAL, CardAction.TAKE_CREDITS, ReturnOutcome.KEPT_WITH_CREDITS),
+    ],
+)
+async def test_a_click_is_decided_by_rules_and_never_asks_the_model(setup, stage, action, outcome):
+    result, _, reader = await _click(setup, [OPEN70], action, _pending(OPEN_70, stage))
+
+    assert result["return_result"].outcome is outcome
+    assert reader.asked == 0
+
+
+@pytest.mark.asyncio
+async def test_confirming_the_cancellation_with_a_click_cancels_and_keeping_does_not(setup):
+    cancelled, shop, _ = await _click(setup, [OPEN30], CardAction.CONFIRM_CANCEL, _pending(OPEN_30, CONFIRM))
+    kept, shop2, _ = await _click(setup, [OPEN30], CardAction.KEEP_ORDER, _pending(OPEN_30, CONFIRM))
+
+    assert cancelled["return_result"].outcome is ReturnOutcome.CANCELLED and shop.calls == [("cancel", OPEN_30)]
+    assert kept["return_result"].outcome is ReturnOutcome.KEPT_AS_IS and shop2.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stage", "action", "again"),
+    [
+        (CONFIRM, CardAction.DECLINE_OFFER, ReturnOutcome.CONFIRM_CANCEL),  # must not cancel
+        (CONFIRM, CardAction.TAKE_REFUND, ReturnOutcome.CONFIRM_CANCEL),
+        (OFFER, CardAction.CONFIRM_CANCEL, ReturnOutcome.OFFER),
+        (OFFER, CardAction.KEEP_ORDER, ReturnOutcome.OFFER),
+        (CHECK, CardAction.TAKE_REFUND, ReturnOutcome.CONFIRM_ORDER),
+        (FINAL, CardAction.CONFIRM_ORDER, ReturnOutcome.FINAL_OFFER),
+    ],
+)
+async def test_a_click_that_does_not_fit_the_step_changes_nothing_and_asks_again(setup, stage, action, again):
+    result, shop, reader = await _click(setup, [OPEN70], action, _pending(OPEN_70, stage))
+
+    assert result["return_result"].outcome is again
+    assert result["pending_return"] == _pending(OPEN_70, stage)
+    assert shop.calls == [] and reader.asked == 0
+
+
+@pytest.mark.asyncio
+async def test_choosing_an_order_with_a_click_takes_only_one_of_the_listed_orders(setup):
+    chosen, _, _ = await _click(setup, [OPEN70, OPEN30], CardAction.CHOOSE_ORDER, order_id=OPEN_70)
+    made_up, _, _ = await _click(setup, [OPEN70, OPEN30], CardAction.CHOOSE_ORDER, order_id="Z" * 20)
+    stray, _, _ = await _click(setup, [OPEN70, OPEN30], CardAction.TAKE_REFUND)  # nothing is pending
+
+    assert chosen["return_result"].outcome is ReturnOutcome.OFFER
+    assert chosen["return_result"].order.order_id == OPEN_70
+    assert made_up["return_result"].outcome is ReturnOutcome.CHOOSE_ORDER
+    assert stray["return_result"].outcome is ReturnOutcome.CHOOSE_ORDER

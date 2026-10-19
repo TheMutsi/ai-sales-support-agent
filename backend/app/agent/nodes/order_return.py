@@ -26,7 +26,8 @@ from app.agent.state import AgentState
 from app.business.returns import return_options
 from app.core.llm import get_chat_model
 from app.orders.factory import get_order_source
-from app.schemas.agent import ReturnChoice, ReturnReading
+from app.schemas.agent import Intent, ReturnChoice, ReturnReading
+from app.schemas.cards import CardAction
 from app.schemas.orders import (
     OrderDetails,
     PendingReturn,
@@ -76,6 +77,46 @@ def _check(order: OrderDetails) -> tuple[PendingReturn, ReturnResult]:
         PendingReturn(order_id=order.order_id, stage=ReturnStage.CHECK),
         ReturnResult(outcome=ReturnOutcome.CONFIRM_ORDER, order=order),
     )
+
+
+# What a button means, and in which step each is valid. A click that does not fit the step the
+# customer is in (a button from an older question) is read as "not understood", never applied.
+_ACTION_CHOICE = {
+    CardAction.CONFIRM_ORDER: ReturnChoice.REJECT,
+    CardAction.CONFIRM_CANCEL: ReturnChoice.REJECT,
+    CardAction.DECLINE_OFFER: ReturnChoice.REJECT,
+    CardAction.CHOOSE_ORDER: ReturnChoice.REJECT,
+    CardAction.TAKE_REFUND: ReturnChoice.REFUND,
+    CardAction.TAKE_CREDITS: ReturnChoice.CREDITS,
+    CardAction.KEEP_ORDER: ReturnChoice.KEEP,
+}
+_OFFER_ACTIONS = {CardAction.TAKE_REFUND, CardAction.TAKE_CREDITS, CardAction.DECLINE_OFFER}
+_ACTIONS_BY_STAGE: dict[ReturnStage | None, set[CardAction]] = {
+    None: {CardAction.CHOOSE_ORDER},  # nothing pending: only picking one of the listed orders
+    ReturnStage.CHECK: {CardAction.CONFIRM_ORDER, CardAction.KEEP_ORDER},
+    ReturnStage.OFFER: _OFFER_ACTIONS,
+    ReturnStage.FINAL_OFFER: _OFFER_ACTIONS,
+    ReturnStage.CONFIRM: {CardAction.CONFIRM_CANCEL, CardAction.KEEP_ORDER},
+}
+
+
+def _from_action(state: AgentState, orders: list[OrderDetails], stage: ReturnStage | None) -> ReturnReading:
+    """The reading a click stands for, from rules alone (no model)."""
+    action = state["action"]
+    if action not in _ACTIONS_BY_STAGE[stage]:
+        return ReturnReading(choice=ReturnChoice.UNCLEAR, order_id=None)
+    order_id = state.get("action_order_id") if action is CardAction.CHOOSE_ORDER else None
+    if order_id not in {o.order_id for o in orders}:
+        order_id = None
+    return ReturnReading(choice=_ACTION_CHOICE[action], order_id=order_id)
+
+
+async def _reading(
+    state: AgentState, orders: list[OrderDetails], situation: str, stage: ReturnStage | None
+) -> ReturnReading:
+    if state.get("action") is not None:
+        return _from_action(state, orders, stage)
+    return await _read(state, orders, situation)
 
 
 def _start(order: OrderDetails) -> tuple[PendingReturn | None, ReturnResult]:
@@ -183,6 +224,7 @@ def _answer(pending: PendingReturn | None, result: ReturnResult) -> dict:
         "pending_return": pending,
         "return_result": result,
         "messages": [AIMessage(content=reply_for(result))],
+        "intent": Intent.ORDER_RETURN,  # a click skips the classifier; the summary still says what it was
     }
 
 
@@ -199,7 +241,9 @@ async def order_return_node(state: AgentState) -> dict:
     if pending is not None and pending.order_id in by_id and pending.stage is ReturnStage.CHECK:
         order = by_id[pending.order_id]
         candidates = [o for o in orders if _actionable(o)] or [order]
-        reading = await _read(state, candidates, CHECK_SITUATION.format(order_id=order.order_id))
+        reading = await _reading(
+            state, candidates, CHECK_SITUATION.format(order_id=order.order_id), pending.stage
+        )
         named = by_id.get(reading.order_id) if reading.order_id else None
         if named is not None and named.order_id != order.order_id and _actionable(named):
             return _answer(*_start(named))  # they named another order: that one is meant
@@ -215,7 +259,7 @@ async def order_return_node(state: AgentState) -> dict:
             ReturnStage.OFFER: OFFER_SITUATION,
             ReturnStage.FINAL_OFFER: FINAL_OFFER_SITUATION,
         }.get(pending.stage, CONFIRM_SITUATION).format(order_id=order.order_id)
-        reading = await _read(state, [order], situation)
+        reading = await _reading(state, [order], situation, pending.stage)
         new_pending, result = await _continue(source, ids, order, pending, reading.choice)
         return _answer(new_pending, result)
 
@@ -225,7 +269,7 @@ async def order_return_node(state: AgentState) -> dict:
     order = candidates[0] if len(candidates) == 1 else None
     reading = None
     if order is None:
-        reading = await _read(state, candidates, NO_PENDING_SITUATION)
+        reading = await _reading(state, candidates, NO_PENDING_SITUATION, None)
         order = by_id.get(reading.order_id) if reading.order_id else None
     if order is None:
         result = ReturnResult(outcome=ReturnOutcome.CHOOSE_ORDER, candidates=candidates)
