@@ -63,6 +63,21 @@ are, or whether something happened.
 - Not built: the return after delivery, telling "already kept"
   from "not allowed" to the customer, a real refund or credits API.
 
+## Updates
+
+- **Which order first.** Asking to cancel never opens with an offer: the order is shown and the
+  customer is asked "is this the one?" (stage `check`, outcome `confirm_order`), with "Yes, this
+  one" and "No, keep my order". Naming another order in words moves to that one. With several open
+  orders the cards are the list to choose from, and choosing one counts as the confirmation. Only
+  then the offer (or the confirmation of a cheaper order) follows. A request that finds nothing to
+  cancel now answers with its fixed text (before, it added no reply and the visitor's own message
+  was sent back as the answer).
+- **Buttons are not read by the model.** The cards send a typed action decided by rules, and only
+  written words go through the reading above, so the misreading described in the consequences can
+  now only happen with typed text (ADR-0019). Each turn is recorded in `return_events` (ADR-0020).
+- The free gift of the last offer is the Shapermint Essentials Everyday Wireless Jelly Bra
+  (`GIFT_NAME`).
+
 ## Alternatives
 
 - **Let the model call refund/cancel tools directly.** Rejected: it would decide eligibility and

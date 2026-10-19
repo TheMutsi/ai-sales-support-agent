@@ -1,6 +1,6 @@
 # Demo scenarios
 
-Three conversations to reproduce the main behaviors. Each was run for real against the local
+Four conversations to reproduce the main behaviors. Each was run for real against the local
 stack (`qwen2.5:7b-instruct` through Ollama); the model is not deterministic, so wording varies.
 
 ## Set up
@@ -53,6 +53,32 @@ injection shapes and short-circuits the graph, so the message never reaches the 
 that evade the regexes go through a second, model-based check
 ([ADR-0007](adr/0007-input-safety-cascade.md)); see the evaluation README for how often that
 works.
+
+## 4. Rejecting an order: asked which one, then buttons decided by rules
+
+On the example page click **mail2@gmail.com: Open order, $69.99** (`python -m app.db.seed
+--reset-demo` puts the demo orders back), open the chat and type: **I want to cancel my order**.
+
+Expected, one turn each:
+
+1. The order is shown as a card and asked about ("Is this the order you want to cancel?"), with
+   **Yes, this one** and **No, keep my order**. Nothing is offered yet.
+2. **Yes, this one**: the offer, as cards: a refund of $14.00 (20%) to the card or $21.00 (30%) in
+   credits, and **No thanks**.
+3. **No thanks**: the last offer, the same two options plus a free gift (Shapermint Essentials
+   Everyday Wireless Jelly Bra). One decline is enough to get here.
+4. Taking an option ("$21.00 in credits") keeps the order and records what was given; declining
+   again cancels it.
+
+Every reply is fixed text with no id and no model. The clicks are sent as actions
+([ADR-0019](adr/0019-buttons-are-typed-actions-decided-by-rules.md)): they answer in tens of
+milliseconds, while the first typed message goes through the classifier and takes seconds.
+Typing the answers instead of clicking works too (the model reads them). What happened is in the
+`return_events` table ([ADR-0020](adr/0020-return-events-for-outcome-analysis.md)):
+
+```sql
+select user_seq, input_type, action, stage_before, stage_after, outcome from return_events order by user_seq;
+```
 
 ## See the traces
 
