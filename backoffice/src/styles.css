@@ -23,3 +23,8 @@ main.wide { max-width: 70rem; }
 .timeline { color: #555; font-size: 0.9rem; }
 .message { display: grid; gap: 0.1rem; max-width: 34rem; margin: 0.5rem 0; padding: 0.5rem 0.7rem; border-radius: 8px; white-space: pre-wrap; background: #fff; }
 .message.user { margin-left: auto; background: #e8e8ff; }
+.message.human { margin-left: auto; background: #dff5e1; }
+.message.system { max-width: none; text-align: center; background: none; color: #666; font-size: 0.9rem; }
+.agent-view .message.user { margin-left: 0; background: #fff; }
+.reply { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+.reply input { flex: 1; padding: 0.4rem; }
