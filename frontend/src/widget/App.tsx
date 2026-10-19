@@ -45,19 +45,20 @@ export function App({
 
   // The conversation is only fetched (and an anonymous one only created) when the chat is shown,
   // not when the menu is: looking at the menu starts nothing.
+  const [synced, setSynced] = useState(false);
   const showingChat = open && view === "chat";
   useEffect(() => {
-    if (showingChat) void chat.load();
+    if (showingChat) void chat.load().finally(() => setSynced(true));
   }, [showingChat, chat]);
 
   // On the menu, still look (without starting anything) for a conversation a person is in, so a
   // visitor who reloads while waiting for one is taken to it instead of to a menu that hides it.
   useEffect(() => {
-    if (open && view === "menu") void chat.refresh();
+    if (open && view === "menu") void chat.refresh().finally(() => setSynced(true));
   }, [open, view, chat]);
 
   // "Seen" means the chat is on screen: an answer that arrives while the menu is showing is unread.
-  const unread = useUnread(answeredCount(messages), showingChat, () => settings.sound && playPing());
+  const unread = useUnread(answeredCount(messages), showingChat, () => settings.sound && playPing(), synced || messages.length > 0);
 
   if (!visible) return null;
   // Typing dots show from the moment of sending until the first word of the answer arrives.

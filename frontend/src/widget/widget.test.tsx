@@ -394,6 +394,18 @@ describe("the panel's views", () => {
     expect(container.querySelector(".mew-menu")).toBeNull();
   });
 
+  it("does not call a stored conversation unread when the menu looks it up", async () => {
+    const chat = fakeChat();
+    chat.refresh.mockImplementation(async () => {
+      chat.set({ messages: [{ id: "1", role: "assistant", kind: "text", content: "hi" }, { id: "2", role: "assistant", kind: "text", content: "again" }] });
+    });
+    await mountApp(chat);
+    await act(async () => {});
+
+    expect(container.querySelector(".mew-menu-badge")).toBeNull();
+    expect(container.querySelector(".mew-badge")).toBeNull();
+  });
+
   it("counts an answer that arrives while the menu is showing as unread, on the Help entry", async () => {
     const chat = fakeChat({ messages: [{ id: "1", role: "assistant", kind: "text", content: "hi" }] });
     await mountApp(chat); // what was already there is the baseline, not unread
