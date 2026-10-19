@@ -68,11 +68,12 @@ export function App() {
             ))}
           </select>
         </label>
-        <nav>
+        <nav aria-label="Main">
           {items.map((item) => (
             <button
               key={item.id}
               className={page === item.id ? "nav-item active" : "nav-item"}
+              aria-current={page === item.id ? "page" : undefined}
               onClick={() => setPage(item.id)}
             >
               <span className="nav-icon" aria-hidden>{item.icon}</span>
