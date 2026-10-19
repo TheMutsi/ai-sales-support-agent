@@ -2,7 +2,7 @@
 
 A card is a message part, like text or an image. The server builds them from what the turn
 really did (never from the model's words), stores them with the reply, and the widget draws one
-component per type. New kinds (a coupon, a carousel) are new members of the union, nothing else.
+component per type. New kinds (a carousel) are new members of the union, nothing else.
 """
 
 from typing import Annotated, Literal
@@ -45,16 +45,6 @@ class ProductCard(BaseModel):
     more_images: list[CardImage] = Field(default_factory=list)
 
 
-class CouponCard(BaseModel):
-    """A code the visitor was given."""
-
-    type: Literal["coupon"] = "coupon"
-    id: str
-    code: str
-    title: str
-    subtitle: str | None = None
-
-
 class DividerCard(BaseModel):
     """A mark between groups of cards (a "+" between a gift and the choices that come with it)."""
 
@@ -63,4 +53,4 @@ class DividerCard(BaseModel):
     label: str = ""
 
 
-Card = Annotated[ActionCard | ProductCard | CouponCard | DividerCard, Field(discriminator="type")]
+Card = Annotated[ActionCard | ProductCard | DividerCard, Field(discriminator="type")]

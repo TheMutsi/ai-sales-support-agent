@@ -176,7 +176,7 @@ Built: the tenant configuration cache, the admin API (`/api/admin`: roles and pe
 
 ### Orders demo (rejecting and returning an order)
 
-The example shop page has a login button per demo customer (`mail1` to `mail4`, one order each: open $29.99, open $69.99, in delivery $69.99, in delivery $29.99). A logged-in customer can ask about their orders and reject or return one (ADR-0018): an open order is cancelled after a confirmation, an order in delivery cannot be rejected (it is returned once it arrives), and a $69.99 order is first offered to be kept for $14.00 back (20%) or 2,100 points (30%). Rules in `app/business/returns.py`; nothing moves money, it is recorded in `order_adjustments`. `python -m app.db.seed --reset-demo` puts the demo orders back. Not built: the return after delivery, a real refund or points API.
+The example shop page has a login button per demo customer (`mail1` to `mail4`, one order each: open $29.99, open $69.99, in delivery $69.99, in delivery $29.99). A logged-in customer can ask about their orders and reject or return one (ADR-0018): an open order is cancelled after a confirmation, an order in delivery cannot be rejected (it is returned once it arrives), and a $69.99 order is first offered to be kept for $14.00 back (20%) or $21.00 in credits (30%). Rules in `app/business/returns.py`; nothing moves money, it is recorded in `order_adjustments`. `python -m app.db.seed --reset-demo` puts the demo orders back. Not built: the return after delivery, a real refund or credits API.
 
 ### Stage 10b status (the widget)
 

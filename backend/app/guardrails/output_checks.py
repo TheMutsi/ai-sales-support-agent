@@ -109,9 +109,9 @@ _ORDER_CANCELLED_CLAIM_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-_POINTS_CREDITED_CLAIM_PATTERN = re.compile(
-    r"points?.{0,40}\b(have been|has been|were|was|are now|ya fueron|ya se) (added|credited|acreditad)|"
-    r"\b(i|we)('ve| have) (added|credited).{0,40}points?|acreditamos.{0,40}puntos",
+_CREDITS_ADDED_CLAIM_PATTERN = re.compile(
+    r"credits?.{0,40}\b(have been|has been|were|was|are now|ya fueron|ya se) (added|credited|acreditad)|"
+    r"\b(i|we)('ve| have) (added|credited).{0,40}credits?|acreditamos.{0,40}cr[eé]ditos?",
     re.IGNORECASE,
 )
 
@@ -120,15 +120,15 @@ def check_unbacked_order_action_claim(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
     """Rejecting an order and taking the offer are done by the return step and nothing else, so
-    a reply saying an order was cancelled, or that points were added, without that step (or an
+    a reply saying an order was cancelled, or that credits were added, without that step (or an
     order that already says so) having done it is invented, and is blocked."""
     cancelled = not context.order_cancelled and _ORDER_CANCELLED_CLAIM_PATTERN.search(response_text)
-    credited = not context.points_credited and _POINTS_CREDITED_CLAIM_PATTERN.search(response_text)
+    credited = not context.credits_added and _CREDITS_ADDED_CLAIM_PATTERN.search(response_text)
     if cancelled or credited:
         return GuardrailViolation(
             code="unbacked_order_action_claim",
             severity=GuardrailSeverity.BLOCK,
-            message="Response says an order was cancelled or points were added, but nothing did that.",
+            message="Response says an order was cancelled or credits were added, but nothing did that.",
         )
     return None
 

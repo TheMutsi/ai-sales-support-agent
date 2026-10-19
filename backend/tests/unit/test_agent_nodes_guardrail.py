@@ -134,9 +134,9 @@ def test_only_what_the_return_step_did_this_turn_backs_a_claim():
     cancelled = _confirmed_return_actions({"return_result": _result(ReturnOutcome.CANCELLED)})
     offered = _confirmed_return_actions({"return_result": _result(ReturnOutcome.OFFER)})
 
-    assert (done["refund_recorded"], done["points_credited"], done["order_cancelled"]) == (True, False, False)
+    assert (done["refund_recorded"], done["credits_added"], done["order_cancelled"]) == (True, False, False)
     assert cancelled["order_cancelled"] and not cancelled["refund_recorded"]
-    assert offered["offering"] and not any(offered[k] for k in ("refund_recorded", "points_credited", "order_cancelled"))
+    assert offered["offering"] and not any(offered[k] for k in ("refund_recorded", "credits_added", "order_cancelled"))
 
 
 def test_old_refunds_and_cancellations_back_a_reply_only_in_a_status_answer():

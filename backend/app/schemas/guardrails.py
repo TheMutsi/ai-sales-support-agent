@@ -38,7 +38,7 @@ class OutputCheckContext(BaseModel):
     # What the return flow really did this turn: only these let a reply say it happened.
     order_cancelled: bool = False
     refund_recorded: bool = False
-    points_credited: bool = False
+    credits_added: bool = False
     # The reply is presenting an offer or asking for a confirmation: only claims that it is
     # already done are false then, "will be refunded" is the offer itself.
     offering: bool = False

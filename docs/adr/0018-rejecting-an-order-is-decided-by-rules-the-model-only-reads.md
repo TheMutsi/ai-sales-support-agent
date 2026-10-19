@@ -8,7 +8,7 @@
 A customer logged in by the shop can ask to reject or return an order. The product rules are
 specific and money-adjacent: an order not shipped yet can be rejected (cancelled); one on its
 way cannot, it is returned once it arrives; and before an order worth at least $50.00 is
-rejected the customer is offered to keep it for 20% back on their card or 30% as points. Taking
+rejected the customer is offered to keep it for 20% back on their card or 30% as credit. Taking
 the offer means the order is kept, not returned. Until now every request like this ended at a
 person (`refund_request`), and the guardrail said no tool could ever confirm a refund.
 
@@ -21,7 +21,7 @@ are, or whether something happened.
 - A new intent, `order_return`, behind the `refund:request` scope (verified customers only).
   Cancelling a subscription stays `refund_request`; rejecting one order is `order_return`.
 - `app/business/returns.py` holds the rules in integer cents (what can be done, the offer,
-  rounding half up, the $50 threshold, 1 point = 1 cent). The model never computes an amount.
+  rounding half up, the $50 threshold, amounts in integer cents). The model never computes an amount.
 - The `order_return` node asks the model for one thing, a `ReturnReading`: which of the
   customer's orders they mean (validated against their own list) and which of reject / refund /
   credits / keep / unclear they said. Everything after that is code: the node starts the offer or
@@ -39,13 +39,13 @@ are, or whether something happened.
   graph ends there: no model words a question or reports what happened, so a reply cannot invent
   an amount, an order number or a cancellation. The offers are **cards** (see `app/cards.py`), the
   text never names cancelling (the "No thanks" card is the button for that) and never shows an id.
-- Two chances: the first offer is the three options (refund, points, next order free); declining it
+- Two chances: the first offer is the two options (a refund to the card, or credit); declining it
   shows the **last offer**, the same three plus a free gift (a product card, a "+" and the choices);
   declining that cancels an open order (or, for one in delivery, says to return it once it arrives).
   Output guardrails: a refund claim is allowed only when the return step recorded one, and
-  `unbacked_order_action_claim` blocks "your order has been cancelled" or "points have been added"
+  `unbacked_order_action_claim` blocks "your order has been cancelled" or "credits have been added"
   in the replies of other steps.
-- Nothing moves money: the refund and the points are recorded in `order_adjustments` and
+- Nothing moves money: the refund and the credits are recorded in `order_adjustments` and
   stated to the customer, which is all the simulation does.
 
 ## Consequences
@@ -61,7 +61,7 @@ are, or whether something happened.
 - The existing `refund_request` path (ticket for a person) is untouched; "cancel my order" moved
   from it to this flow (evaluation case `order-012` changed accordingly).
 - Not built: the return after delivery, telling "already kept"
-  from "not allowed" to the customer, a real refund or points API.
+  from "not allowed" to the customer, a real refund or credits API.
 
 ## Alternatives
 
