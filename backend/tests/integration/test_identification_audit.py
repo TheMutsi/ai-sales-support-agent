@@ -33,7 +33,7 @@ class FakeSender:
 @pytest.fixture
 def sender(monkeypatch):
     fake = FakeSender()
-    monkeypatch.setattr(auth_module, "get_otp_sender", lambda settings: fake)
+    monkeypatch.setattr(auth_module, "sender_for_tenant", lambda settings, db: (lambda tenant: fake))
     return fake
 
 
@@ -293,7 +293,7 @@ def test_the_hashes_use_the_audit_key_not_the_session_key(shop, sender, monkeypa
     own = Settings(
         app_env="production",
         session_signing_key="s" * 40,
-        audit_hmac_key="a" * 40,
+        audit_hmac_key="a" * 40, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=",
     )
     monkeypatch.setattr(audit, "get_settings", lambda: own)
 

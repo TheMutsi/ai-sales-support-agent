@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from cryptography.fernet import Fernet
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,6 +20,9 @@ LLMProvider = Literal["anthropic", "google", "ollama"]
 
 
 _DEV_SESSION_KEY = "dev-only-session-signing-key-change-me"
+# A valid Fernet key, public like the one above: it only exists so a local database can hold
+# encrypted values without setup. `_require_a_real_encryption_key` refuses it elsewhere.
+_DEV_ENCRYPTION_KEY = "QfxUoq4U_nd0a17NgubcRMPK2uxUNiGw0KzvtDQrXe4="
 # The only environments allowed to run on the (public) development key. An
 # allowlist rather than `!= "production"`: an environment named "prod" or
 # "staging" must not fall through to a key anyone can read in the repo.
@@ -48,6 +52,9 @@ class Settings(BaseSettings):
     # not change every hash and a leaked session key does not make them guessable. Empty means
     # "use the session key", allowed in local environments only.
     audit_hmac_key: str = ""
+    # Encrypts credentials kept in the database (a tenant's SMTP password). A Fernet key, kept
+    # outside the database: a dump alone then reads as noise. See `app.core.secrets`.
+    secrets_encryption_key: str = _DEV_ENCRYPTION_KEY
     session_ttl_seconds: int = 24 * 3600
     # How long tenant configuration (origins, scope overrides) may be served from memory before it
     # is read again; a write from the back office invalidates it at once on that instance.
@@ -110,6 +117,17 @@ class Settings(BaseSettings):
             raise ValueError(f"AUDIT_HMAC_KEY must be at least {_MIN_SESSION_KEY_LENGTH} characters.")
         if key == self.session_signing_key:
             raise ValueError("AUDIT_HMAC_KEY must differ from SESSION_SIGNING_KEY.")
+        return self
+
+    @model_validator(mode="after")
+    def _require_a_real_encryption_key(self) -> "Settings":
+        key = self.secrets_encryption_key
+        if key == _DEV_ENCRYPTION_KEY and self.app_env not in LOCAL_ENVIRONMENTS:
+            raise ValueError("SECRETS_ENCRYPTION_KEY must be set to a real key outside local envs.")
+        try:
+            Fernet(key)
+        except ValueError as problem:
+            raise ValueError("SECRETS_ENCRYPTION_KEY must be a Fernet key (32 url-safe base64 bytes).") from problem
         return self
 
     @property

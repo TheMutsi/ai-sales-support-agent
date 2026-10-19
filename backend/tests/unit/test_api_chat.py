@@ -368,7 +368,7 @@ async def test_done_event_hides_safety_confidence_in_production(monkeypatch):
         lambda: Settings(
             app_env="production",
             session_signing_key="a-real-session-signing-key-32-chars!",
-            audit_hmac_key="an-audit-hmac-key-of-32-characters!!",
+            audit_hmac_key="an-audit-hmac-key-of-32-characters!!", secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=",
         ),
     )
     final_state = {

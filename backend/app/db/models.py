@@ -2,7 +2,16 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
@@ -70,6 +79,23 @@ class Tenant(Base):
         return normalized
 
     secrets: Mapped[list["TenantSecret"]] = relationship(back_populates="tenant")
+
+
+class TenantSmtp(Base):
+    """The mail server a tenant's one-time codes go out through. The password is stored
+    encrypted (`app.core.secrets`) and is write-only: nothing reads it back except the sender."""
+
+    __tablename__ = "tenant_smtp"
+    __table_args__ = (CheckConstraint("security in ('starttls', 'ssl', 'none')", name="ck_tenant_smtp_security"),)
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
+    host: Mapped[str]
+    port: Mapped[int]
+    security: Mapped[str] = mapped_column(default="starttls")  # starttls | ssl | none
+    username: Mapped[str | None]
+    password_encrypted: Mapped[str | None]
+    from_address: Mapped[str]
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class TenantSecret(Base):

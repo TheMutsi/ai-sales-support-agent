@@ -19,6 +19,7 @@ from app.db.models import (
     Subscription,
     Tenant,
     TenantSecret,
+    TenantSmtp,
     Ticket,
 )
 from app.db.seed import seed as seed_fixtures
@@ -60,6 +61,7 @@ def _wipe_commercial_tables(session: Session) -> None:
     session.query(OtpChallenge).delete()
     session.query(SecurityEvent).delete()
     session.query(TenantSecret).delete()
+    session.query(TenantSmtp).delete()
     session.query(Tenant).delete()
     session.query(Plan).delete()
     session.commit()

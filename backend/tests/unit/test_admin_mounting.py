@@ -7,7 +7,7 @@ from app.core.config import Settings, get_settings
 
 
 def _settings(**values) -> Settings:
-    return Settings(_env_file=None, session_signing_key="k" * 40, audit_hmac_key="a" * 40, **values)
+    return Settings(_env_file=None, session_signing_key="k" * 40, audit_hmac_key="a" * 40, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=", **values)
 
 
 @pytest.mark.parametrize(
