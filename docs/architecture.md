@@ -50,6 +50,10 @@ flowchart TD
   dispatch -- "product / technical / small_talk" --> rw
   dispatch -- pricing --> pc[get_plan_catalog<br/><i>prices from plans table</i>]
   dispatch -- "order status, with an order<br/>in the session" --> os[get_order_status<br/><i>the shop's orders, async</i>]
+  dispatch -- "order status, customer with<br/>no order in the session" --> co[get_customer_orders<br/><i>their own orders</i>]
+  dispatch -- "order_return, or a follow-up<br/>to a pending return" --> orr[order_return<br/><i>rules + one model reading</i>]
+  co --> rw
+  orr --> rw
   dispatch -- "upgrade / billing / refund" --> cc[get_customer_context]
   dispatch -- "human_escalation / unsupported<br/>(unsupported without ticket:create<br/>goes to response_writer)" --> he
   cc -- upgrade --> br[business_rules<br/><i>eligibility</i>]

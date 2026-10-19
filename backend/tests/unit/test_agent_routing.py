@@ -263,3 +263,50 @@ def test_the_order_lookup_goes_on_to_the_response_writer_in_the_compiled_graph()
     assert ("get_order_status", "response_writer") in edges
     assert ("get_customer_orders", "response_writer") in edges
 
+
+
+def _returning(intent, scopes=None, customer=True, pending=None) -> dict:
+    state = _state(intent, scopes=_CUSTOMER_SCOPES if scopes is None else scopes)
+    state["customer_id"] = str(uuid.uuid4()) if customer else None
+    state["pending_return"] = pending
+    return state
+
+
+def test_rejecting_an_order_needs_a_verified_customer_and_reaches_the_return_step():
+    assert route_after_intent(_returning(Intent.ORDER_RETURN)) == "order_return"
+    assert route_after_intent(_returning(Intent.ORDER_RETURN, scopes=_ANONYMOUS_SCOPES, customer=False)) == (
+        "request_identity"
+    )
+    assert route_after_intent(
+        _returning(Intent.ORDER_RETURN, scopes=_ORDER_LOOKUP_SCOPES, customer=False)
+    ) == "request_identity"
+
+
+def test_while_a_return_is_pending_the_answers_the_classifier_misfiles_continue_it():
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
+
+    for intent in (Intent.SMALL_TALK, Intent.REFUND_REQUEST, Intent.ORDER_STATUS):
+        assert route_after_intent(_returning(intent, pending=pending)) == "order_return"
+    # `unsupported` takes the safety judge first, which then dispatches the same way.
+    unsupported = {**_returning(Intent.UNSUPPORTED, pending=pending), "input_blocked": False}
+    assert route_after_safety_judge(unsupported) == "order_return"
+    # A different question goes its own way, and the pending return waits.
+    assert route_after_intent(_returning(Intent.PRICING_QUESTION, pending=pending)) == "get_plan_catalog"
+
+
+def test_a_pending_return_does_not_widen_who_may_act():
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
+    no_customer = _returning(Intent.SMALL_TALK, scopes=_ANONYMOUS_SCOPES, customer=False, pending=pending)
+
+    assert route_after_intent(no_customer) == "response_writer"
+
+
+def test_the_return_step_goes_on_to_the_writer_in_the_compiled_graph():
+    from app.agent.graph import build_graph
+
+    edges = {(e.source, e.target) for e in build_graph().get_graph().edges}
+    assert ("order_return", "response_writer") in edges
