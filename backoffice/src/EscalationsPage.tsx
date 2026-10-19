@@ -89,7 +89,11 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
         <ul>
           {items.map((item) => (
             <li key={item.id}>
-              <button className={selected === item.id ? "item active" : "item"} onClick={() => open(item.id)}>
+              <button
+                className={selected === item.id ? "item active" : "item"}
+                data-state={item.handoff_status}
+                onClick={() => open(item.id)}
+              >
                 <strong>{who(item)}</strong>
                 <span className="hint">{waitingLine(item)}</span>
                 <span>{item.ticket?.subject}</span>
@@ -102,7 +106,10 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
       <div className="detail">
         {detail ? (
           <>
-            <h3>{who(detail)}</h3>
+            <div className="detail-head">
+              <h3>{who(detail)}</h3>
+              <span className={`chip ${detail.handoff_status}`}>{waiting ? "Waiting" : active ? `With ${detail.handoff_agent_name ?? "an agent"}` : detail.handoff_status}</span>
+            </div>
             {detail.messages.map((message) => (
               <p key={message.seq} className={`message ${message.role}`}>
                 <span className="hint">{speaker(message)}</span>
@@ -110,7 +117,7 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
               </p>
             ))}
             {waiting && canAct && (
-              <button onClick={() => act(claimEscalation(session.token, tenantId, detail.id))}>
+              <button className="primary" onClick={() => act(claimEscalation(session.token, tenantId, detail.id))}>
                 Join the chat as {session.name}
               </button>
             )}
@@ -124,7 +131,7 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
                   }}
                 >
                   <input value={text} onChange={(event) => setText(event.target.value)} placeholder="Write to the visitor" />
-                  <button type="submit">Send</button>
+                  <button className="primary" type="submit">Send</button>
                 </form>
                 <div className="reply">
                   <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Resolution notes (optional)" />
