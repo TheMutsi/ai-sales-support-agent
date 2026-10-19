@@ -10,12 +10,12 @@ import uuid
 import pytest
 from sqlalchemy.orm import Session
 
-from app.db.models import Customer, Order, Plan, Subscription, Tenant, TenantSecret
+from app.db.models import Customer, Order, OrderAdjustment, Plan, Subscription, Tenant, TenantSecret
 from app.db.seed import seed
 from app.db.session import SessionLocal
 from app.orders.simulated import SimulatedOrderSource
 from app.orders.source import OrderSource
-from app.schemas.orders import OrderStatus
+from app.schemas.orders import OrderStatus, RetentionChoice
 
 
 @pytest.fixture
@@ -108,3 +108,134 @@ def test_another_tenants_id_lists_nothing_for_a_customer(db: Session):
     )
 
     assert orders == []
+
+
+def _customer_and_order(db: Session, email: str):
+    customer = db.query(Customer).filter_by(email=email).one()
+    order = db.query(Order).filter_by(customer_id=customer.id).one()
+    return customer, order
+
+
+def test_an_open_order_is_cancelled_once_and_an_order_in_delivery_cannot_be(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    open_customer, open_order = _customer_and_order(db, "mail1@gmail.com")
+    delivery_customer, delivery_order = _customer_and_order(db, "mail3@gmail.com")
+
+    cancelled = asyncio.run(
+        source.cancel_order(
+            tenant_id=open_customer.tenant_id, customer_id=open_customer.id, order_id=open_order.order_id
+        )
+    )
+    again = asyncio.run(
+        source.cancel_order(
+            tenant_id=open_customer.tenant_id, customer_id=open_customer.id, order_id=open_order.order_id
+        )
+    )
+    shipped = asyncio.run(
+        source.cancel_order(
+            tenant_id=delivery_customer.tenant_id,
+            customer_id=delivery_customer.id,
+            order_id=delivery_order.order_id,
+        )
+    )
+
+    assert cancelled is not None and cancelled.status is OrderStatus.CANCELLED
+    assert again is None and shipped is None
+    db.expire_all()
+    assert delivery_order.status == "in_delivery"
+
+
+def test_nobody_cancels_or_keeps_an_order_that_is_not_theirs(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    owner, order = _customer_and_order(db, "mail1@gmail.com")
+    stranger = db.query(Customer).filter_by(email="mail2@gmail.com").one()
+
+    cancelled = asyncio.run(
+        source.cancel_order(tenant_id=owner.tenant_id, customer_id=stranger.id, order_id=order.order_id)
+    )
+    kept = asyncio.run(
+        source.keep_order_with_retention(
+            tenant_id=owner.tenant_id, customer_id=stranger.id, order_id=order.order_id,
+            choice=RetentionChoice.REFUND,
+        )
+    )
+
+    assert cancelled is None and kept is None
+    db.expire_all()
+    assert order.status == "open"
+
+
+def test_keeping_an_order_with_the_offer_is_recorded_once_per_order(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    customer, order = _customer_and_order(db, "mail2@gmail.com")
+
+    def keep(choice):
+        return asyncio.run(
+            source.keep_order_with_retention(
+                tenant_id=customer.tenant_id, customer_id=customer.id, order_id=order.order_id,
+                choice=choice,
+            )
+        )
+
+    first = keep(RetentionChoice.CREDITS)
+    second = keep(RetentionChoice.REFUND)  # a second one must not stack
+
+    assert first is not None and (first.credit_points, first.refund_cents) == (2100, None)
+    assert second is None
+    db.expire_all()
+    [adjustment] = db.query(OrderAdjustment).filter_by(order_id=order.id).all()
+    assert (adjustment.kind, adjustment.credit_points) == ("credits", 2100)
+    assert order.status == "open"  # kept: nothing is cancelled
+
+
+def test_a_cancelled_order_cannot_be_kept_with_an_offer(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    customer, order = _customer_and_order(db, "mail1@gmail.com")
+    asyncio.run(source.cancel_order(tenant_id=customer.tenant_id, customer_id=customer.id, order_id=order.order_id))
+
+    kept = asyncio.run(
+        source.keep_order_with_retention(
+            tenant_id=customer.tenant_id, customer_id=customer.id, order_id=order.order_id,
+            choice=RetentionChoice.REFUND,
+        )
+    )
+
+    assert kept is None
+
+
+def test_an_order_kept_with_the_offer_cannot_be_cancelled_afterwards(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    customer, order = _customer_and_order(db, "mail2@gmail.com")
+    ids = {"tenant_id": customer.tenant_id, "customer_id": customer.id, "order_id": order.order_id}
+
+    kept = asyncio.run(source.keep_order_with_retention(**ids, choice=RetentionChoice.REFUND))
+    cancelled = asyncio.run(source.cancel_order(**ids))
+
+    assert kept is not None and (kept.refund_cents, kept.credit_points) == (1400, None)
+    assert cancelled is None
+    db.expire_all()
+    assert order.status == "open"
+
+
+def test_an_order_below_the_threshold_cannot_be_kept_with_an_offer(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    customer, order = _customer_and_order(db, "mail1@gmail.com")  # $29.99
+
+    kept = asyncio.run(
+        source.keep_order_with_retention(
+            tenant_id=customer.tenant_id, customer_id=customer.id, order_id=order.order_id,
+            choice=RetentionChoice.CREDITS,
+        )
+    )
+
+    assert kept is None
+    assert db.query(OrderAdjustment).count() == 0
+
+
+def test_another_tenants_id_cannot_cancel_or_keep_an_order(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    customer, order = _customer_and_order(db, "mail2@gmail.com")
+    ids = {"tenant_id": uuid.uuid4(), "customer_id": customer.id, "order_id": order.order_id}
+
+    assert asyncio.run(source.cancel_order(**ids)) is None
+    assert asyncio.run(source.keep_order_with_retention(**ids, choice=RetentionChoice.REFUND)) is None

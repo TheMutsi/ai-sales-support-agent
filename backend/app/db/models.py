@@ -319,6 +319,20 @@ class Order(Base):
     plan: Mapped["Plan"] = relationship()
 
 
+class OrderAdjustment(Base):
+    """What a customer took to keep an order they wanted to reject. Simulated like `Order`: the
+    shop's own system would hold it, and nothing here moves money. One per order."""
+
+    __tablename__ = "order_adjustments"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), unique=True)
+    kind: Mapped[str]  # refund_to_card | credits
+    refund_cents: Mapped[int | None]
+    credit_points: Mapped[int | None]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class Document(Base):
     """A knowledge-base source document. Content is populated by the RAG ingestion
     pipeline (Stage 3), not seeded here."""
