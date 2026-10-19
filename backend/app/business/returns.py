@@ -30,6 +30,8 @@ def retention_offer(amount_cents: int) -> RetentionOffer | None:
 
 
 def return_options(order: OrderDetails) -> ReturnOptions:
+    if order.retention is not None:  # kept with the offer: it stays as it is
+        return ReturnOptions(can_cancel=False, return_after_delivery=False, retention=None)
     open_order = order.status is OrderStatus.OPEN
     in_delivery = order.status is OrderStatus.IN_DELIVERY
     return ReturnOptions(

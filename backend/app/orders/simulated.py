@@ -41,7 +41,9 @@ class SimulatedOrderSource:
             orders = (
                 db.query(Order)
                 .join(Customer, Order.customer_id == Customer.id)
-                .options(joinedload(Order.customer), joinedload(Order.plan))
+                .options(
+                joinedload(Order.customer), joinedload(Order.plan), joinedload(Order.adjustment)
+            )
                 .filter(Customer.tenant_id == tenant_id, Customer.id == customer_id)
                 .order_by(Order.created_at.desc(), Order.order_id)
                 .limit(limit)
@@ -115,7 +117,9 @@ class SimulatedOrderSource:
         return (
             db.query(Order)
             .join(Customer, Order.customer_id == Customer.id)
-            .options(joinedload(Order.customer), joinedload(Order.plan))
+            .options(
+                joinedload(Order.customer), joinedload(Order.plan), joinedload(Order.adjustment)
+            )
             .filter(
                 Customer.tenant_id == tenant_id,
                 Customer.id == customer_id,
@@ -130,7 +134,9 @@ class SimulatedOrderSource:
             order = (
                 db.query(Order)
                 .join(Customer, Order.customer_id == Customer.id)
-                .options(joinedload(Order.customer), joinedload(Order.plan))
+                .options(
+                joinedload(Order.customer), joinedload(Order.plan), joinedload(Order.adjustment)
+            )
                 .filter(Customer.tenant_id == tenant_id, Order.order_id == order_id)
                 .one_or_none()
             )
@@ -138,6 +144,16 @@ class SimulatedOrderSource:
 
 
 def _details(order: Order) -> OrderDetails:
+    kept = order.adjustment
+    receipt = None
+    if kept is not None:
+        refund = kept.kind == "refund_to_card"
+        receipt = RetentionReceipt(
+            order_id=order.order_id,
+            choice=RetentionChoice.REFUND if refund else RetentionChoice.CREDITS,
+            refund_cents=kept.refund_cents,
+            credit_points=kept.credit_points,
+        )
     return OrderDetails(
         order_id=order.order_id,
         customer_email=order.customer.email,
@@ -146,4 +162,5 @@ def _details(order: Order) -> OrderDetails:
         currency=order.currency,
         status=OrderStatus(order.status),
         created_at=order.created_at,
+        retention=receipt,
     )

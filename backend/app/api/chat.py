@@ -49,7 +49,9 @@ from app.api.rate_limit import limit_by_conversation
 from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
 from app.chat.turns import (
+    KEEP,
     HandoffStatus,
+    Keep,
     MessageIdReused,
     MessageKind,
     TurnAction,
@@ -68,6 +70,7 @@ from app.core.tenant_config import tenant_configs
 from app.db.models import Conversation, Message
 from app.db.session import SessionLocal
 from app.schemas.chat import ChatRequest, ChatTurnSummary, MessageList, StoredMessage
+from app.schemas.orders import PendingReturn
 from app.schemas.rag import SourceReference
 
 logger = logging.getLogger(__name__)
@@ -92,6 +95,7 @@ def _build_initial_state(
         "customer_id": str(session.customer_id) if session.customer_id else None,
         "tenant_id": str(session.tenant_id),
         "order_id": session.order_id,
+        "pending_return": turn.pending_return,
         "scopes": sorted(s.value for s in scopes_for(session.level, scope_overrides)),
         "scope_overrides": scope_overrides,
     }
@@ -160,6 +164,7 @@ class TurnStore(Protocol):
         content: str,
         kind: MessageKind = MessageKind.TEXT,
         escalation_ticket_id: uuid.UUID | None = None,
+        pending_return: PendingReturn | None | Keep = KEEP,
     ) -> None: ...
 
     async def abandon(self) -> None: ...
@@ -190,6 +195,7 @@ class _DbTurnStore:
         content: str,
         kind: MessageKind = MessageKind.TEXT,
         escalation_ticket_id: uuid.UUID | None = None,
+        pending_return: PendingReturn | None | Keep = KEEP,
     ) -> None:
         def save() -> None:
             with SessionLocal() as db:
@@ -202,6 +208,7 @@ class _DbTurnStore:
                         now=datetime.now(UTC),
                         kind=kind,
                         escalation_ticket_id=escalation_ticket_id,
+                        pending_return=pending_return,
                     )
                 except TurnSuperseded:
                     logger.warning("late reply dropped (conversation %s)", self._conversation_id)
@@ -343,7 +350,11 @@ async def _stream_turn(
         receipt = final_state.get("ticket_receipt")
         await asyncio.shield(
             store.finish(
-                final_text, kind, escalation_ticket_id=receipt.ticket_id if receipt else None
+                final_text,
+                kind,
+                escalation_ticket_id=receipt.ticket_id if receipt else None,
+                # Absent means "this run did not touch it", never "clear it".
+                pending_return=final_state.get("pending_return", KEEP),
             )
         )
     except Exception:

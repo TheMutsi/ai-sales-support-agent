@@ -286,3 +286,25 @@ def test_the_latest_unanswered_question_is_the_pending_one(db, conversation):
     _ask_for_identity(db, conversation, _begin(db, conversation, "and my refund?"))
 
     assert pending_message(db, conversation_id=conversation.id).content == "and my refund?"
+
+
+def test_a_pending_return_is_kept_between_turns_and_cleared_when_asked(db, conversation):
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
+    first = _begin(db, conversation, "I want to reject my order")
+    finish_turn(
+        db, conversation_id=conversation.id, turn=first, content="Here is an offer", now=NOW,
+        pending_return=pending,
+    )
+
+    second = _begin(db, conversation, "tell me about the plans", now=NOW + timedelta(seconds=5))
+    assert second.pending_return == pending  # the next turn starts from it
+    finish_turn(db, conversation_id=conversation.id, turn=second, content="Plans...", now=NOW)  # not touched
+    third = _begin(db, conversation, "the credits", now=NOW + timedelta(seconds=10))
+    assert third.pending_return == pending
+
+    finish_turn(
+        db, conversation_id=conversation.id, turn=third, content="Done", now=NOW, pending_return=None
+    )
+    assert _begin(db, conversation, "thanks", now=NOW + timedelta(seconds=15)).pending_return is None
