@@ -2,7 +2,7 @@ import { ApiError, type Api } from "./api";
 import type { Auth } from "./auth";
 import { applyEvent, initialState, type ChatState } from "./chatState";
 import type { SessionStore } from "./sessionStore";
-import type { ChatEvent, ChatMessage, Session } from "./types";
+import type { Card, ChatEvent, ChatInput, ChatMessage, Session } from "./types";
 
 /**
  * The conversation as the UI sees it: state to subscribe to (`useSyncExternalStore`) and the
@@ -36,6 +36,12 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
         for await (const event of open(session)) update(applyEvent(state, event));
       });
     } catch (error) {
+      if (error instanceof ApiError && error.status === 422) {
+        // Rejected as malformed: a bug or someone tampering, never something a visitor did. It is
+        // not retried or explained in a way that helps probing; they are offered a fresh start.
+        update({ ...state, streaming: false, error: null, broken: true });
+        return;
+      }
       const busy = error instanceof ApiError && error.code === "turn_in_progress";
       update({ ...state, streaming: false, error: busy ? "Still answering your last message." : "Could not reach the assistant." });
     }
@@ -86,7 +92,26 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
       const id = crypto.randomUUID();
       store.touch();
       update({ ...state, messages: [...state.messages, { id, role: "user", kind: "text", content: text, images }] });
-      await run((session) => api.chat(session, text, id));
+      await run((session) => api.chat(session, { type: "text", message: text }, id));
+    },
+    /**
+     * A button was clicked. It says what its card says, and is sent as the action itself, not as
+     * text, so the server decides it by rules. A card stored before actions existed has none: it
+     * is sent as written.
+     */
+    async pick(card: Extract<Card, { type: "action" }>) {
+      if (!card.action) return this.send(card.message);
+      if (state.streaming) return;
+      const id = crypto.randomUUID();
+      const input: ChatInput = { type: "action", action: card.action, order_id: card.order_id ?? null };
+      store.touch();
+      update({ ...state, messages: [...state.messages, { id, role: "user", kind: "text", content: card.message }] });
+      await run((session) => api.chat(session, input, id));
+    },
+    /** Leaves a conversation that cannot go on: the next message starts a new one. */
+    restart() {
+      store.clear();
+      update(initialState);
     },
     /** After the visitor identified: answers the message that was waiting. */
     async resume() {

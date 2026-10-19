@@ -52,6 +52,9 @@
 .mew-typing i:nth-child(3) { animation-delay: 0.3s; }
 @keyframes mew-bounce { 0%, 60%, 100% { opacity: 0.35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
 .mew-error { padding: 8px 12px; background: #fef2f2; color: #b91c1c; font-size: 13px; }
+.mew-broken { padding: 12px; border-top: 1px solid var(--mew-line); text-align: center; font-size: 14px; }
+.mew-broken p { margin: 0 0 10px; }
+.mew-broken button { border: 0; border-radius: 999px; padding: 10px 18px; background: var(--mew-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 .mew-composer { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 12px; }
 .mew-row { display: flex; gap: 8px; align-items: flex-end; }
 .mew-composer .mew-attach { background: none; color: inherit; padding: 0 4px; font-size: 18px; }

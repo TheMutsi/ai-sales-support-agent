@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { CardImage, ChatMessage } from "../data/types";
+import type { ActionCard } from "./Cards";
 import { Avatar, MessageView } from "./MessageView";
 import { scrollModeFor } from "./scroll";
 
@@ -16,7 +17,7 @@ export function MessageList({
   busy: boolean;
   /** A person has the conversation: an offer of the assistant is no longer theirs to take. */
   locked: boolean;
-  onPick: (message: string) => void;
+  onPick: (card: ActionCard) => void;
   onZoom: (images: CardImage[]) => void;
 }) {
   const list = useRef<HTMLDivElement>(null);

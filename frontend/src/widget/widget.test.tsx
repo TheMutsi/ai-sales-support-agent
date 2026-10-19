@@ -340,7 +340,7 @@ describe("the menu", () => {
 
 describe("the panel's views", () => {
   const fakeChat = (state: Partial<ChatState> = {}) => {
-    let current: ChatState = { messages: [], streaming: false, error: null, identity: null, handoff: "none", ...state };
+    let current: ChatState = { messages: [], streaming: false, error: null, identity: null, handoff: "none", broken: false, ...state };
     const listeners = new Set<() => void>();
     return {
       load: vi.fn(async () => {}),
@@ -422,12 +422,12 @@ describe("cards", () => {
     image: { url: "http://api.test/api/assets/products/pro.svg", alt: "Pro plan" },
   };
 
-  it("sends an action card's message when it is chosen, only while it is the latest reply", async () => {
+  it("hands the whole card to onPick when it is chosen, only while it is the latest reply", async () => {
     const { Cards } = await import("./Cards");
     const onPick = vi.fn();
     mount(<Cards cards={[action]} active onPick={onPick} onZoom={() => {}} />);
     act(() => container.querySelector<HTMLButtonElement>(".mew-action")!.click());
-    expect(onPick).toHaveBeenCalledWith("I'll take the 2,100 points");
+    expect(onPick).toHaveBeenCalledWith(action);
 
     act(() => root!.unmount());
     onPick.mockClear();
