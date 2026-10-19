@@ -109,10 +109,13 @@ conversation. The `security_events` log line now carries the masked email too.
   code can still claim it later); orders come from the async `OrderSource` interface, with a
   simulated table behind it. The agent's `order_status` intent reads that order (the tenant and
   the order id come from the session, never from the message), and the widget form asks for the
-  email first and then a code or an order number. Two consequences to know: a customer verified with a code who asks
-  about an order has no order in the session, so the agent asks for one and offers only the
-  order form; and if they submit it, the new session is an `order_lookup` one with no customer,
-  so they lose the account scopes until they verify again (a narrowing, not a leak).
+  email first and then a code or an order number. Two consequences to know: a customer verified
+  with a code or by the shop who asks about an order has no order in the session, so the agent
+  reads all of their own orders (the customer comes from the session, never from the message;
+  the 10 most recent) and lists them, asking which one they mean when there are several, instead
+  of picking one for them; and if a visitor submits the order form, the new session is an
+  `order_lookup` one with no customer, so they lose the account scopes until they verify again
+  (a narrowing, not a leak).
 - A real email provider for the codes (outside local environments sending fails loudly).
 - Flagging codes requested and never used, and the retention job that archives old
   messages and purges anonymous conversations.

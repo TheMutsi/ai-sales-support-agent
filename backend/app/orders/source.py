@@ -14,3 +14,10 @@ class OrderSource(Protocol):
         """The tenant's order with that id, or None. The tenant is part of the call so an id
         from one shop can never resolve for another. A malformed id is None, not an error."""
         ...
+
+    async def list_orders(
+        self, *, tenant_id: uuid.UUID, customer_id: uuid.UUID, limit: int = 10
+    ) -> list[OrderDetails]:
+        """The customer's most recent orders, newest first. Only for a customer the session
+        already proved (never taken from a message); another shop's customer gives nothing."""
+        ...

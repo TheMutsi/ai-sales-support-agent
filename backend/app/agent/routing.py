@@ -35,6 +35,7 @@ def route_after_intent(
     Node.GET_CUSTOMER_CONTEXT,
     Node.GET_PLAN_CATALOG,
     Node.GET_ORDER_STATUS,
+    Node.GET_CUSTOMER_ORDERS,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -59,6 +60,7 @@ def route_after_safety_judge(
     Node.GET_CUSTOMER_CONTEXT,
     Node.GET_PLAN_CATALOG,
     Node.GET_ORDER_STATUS,
+    Node.GET_CUSTOMER_ORDERS,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -73,6 +75,7 @@ def _dispatch_by_intent(
     Node.GET_CUSTOMER_CONTEXT,
     Node.GET_PLAN_CATALOG,
     Node.GET_ORDER_STATUS,
+    Node.GET_CUSTOMER_ORDERS,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -86,9 +89,12 @@ def _dispatch_by_intent(
     if REQUIRED_SCOPE[state["intent"]] not in scopes:
         return Node.REQUEST_IDENTITY
     if state["intent"] == Intent.ORDER_STATUS:
-        # Holding `order:read` is not enough: a verified customer's session names no order, and
-        # the agent must not pick one for them. Only a session that proved an order reads it.
-        return Node.GET_ORDER_STATUS if state.get("order_id") else Node.REQUEST_IDENTITY
+        # A session that proved one order reads that order, whatever the message says. A verified
+        # customer's session names none, so all of their own orders are read (a customer proved
+        # by the shop or by a code, never one taken from the message) and they say which one.
+        if state.get("order_id"):
+            return Node.GET_ORDER_STATUS
+        return Node.GET_CUSTOMER_ORDERS if state.get("customer_id") else Node.REQUEST_IDENTITY
     if state["intent"] in {Intent.UPGRADE_REQUEST, Intent.BILLING_QUESTION, Intent.REFUND_REQUEST}:
         return Node.GET_CUSTOMER_CONTEXT
     if state["intent"] == Intent.PRICING_QUESTION:

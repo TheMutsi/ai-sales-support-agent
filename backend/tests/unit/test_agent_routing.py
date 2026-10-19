@@ -5,6 +5,8 @@ over a `state` dict — no LLM, no DB, no graph compilation needed to exercise
 them, the same way the business-rules tests construct their inputs directly.
 """
 
+import uuid
+
 from langchain_core.messages import AIMessage
 from langgraph.graph import END
 
@@ -236,10 +238,22 @@ def test_an_anonymous_visitor_asking_about_an_order_is_asked_to_identify():
     assert route_after_intent(_asking_about_an_order(_ANONYMOUS_SCOPES)) == "request_identity"
 
 
-def test_a_customer_with_no_order_in_the_session_is_asked_for_one_not_given_a_guess():
-    """A verified customer holds `order:read` but the session names no order: the agent must
-    not pick one for them, so it asks for the order to look up."""
+def test_a_verified_customer_with_no_order_in_the_session_gets_their_own_orders_read():
+    """The session names no order, so none is picked for them: all of their own are read and
+    they say which one. Without a customer (an anonymous visitor) it asks to identify."""
+    state = {**_asking_about_an_order(_CUSTOMER_SCOPES), "customer_id": str(uuid.uuid4())}
+
+    assert route_after_intent(state) == "get_customer_orders"
     assert route_after_intent(_asking_about_an_order(_CUSTOMER_SCOPES)) == "request_identity"
+
+
+def test_a_session_that_proved_an_order_reads_that_order_even_for_a_customer():
+    state = {
+        **_asking_about_an_order(_CUSTOMER_SCOPES, order_id="a" * 20),
+        "customer_id": str(uuid.uuid4()),
+    }
+
+    assert route_after_intent(state) == "get_order_status"
 
 
 def test_the_order_lookup_goes_on_to_the_response_writer_in_the_compiled_graph():
@@ -247,4 +261,5 @@ def test_the_order_lookup_goes_on_to_the_response_writer_in_the_compiled_graph()
 
     edges = {(e.source, e.target) for e in build_graph().get_graph().edges}
     assert ("get_order_status", "response_writer") in edges
+    assert ("get_customer_orders", "response_writer") in edges
 

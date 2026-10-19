@@ -23,6 +23,24 @@ class SimulatedOrderSource:
             return None
         return await asyncio.to_thread(self._read, tenant_id, order_id)
 
+    async def list_orders(
+        self, *, tenant_id: uuid.UUID, customer_id: uuid.UUID, limit: int = 10
+    ) -> list[OrderDetails]:
+        return await asyncio.to_thread(self._list, tenant_id, customer_id, limit)
+
+    def _list(self, tenant_id: uuid.UUID, customer_id: uuid.UUID, limit: int) -> list[OrderDetails]:
+        with self._session_factory() as db:
+            orders = (
+                db.query(Order)
+                .join(Customer, Order.customer_id == Customer.id)
+                .options(joinedload(Order.customer), joinedload(Order.plan))
+                .filter(Customer.tenant_id == tenant_id, Customer.id == customer_id)
+                .order_by(Order.created_at.desc(), Order.order_id)
+                .limit(limit)
+                .all()
+            )
+            return [_details(order) for order in orders]
+
     def _read(self, tenant_id: uuid.UUID, order_id: str) -> OrderDetails | None:
         with self._session_factory() as db:
             order = (
@@ -32,14 +50,16 @@ class SimulatedOrderSource:
                 .filter(Customer.tenant_id == tenant_id, Order.order_id == order_id)
                 .one_or_none()
             )
-            if order is None:
-                return None
-            return OrderDetails(
-                order_id=order.order_id,
-                customer_email=order.customer.email,
-                plan_slug=order.plan.slug,
-                amount_cents=order.amount_cents,
-                currency=order.currency,
-                status=OrderStatus(order.status),
-                created_at=order.created_at,
-            )
+            return None if order is None else _details(order)
+
+
+def _details(order: Order) -> OrderDetails:
+    return OrderDetails(
+        order_id=order.order_id,
+        customer_email=order.customer.email,
+        plan_slug=order.plan.slug,
+        amount_cents=order.amount_cents,
+        currency=order.currency,
+        status=OrderStatus(order.status),
+        created_at=order.created_at,
+    )

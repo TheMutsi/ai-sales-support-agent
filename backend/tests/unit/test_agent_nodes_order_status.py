@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.agent.nodes import order_status as order_status_module
-from app.agent.nodes.order_status import get_order_status_node
+from app.agent.nodes.order_status import get_customer_orders_node, get_order_status_node
 from app.agent.nodes.response_writer import _build_context_blob
 from app.schemas.orders import OrderDetails, OrderStatus
 
@@ -36,6 +36,10 @@ class FakeOrders:
     async def get_order(self, *, tenant_id, order_id):
         self.calls.append({"tenant_id": tenant_id, "order_id": order_id})
         return self.order
+
+    async def list_orders(self, *, tenant_id, customer_id, limit=10):
+        self.calls.append({"tenant_id": tenant_id, "customer_id": customer_id})
+        return [self.order] if self.order else []
 
 
 @pytest.fixture
@@ -108,3 +112,45 @@ def test_the_chat_hands_the_agent_the_tenant_and_the_order_of_the_session():
 
     assert state["tenant_id"] == TENANT and state["order_id"] == ORDER_ID
     assert state["customer_id"] is None
+
+
+CUSTOMER = str(uuid.uuid4())
+
+
+@pytest.mark.asyncio
+async def test_a_verified_customers_orders_are_read_for_the_session_customer(orders):
+    fake = orders(_order(status=OrderStatus.OPEN))
+
+    result = await get_customer_orders_node({"tenant_id": TENANT, "customer_id": CUSTOMER})
+
+    assert [o.status for o in result["customer_orders"]] == [OrderStatus.OPEN]
+    assert fake.calls == [{"tenant_id": uuid.UUID(TENANT), "customer_id": uuid.UUID(CUSTOMER)}]
+
+
+@pytest.mark.asyncio
+async def test_reading_a_customers_orders_needs_a_customer(orders):
+    orders(None)
+
+    with pytest.raises(ValueError, match="verified customer"):
+        await get_customer_orders_node({"tenant_id": TENANT, "customer_id": None})
+
+
+def test_the_writer_is_given_every_order_with_its_status_in_words():
+    blob = _build_context_blob(
+        {
+            "intent": "order_status",
+            "customer_orders": [
+                _order(order_id="B" * 20, amount_cents=6999, status=OrderStatus.IN_DELIVERY),
+                _order(amount_cents=2999, status=OrderStatus.OPEN),
+            ],
+        }
+    )
+
+    assert "$69.99" in blob and "in delivery (on its way)" in blob
+    assert "$29.99" in blob and "open (not shipped yet)" in blob
+
+
+def test_a_customer_without_orders_is_told_so_not_that_a_number_was_not_found():
+    blob = _build_context_blob({"intent": "order_status", "customer_orders": []})
+
+    assert "no orders" in blob and "no order with that number" not in blob
