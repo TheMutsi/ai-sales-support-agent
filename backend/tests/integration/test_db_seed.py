@@ -136,6 +136,11 @@ def test_seed_creates_the_demo_shop_customers_with_one_order_each(db: Session):
     }
     mail1 = db.query(Customer).filter_by(email="mail1@gmail.com").one()
     assert mail1.external_id == mail1.email and mail1.tenant_id is not None
+    plans = {
+        o.customer.email: o.plan.slug
+        for o in db.query(Order).join(Customer).filter(Customer.email.like("mail%@gmail.com"))
+    }
+    assert plans == {"mail1@gmail.com": "starter", "mail2@gmail.com": "pro", "mail3@gmail.com": "pro", "mail4@gmail.com": "starter"}
 
 
 def test_resetting_the_demo_shop_restores_its_orders(db: Session):

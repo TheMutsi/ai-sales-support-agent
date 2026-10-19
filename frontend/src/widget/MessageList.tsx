@@ -21,7 +21,7 @@ export function MessageList({
   // Follow the answer as it streams in: the last message's text changes without a new message.
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "end" });
-  }, [messages.length, last?.content, waiting]);
+  }, [messages.length, last?.content, last?.cards?.length, waiting]);
 
   return (
     <div className="mew-messages" role="log" aria-live="polite">
