@@ -21,19 +21,24 @@ export function nextUnread(prev: UnreadState, answered: number, open: boolean): 
   return answered > prev.seen ? { seen: prev.seen, unread: answered - prev.seen } : prev;
 }
 
-/** The unread count for the launcher badge; `onNew` runs when it grows (to play the sound). */
-export function useUnread(answered: number, open: boolean, onNew: () => void): number {
+/**
+ * The unread count for the launcher badge; `onNew` runs when it grows (to play the sound).
+ * `ready` is false until the conversation has been read from the server (or there is something
+ * to read): a stored conversation that arrives after the first look is the baseline, not news.
+ */
+export function useUnread(answered: number, open: boolean, onNew: () => void, ready = true): number {
   const state = useRef<UnreadState>({ seen: null, unread: 0 });
   const [unread, setUnread] = useState(0);
   const notify = useRef(onNew);
   notify.current = onNew;
 
   useEffect(() => {
+    if (!ready) return;
     const next = nextUnread(state.current, answered, open);
     if (next.unread > state.current.unread) notify.current();
     state.current = next;
     setUnread(next.unread);
-  }, [answered, open]);
+  }, [answered, open, ready]);
 
   return unread;
 }

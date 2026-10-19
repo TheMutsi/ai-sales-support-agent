@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ChatMessage } from "../data/types";
-import { MessageView } from "./MessageView";
+import { Avatar, MessageView } from "./MessageView";
 
 export function MessageList({ messages, waiting }: { messages: ChatMessage[]; waiting: boolean }) {
   const end = useRef<HTMLDivElement>(null);
@@ -17,7 +17,14 @@ export function MessageList({ messages, waiting }: { messages: ChatMessage[]; wa
       {messages.map((message) => (
         <MessageView key={message.id} message={message} />
       ))}
-      {waiting && <div className="mew-message mew-assistant mew-typing" aria-label="Typing">…</div>}
+      {waiting && (
+        <div className="mew-row-assistant">
+          <Avatar />
+          <div className="mew-message mew-assistant mew-typing" role="status" aria-label="Typing">
+            <i /><i /><i />
+          </div>
+        </div>
+      )}
       <div ref={end} />
     </div>
   );

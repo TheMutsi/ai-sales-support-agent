@@ -7,6 +7,7 @@ import { MessageView } from "./MessageView";
 import { toParts } from "./parts";
 import { rejection } from "./attachments";
 import { answeredCount, nextUnread } from "./unread";
+import type { ChatState } from "../data/chatState";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -310,3 +311,106 @@ describe("IdentityForm with an order number", () => {
   });
 });
 
+
+describe("the menu", () => {
+  it("only lets 'Help & Support' lead anywhere; the other entries are drawn and do nothing", async () => {
+    const { Menu } = await import("./Menu");
+    const onHelp = vi.fn();
+    mount(<Menu onHelp={onHelp} onClose={() => {}} />);
+    const items = Array.from(container.querySelectorAll<HTMLButtonElement>(".mew-menu-item"));
+
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Manage Order",
+      "Track my Order",
+      "Exchanges & Returns",
+      "Manage Memberships",
+      "Manage my TV Show Order",
+      "Help & Support",
+    ]);
+    items.slice(0, -1).forEach((item) => {
+      expect(item.getAttribute("aria-disabled")).toBe("true");
+      act(() => item.click());
+    });
+    expect(onHelp).not.toHaveBeenCalled();
+
+    act(() => items.at(-1)!.click());
+    expect(onHelp).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the panel's views", () => {
+  const fakeChat = (state: Partial<ChatState> = {}) => {
+    let current: ChatState = { messages: [], streaming: false, error: null, identity: null, handoff: "none", ...state };
+    const listeners = new Set<() => void>();
+    return {
+      load: vi.fn(async () => {}),
+      refresh: vi.fn(async () => {}),
+      send: vi.fn(async () => {}),
+      getState: () => current,
+      subscribe: (fn: () => void) => (listeners.add(fn), () => listeners.delete(fn)),
+      set: (next: Partial<ChatState>) => {
+        current = { ...current, ...next };
+        listeners.forEach((fn) => fn());
+      },
+    };
+  };
+  const mountApp = async (chat: ReturnType<typeof fakeChat>) => {
+    const { App } = await import("./App");
+    const { createController } = await import("../loader/controller");
+    const controller = createController();
+    controller.run("open");
+    mount(<App controller={controller} chat={chat as never} identity={{} as never} settings={{ sound: false }} />);
+    return controller;
+  };
+  const click = (text: string) =>
+    act(() => Array.from(container.querySelectorAll("button")).find((b) => b.textContent?.includes(text))!.click());
+
+  it("starts on the menu, loads nothing there, and loads the conversation when Help & Support is chosen", async () => {
+    const chat = fakeChat();
+    await mountApp(chat);
+
+    expect(container.querySelector(".mew-menu")).not.toBeNull();
+    expect(chat.load).not.toHaveBeenCalled();
+    expect(chat.refresh).toHaveBeenCalled(); // only looks, it never starts a conversation
+
+    click("Help & Support");
+    expect(container.querySelector(".mew-menu")).toBeNull();
+    expect(chat.load).toHaveBeenCalledTimes(1);
+
+    click("Back to menu");
+    expect(container.querySelector(".mew-menu")).not.toBeNull();
+  });
+
+  it("goes straight to the chat when a person already has the conversation", async () => {
+    await mountApp(fakeChat({ handoff: "active" }));
+    expect(container.querySelector(".mew-menu")).toBeNull();
+    expect(container.querySelector(".mew-composer")).not.toBeNull();
+  });
+
+  it("takes a visitor on the menu to the chat when a person turns out to be in it", async () => {
+    const chat = fakeChat();
+    await mountApp(chat);
+    act(() => chat.set({ handoff: "waiting" }));
+    expect(container.querySelector(".mew-menu")).toBeNull();
+  });
+
+  it("does not call a stored conversation unread when the menu looks it up", async () => {
+    const chat = fakeChat();
+    chat.refresh.mockImplementation(async () => {
+      chat.set({ messages: [{ id: "1", role: "assistant", kind: "text", content: "hi" }, { id: "2", role: "assistant", kind: "text", content: "again" }] });
+    });
+    await mountApp(chat);
+    await act(async () => {});
+
+    expect(container.querySelector(".mew-menu-badge")).toBeNull();
+    expect(container.querySelector(".mew-badge")).toBeNull();
+  });
+
+  it("counts an answer that arrives while the menu is showing as unread, on the Help entry", async () => {
+    const chat = fakeChat({ messages: [{ id: "1", role: "assistant", kind: "text", content: "hi" }] });
+    await mountApp(chat); // what was already there is the baseline, not unread
+    act(() => chat.set({ messages: [{ id: "1", role: "assistant", kind: "text", content: "hi" }, { id: "2", role: "human", kind: "text", content: "hello" }] }));
+
+    expect(container.querySelector(".mew-menu-badge")?.textContent).toBe("1");
+  });
+});
