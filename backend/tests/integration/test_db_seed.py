@@ -136,6 +136,11 @@ def test_seed_creates_the_demo_shop_customers_with_one_order_each(db: Session):
     }
     mail1 = db.query(Customer).filter_by(email="mail1@gmail.com").one()
     assert mail1.external_id == mail1.email and mail1.tenant_id is not None
+    plans = {
+        o.customer.email: o.plan.slug
+        for o in db.query(Order).join(Customer).filter(Customer.email.like("mail%@gmail.com"))
+    }
+    assert plans == {"mail1@gmail.com": "starter", "mail2@gmail.com": "pro", "mail3@gmail.com": "pro", "mail4@gmail.com": "starter"}
 
 
 def test_resetting_the_demo_shop_restores_its_orders(db: Session):
@@ -182,8 +187,25 @@ def test_resetting_the_demo_shop_leaves_other_tenants_and_other_environments_alo
 
     db.expire_all()
     assert conversation.pending_return_order_id == "A" * 20  # not the demo shop's
+    db.query(Conversation).delete()  # the next test's fixture deletes customers
+    db.commit()
 
     production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
     monkeypatch.setattr(seed_module, "get_settings", lambda: production)
     with pytest.raises(RuntimeError, match="local"):
         reset_demo_shop(db)
+
+
+def test_resetting_the_demo_shop_restores_the_plan_of_each_order(db: Session):
+    from app.db.seed import reset_demo_shop
+
+    seed(db)
+    starter = db.query(Plan).filter_by(slug="starter").one()
+    mail2 = db.query(Order).join(Customer).filter(Customer.email == "mail2@gmail.com").one()
+    mail2.plan_id = starter.id
+    db.commit()
+
+    reset_demo_shop(db)
+
+    db.expire_all()
+    assert mail2.plan.slug == "pro"

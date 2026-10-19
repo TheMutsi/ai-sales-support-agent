@@ -122,7 +122,7 @@ def seed(db: Session) -> None:
     db.flush()
     _ensure_orders(db, plans_by_slug, tenant_id)
     if tenant:
-        _ensure_demo_shop(db, plans_by_slug["starter"], tenant_id, now)
+        _ensure_demo_shop(db, plans_by_slug, tenant_id, now)
     db.commit()
 
 
@@ -136,7 +136,13 @@ DEMO_SHOP = [
 ]
 
 
-def _ensure_demo_shop(db: Session, plan: Plan, tenant_id, now: datetime) -> None:
+def _demo_plan(plans: dict[str, Plan], amount_cents: int) -> Plan:
+    """The plan an order of this amount is for, so a card shows a name that fits its price: the
+    cheaper demo orders are Starter, the $69.99 ones Pro (what was charged is not a list price)."""
+    return plans["pro" if amount_cents >= 5000 else "starter"]
+
+
+def _ensure_demo_shop(db: Session, plans: dict[str, Plan], tenant_id, now: datetime) -> None:
     """Demo customers and their orders for the example page. Idempotent; local environments only
     (the caller has a dev tenant only there)."""
     have = {
@@ -158,7 +164,7 @@ def _ensure_demo_shop(db: Session, plan: Plan, tenant_id, now: datetime) -> None
             db.flush()
             db.add(
                 Subscription(
-                    customer_id=customer.id, plan_id=plan.id, status="active",
+                    customer_id=customer.id, plan_id=plans["starter"].id, status="active",
                     current_period_end=now + timedelta(days=20),
                 )
             )
@@ -166,7 +172,8 @@ def _ensure_demo_shop(db: Session, plan: Plan, tenant_id, now: datetime) -> None
         if db.query(Order).filter_by(order_id=order_id).one_or_none() is None:
             db.add(
                 Order(
-                    order_id=order_id, customer_id=customer.id, plan_id=plan.id,
+                    order_id=order_id, customer_id=customer.id,
+                    plan_id=_demo_plan(plans, entry["amount_cents"]).id,
                     amount_cents=entry["amount_cents"], status=entry["status"],
                     created_at=now - timedelta(days=2),
                 )
@@ -214,6 +221,7 @@ def reset_demo_shop(db: Session) -> int:
     tenant = db.query(Tenant).filter_by(api_key=DEV_TENANT_API_KEY).one_or_none()
     if tenant is None:
         return 0
+    plans = {p.slug: p for p in db.query(Plan)}
     emails = [entry["email"] for entry in DEMO_SHOP]
     wanted = {_order_id(entry["email"]): entry for entry in DEMO_SHOP}
     orders = (
@@ -226,6 +234,7 @@ def reset_demo_shop(db: Session) -> int:
         db.query(OrderAdjustment).filter_by(order_id=order.id).delete()
         order.status = wanted[order.order_id]["status"]
         order.amount_cents = wanted[order.order_id]["amount_cents"]
+        order.plan_id = _demo_plan(plans, order.amount_cents).id
     customer_ids = [
         c.id
         for c in db.query(Customer).filter(Customer.email.in_(emails), Customer.tenant_id == tenant.id)

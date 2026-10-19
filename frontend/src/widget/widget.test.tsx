@@ -1,4 +1,4 @@
-import { act } from "react";
+import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
@@ -412,5 +412,87 @@ describe("the panel's views", () => {
     act(() => chat.set({ messages: [{ id: "1", role: "assistant", kind: "text", content: "hi" }, { id: "2", role: "human", kind: "text", content: "hello" }] }));
 
     expect(container.querySelector(".mew-menu-badge")?.textContent).toBe("1");
+  });
+});
+
+describe("cards", () => {
+  const action = { type: "action" as const, id: "offer-points", title: "2,100 points", badge: "30% in points", message: "I'll take the 2,100 points" };
+  const product = {
+    type: "product" as const, id: "o1", name: "Pro plan", price: "$69.99", badge: "Open",
+    image: { url: "http://api.test/api/assets/products/pro.svg", alt: "Pro plan" },
+  };
+
+  it("sends an action card's message when it is chosen, only while it is the latest reply", async () => {
+    const { Cards } = await import("./Cards");
+    const onPick = vi.fn();
+    mount(<Cards cards={[action]} active onPick={onPick} onZoom={() => {}} />);
+    act(() => container.querySelector<HTMLButtonElement>(".mew-action")!.click());
+    expect(onPick).toHaveBeenCalledWith("I'll take the 2,100 points");
+
+    act(() => root!.unmount());
+    onPick.mockClear();
+    mount(<Cards cards={[action]} active={false} onPick={onPick} onZoom={() => {}} />);
+    expect(container.querySelector<HTMLButtonElement>(".mew-action")!.disabled).toBe(true);
+  });
+
+  it("shows a product small and opens its picture large, closing with Escape", async () => {
+    const { Cards, Lightbox } = await import("./Cards");
+    const onZoom = vi.fn();
+    mount(<Cards cards={[product]} active onPick={() => {}} onZoom={onZoom} />);
+    expect(container.querySelector(".mew-product strong")?.textContent).toBe("Pro plan");
+    expect(container.querySelector(".mew-price")?.textContent).toBe("$69.99");
+    act(() => container.querySelector<HTMLButtonElement>(".mew-product-image")!.click());
+    expect(onZoom).toHaveBeenCalledWith(product.image);
+
+    act(() => root!.unmount());
+    const onClose = vi.fn();
+    mount(<Lightbox image={product.image} onClose={onClose} />);
+    expect(container.querySelector(".mew-lightbox img")?.getAttribute("src")).toBe(product.image.url);
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("draws the cards of an assistant message under its text", () => {
+    const cardsProps = { active: true, onPick: () => {}, onZoom: () => {} };
+    mount(<MessageView message={{ id: "1", role: "assistant", kind: "text", content: "Pick one", cards: [action] }} cards={cardsProps} />);
+    expect(container.querySelector(".mew-assistant")?.textContent).toBe("Pick one");
+    expect(container.querySelectorAll(".mew-card")).toHaveLength(1);
+  });
+
+  it("only lets the latest reply's cards be used, and not while busy or when a person has the chat", async () => {
+    const { MessageList } = await import("./MessageList");
+    const messages = [
+      { id: "1", role: "assistant" as const, kind: "text" as const, content: "old", cards: [action] },
+      { id: "2", role: "assistant" as const, kind: "text" as const, content: "new", cards: [action] },
+    ];
+    const state = (busy: boolean, locked: boolean) => {
+      act(() => root?.unmount());
+      mount(<MessageList messages={messages} waiting={false} busy={busy} locked={locked} onPick={() => {}} onZoom={() => {}} />);
+      return Array.from(container.querySelectorAll<HTMLButtonElement>(".mew-action")).map((b) => b.disabled);
+    };
+
+    expect(state(false, false)).toEqual([true, false]);
+    expect(state(true, false)).toEqual([true, true]);
+    expect(state(false, true)).toEqual([true, true]);
+  });
+
+  it("gives the focus back to the picture when the large one is closed", async () => {
+    const { Cards, Lightbox } = await import("./Cards");
+    const Host = () => {
+      const [image, setImage] = React.useState<typeof product.image | null>(null);
+      return (
+        <>
+          <Cards cards={[product]} active onPick={() => {}} onZoom={setImage} />
+          {image && <Lightbox image={image} onClose={() => setImage(null)} />}
+        </>
+      );
+    };
+    mount(<Host />);
+    const thumb = container.querySelector<HTMLButtonElement>(".mew-product-image")!;
+    act(() => thumb.focus());
+    act(() => thumb.click());
+    expect(document.activeElement).toBe(container.querySelector(".mew-lightbox-close"));
+    act(() => container.querySelector<HTMLButtonElement>(".mew-lightbox-close")!.click());
+    expect(document.activeElement).toBe(thumb);
   });
 });
