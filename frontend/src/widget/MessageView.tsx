@@ -49,7 +49,7 @@ export function MessageView({ message, cards }: { message: ChatMessage; cards?: 
   // The assistant writes markdown; what a visitor types is shown as typed.
   if (message.role === "assistant") {
     return (
-      <div className="mew-row-assistant">
+      <div className="mew-row-assistant" data-message="">
         <Avatar />
         <div className="mew-stack">
           <div className="mew-message mew-assistant">

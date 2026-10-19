@@ -531,3 +531,38 @@ describe("cards", () => {
     expect(container.querySelector(".mew-lightbox > img")?.getAttribute("src")).toBe("https://cdn.test/back.jpg");
   });
 });
+
+describe("scrolling", () => {
+  const withCards = { id: "2", role: "assistant" as const, kind: "text" as const, content: "Choose", cards: [{ type: "action" as const, id: "a", title: "x", message: "x" }] };
+  const plain = { id: "1", role: "assistant" as const, kind: "text" as const, content: "Hello" };
+
+  it("decides from the card types: cards hold the scroll, a plain answer follows it, and the set can change", async () => {
+    const { scrollModeFor, HOLD_SCROLL_FOR } = await import("./scroll");
+
+    expect(scrollModeFor(withCards)).toBe("message-start");
+    expect(scrollModeFor(plain)).toBe("end");
+    expect(scrollModeFor(undefined)).toBe("end");
+    (HOLD_SCROLL_FOR as Set<string>).delete("action");
+    expect(scrollModeFor(withCards)).toBe("end"); // taking a type out of the set brings back autoscroll
+    (HOLD_SCROLL_FOR as Set<string>).add("action");
+  });
+
+  it("scrolls to the start of a reply with cards, and to the bottom for anything else", async () => {
+    const { MessageList } = await import("./MessageList");
+    const calls: { el: string; block: unknown }[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (arg?: boolean | ScrollIntoViewOptions) {
+      calls.push({ el: this.hasAttribute("data-message") ? "message" : "end", block: (arg as ScrollIntoViewOptions)?.block });
+    };
+    try {
+      const props = { waiting: false, busy: false, locked: false, onPick: () => {}, onZoom: () => {} };
+      mount(<MessageList messages={[plain]} {...props} />);
+      expect(calls.at(-1)).toEqual({ el: "end", block: "end" });
+
+      act(() => root!.render(<MessageList messages={[plain, withCards]} {...props} />));
+      expect(calls.at(-1)).toEqual({ el: "message", block: "start" });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+});
