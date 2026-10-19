@@ -21,7 +21,7 @@ from enum import StrEnum
 from sqlalchemy.orm import Session
 
 from app.db.models import Conversation, Message
-from app.schemas.cards import Card
+from app.schemas.cards import Card, CardAction
 from app.schemas.orders import PendingReturn, ReturnStage
 
 DEFAULT_HISTORY_LIMIT = 20
@@ -87,6 +87,9 @@ class TurnStart:
     reply_cards: list | None = None  # the stored cards of that reply, as saved
     handoff: HandoffStatus = HandoffStatus.NONE  # set with `HANDOFF`
     pending_return: PendingReturn | None = None  # the customer's unfinished return, with `RUN`
+    # Set when the turn answers a button click: the rules decide it and no model reads it.
+    click: CardAction | None = None
+    click_order_id: str | None = None
 
 
 ESCALATION_NOTICE = (

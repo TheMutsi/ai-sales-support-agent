@@ -15,12 +15,12 @@ conversation comes from the session (`Authorization: Bearer ...`), never from th
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.agent import Intent
-from app.schemas.cards import Card
+from app.schemas.cards import Card, CardAction
 from app.schemas.rag import SourceReference
 from app.schemas.tools import CheckoutSession
 
@@ -55,9 +55,38 @@ class MessageList(BaseModel):
     handoff: Literal["none", "waiting", "active"] = "none"
 
 
-class ChatRequest(BaseModel):
+class TextInput(BaseModel):
+    """Something the visitor wrote: a model reads it."""
+
+    type: Literal["text"] = "text"
     message: str = Field(min_length=1)
+
+
+class ActionInput(BaseModel):
+    """A button the visitor clicked: rules decide it, no model reads anything. The text it shows in
+    the conversation comes from the card that was offered, not from here."""
+
+    type: Literal["action"]
+    action: CardAction
+    order_id: str | None = Field(default=None, max_length=64)
+
+
+ChatInput = Annotated[TextInput | ActionInput, Field(discriminator="type")]
+
+
+class ChatRequest(BaseModel):
     message_id: uuid.UUID
+    input: ChatInput
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain_message(cls, data):
+        """`{"message": "..."}` (before `input` existed) still means text. Temporary, for widgets
+        already loaded in a shop's page; remove once none are."""
+        if isinstance(data, dict) and "input" not in data and "message" in data:
+            rest = {k: v for k, v in data.items() if k != "message"}
+            data = {**rest, "input": {"type": "text", "message": data["message"]}}
+        return data
 
 
 class ChatTurnSummary(BaseModel):

@@ -25,6 +25,7 @@ from langgraph.graph.message import add_messages
 
 from app.schemas.agent import Intent
 from app.schemas.business import EligibilityResult, UpsellDecision
+from app.schemas.cards import CardAction
 from app.schemas.orders import OrderDetails, PendingReturn, ReturnResult
 from app.schemas.tools import CheckoutSession, CustomerContext, PlanSummary, TicketReceipt
 
@@ -56,6 +57,10 @@ class AgentState(TypedDict):
     # A return the customer is in the middle of (stored on the conversation between turns) and
     # what the `order_return` step did this turn.
     pending_return: PendingReturn | None
+    # Set when the visitor clicked a button instead of writing: the turn is decided by rules from
+    # this (see `route_start`), and no model reads the message.
+    action: CardAction | None
+    action_order_id: str | None
     return_result: ReturnResult | None
 
     eligibility_result: EligibilityResult | None
