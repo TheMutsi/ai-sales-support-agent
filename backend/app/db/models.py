@@ -72,6 +72,22 @@ class Tenant(Base):
     secrets: Mapped[list["TenantSecret"]] = relationship(back_populates="tenant")
 
 
+class TenantSmtp(Base):
+    """The mail server a tenant's one-time codes go out through. The password is stored
+    encrypted (`app.core.secrets`) and is write-only: nothing reads it back except the sender."""
+
+    __tablename__ = "tenant_smtp"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
+    host: Mapped[str]
+    port: Mapped[int]
+    security: Mapped[str] = mapped_column(default="starttls")  # starttls | ssl | none
+    username: Mapped[str | None]
+    password_encrypted: Mapped[str | None]
+    from_address: Mapped[str]
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class TenantSecret(Base):
     """A signing secret we issued to a tenant. Several can be active at once so
     a shop can rotate without downtime; `kid` (in the token header) picks one."""

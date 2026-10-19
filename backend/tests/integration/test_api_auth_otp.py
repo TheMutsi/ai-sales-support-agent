@@ -31,7 +31,7 @@ class FakeSender:
 @pytest.fixture
 def sender(monkeypatch):
     fake = FakeSender()
-    monkeypatch.setattr(auth_module, "get_otp_sender", lambda settings: fake)
+    monkeypatch.setattr(auth_module, "sender_for_tenant", lambda settings, db: (lambda tenant: fake))
     return fake
 
 
@@ -151,3 +151,50 @@ def test_verifying_inside_an_anonymous_conversation_keeps_its_history(shop, send
         conversation = db.get(Conversation, uuid.UUID(started["conversation_id"]))
         assert conversation.customer_id == shop["customer"].id
         assert conversation.linked_via == IdentityLevel.OTP_LOGIN.value
+
+
+def test_a_tenant_with_a_mail_server_sends_through_it_and_keeps_the_password_encrypted(shop, monkeypatch):
+    from sqlalchemy import text
+
+    from app.auth import otp_sender
+    from app.core.secrets import encrypt_secret
+    from app.db.models import TenantSmtp
+
+    sent: list[tuple] = []
+
+    class FakeSmtp:
+        def __init__(self, host, port, timeout=None, context=None):
+            sent.append(("connect", host, port))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def starttls(self, context):
+            pass
+
+        def login(self, user, password):
+            sent.append(("login", user, password))
+
+        def send_message(self, message):
+            sent.append(("send", message["To"], message["From"]))
+
+    monkeypatch.setattr(otp_sender.smtplib, "SMTP", FakeSmtp)
+    with SessionLocal() as db:
+        db.add(TenantSmtp(
+            tenant_id=shop["tenant"].id, host="mail.shop.test", port=587, username="mailer",
+            password_encrypted=encrypt_secret("s3cret"), from_address="no-reply@shop.test",
+        ))
+        db.commit()
+
+    assert _request(shop["api_key"]).status_code == 202
+
+    assert sent == [
+        ("connect", "mail.shop.test", 587), ("login", "mailer", "s3cret"),
+        ("send", EMAIL, "no-reply@shop.test"),
+    ]
+    with SessionLocal() as db:
+        stored = db.execute(text("select password_encrypted from tenant_smtp")).scalar_one()
+    assert "s3cret" not in stored

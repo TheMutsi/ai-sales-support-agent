@@ -24,6 +24,7 @@ customer to it, or starts an identified one.
 
 import hmac
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -145,7 +146,7 @@ def send_otp(
     *,
     api_key: str,
     email: str,
-    sender: OtpSender,
+    sender_for: Callable[[Tenant], OtpSender],
     key: str,
     conversation_id: uuid.UUID | None = None,
 ) -> None:
@@ -155,7 +156,9 @@ def send_otp(
     tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
     if tenant is None:
         return
-    result = request_otp(db, tenant=tenant, email=email, sender=sender, key=key, now=datetime.now(UTC))
+    result = request_otp(
+        db, tenant=tenant, email=email, sender=sender_for(tenant), key=key, now=datetime.now(UTC)
+    )
     audit.record(
         db, tenant_id=tenant.id, method="otp",
         outcome="code_sent" if result == "sent" else "failed",

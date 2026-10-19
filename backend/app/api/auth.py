@@ -18,7 +18,7 @@ from app.auth.login import (
     start_conversation,
 )
 from app.auth.otp import OtpError
-from app.auth.otp_sender import get_otp_sender
+from app.auth.otp_sender import sender_for_tenant
 from app.auth.session import SessionClaims
 from app.core.config import get_settings
 from app.db.session import get_db
@@ -105,7 +105,7 @@ def otp_request(
         db,
         api_key=request.api_key,
         email=request.email,
-        sender=get_otp_sender(settings),
+        sender_for=sender_for_tenant(settings, db),
         key=settings.session_signing_key,
         conversation_id=current.conversation_id if current else None,
     )

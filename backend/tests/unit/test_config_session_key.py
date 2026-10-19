@@ -22,7 +22,7 @@ def test_local_environments_may_use_the_default_key(env):
 
 
 def test_a_real_key_is_accepted_anywhere():
-    settings = Settings(app_env="production", session_signing_key=REAL_KEY, audit_hmac_key=AUDIT_KEY)
+    settings = Settings(app_env="production", session_signing_key=REAL_KEY, audit_hmac_key=AUDIT_KEY, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
 
     assert settings.session_signing_key == REAL_KEY
 
@@ -46,17 +46,17 @@ def test_a_deployment_must_set_its_own_audit_key(env):
 
 def test_the_audit_key_must_differ_from_the_session_key():
     with pytest.raises(ValidationError, match="differ"):
-        Settings(app_env="production", session_signing_key=REAL_KEY, audit_hmac_key=REAL_KEY)
+        Settings(app_env="production", session_signing_key=REAL_KEY, audit_hmac_key=REAL_KEY, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
 
 
 @pytest.mark.parametrize("env", ["development", "production"])
 def test_a_short_audit_key_is_rejected_when_one_is_given(env):
     with pytest.raises(ValidationError, match="at least 32"):
-        Settings(app_env=env, session_signing_key=REAL_KEY, audit_hmac_key="short")
+        Settings(app_env=env, session_signing_key=REAL_KEY, audit_hmac_key="short", secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
 
 
 def test_a_real_audit_key_is_used_as_given():
-    settings = Settings(app_env="production", session_signing_key=REAL_KEY, audit_hmac_key=AUDIT_KEY)
+    settings = Settings(app_env="production", session_signing_key=REAL_KEY, audit_hmac_key=AUDIT_KEY, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
 
     assert settings.audit_key == AUDIT_KEY
 

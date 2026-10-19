@@ -191,10 +191,10 @@ Identifying with an email and an order id is built end to end (PRs #102 to #106 
 Known and deliberately left for later; none of it matters for the portfolio demo, all of it matters for a real deployment.
 
 - **Retention job.** Archive messages of conversations inactive for more than 7 days to another table, purge anonymous conversations sooner (about 5k conversations a day x 10 messages), and purge `identification_events` after 90 days. Until it exists the audit table and the messages only grow.
-- **Real email provider for one-time codes.** An SMTP sender behind the existing `OtpSender` interface; its settings (host, port, credentials, from address) are to live in the back office, per tenant or global. Outside local environments the API refuses to send codes at all until then, and the dev sender prints the code to the log.
+- **Real email provider for one-time codes.** Each tenant can have its own SMTP server (`tenant_smtp`, password encrypted with `SECRETS_ENCRYPTION_KEY`) and `SmtpOtpSender` uses it; there is no way to set it yet except in the database (the back office page is next). A tenant without one cannot send codes outside local environments, and the dev sender prints the code to the log. Not tried against a real mail server, only against a fake one.
 - **A real back office login.** The back office starts with a placeholder login (an "Enter" button and a role picker) and its API is mounted only in local environments; passwords, one-time codes or SSO still have to be chosen and built, and until then it must not be reachable in a deployment (ADR-0016).
-- **Real secrets.** `SESSION_SIGNING_KEY` and `AUDIT_HMAC_KEY`, each at least 32 characters and different from each other (the API refuses to start otherwise outside local environments); the dev tenant's public key and secret must not exist in a real database (the seed already skips them).
-- **Tenant secrets at rest.** HS256 needs the raw key, so tenant secrets are stored in the clear; encrypt them at rest.
+- **Real secrets.** `SESSION_SIGNING_KEY` and `AUDIT_HMAC_KEY`, each at least 32 characters and different from each other, and `SECRETS_ENCRYPTION_KEY`, a Fernet key (the API refuses to start otherwise outside local environments; losing the encryption key means entering the stored credentials again); the dev tenant's public key and secret must not exist in a real database (the seed already skips them).
+- **Tenant signing secrets at rest.** HS256 needs the raw key, so `tenant_secrets` are still stored in the clear; encrypt them with the same mechanism as the SMTP password (`app.core.secrets`).
 - **Rate limits and origins** are estimates without traffic behind them; set `TRUSTED_PROXY_COUNT` for the real proxy chain.
 
 ### Open backlog
