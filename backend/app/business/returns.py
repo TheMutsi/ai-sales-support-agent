@@ -12,7 +12,6 @@ from app.schemas.orders import OrderDetails, OrderStatus, RetentionOffer, Return
 RETENTION_MIN_CENTS = 5_000
 REFUND_PERCENT = 20
 CREDIT_PERCENT = 30
-POINTS_PER_CENT = 1  # one point is worth one cent in the shop
 # Added to the offer the second time, when the customer has declined it once.
 GIFT_NAME = "Chai Jelly"
 GIFT_DESCRIPTION = "Our thank-you gift for staying with us"
@@ -30,7 +29,7 @@ def retention_offer(amount_cents: int) -> RetentionOffer | None:
         return None
     return RetentionOffer(
         refund_cents=_percent_of(amount_cents, REFUND_PERCENT),
-        credit_points=_percent_of(amount_cents, CREDIT_PERCENT) * POINTS_PER_CENT,
+        credit_cents=_percent_of(amount_cents, CREDIT_PERCENT),
     )
 
 

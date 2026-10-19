@@ -59,8 +59,7 @@ class FakeShop:
         receipt = RetentionReceipt(
             order_id=order_id, choice=choice,
             refund_cents=offer.refund_cents if choice is RetentionChoice.REFUND else None,
-            credit_points=offer.credit_points if choice is RetentionChoice.CREDITS else None,
-            coupon_code="FREE-AAAAAA" if choice is RetentionChoice.NEXT_ORDER_FREE else None,
+            credit_cents=offer.credit_cents if choice is RetentionChoice.CREDITS else None,
             gift="Chai Jelly" if with_gift else None,
         )
         self.orders[order_id] = order.model_copy(update={"retention": receipt})
@@ -122,7 +121,7 @@ async def test_asking_to_reject_the_69_99_open_order_makes_the_offer_and_changes
 
     returned = result["return_result"]
     assert returned.outcome is ReturnOutcome.OFFER
-    assert (returned.offer.refund_cents, returned.offer.credit_points) == (1400, 2100)
+    assert (returned.offer.refund_cents, returned.offer.credit_cents) == (1400, 2100)
     assert result["pending_return"] == _pending(OPEN_70, OFFER)
     assert shop.calls == [] and reader.asked == 0  # one candidate: nothing to ask the model
 
@@ -157,7 +156,6 @@ async def test_the_69_99_order_in_delivery_gets_the_offer_too(setup):
     [
         (ReturnChoice.REFUND, ReturnOutcome.KEPT_WITH_REFUND, 1400, None),
         (ReturnChoice.CREDITS, ReturnOutcome.KEPT_WITH_CREDITS, None, 2100),
-        (ReturnChoice.FREE_NEXT, ReturnOutcome.KEPT_WITH_FREE_ORDER, None, None),
     ],
 )
 async def test_taking_the_offer_keeps_the_order_and_records_what_was_chosen(
@@ -167,7 +165,7 @@ async def test_taking_the_offer_keeps_the_order_and_records_what_was_chosen(
 
     receipt = result["return_result"].receipt
     assert result["return_result"].outcome is outcome and result["pending_return"] is None
-    assert (receipt.refund_cents, receipt.credit_points) == (refund, points)
+    assert (receipt.refund_cents, receipt.credit_cents) == (refund, points)
     assert shop.orders[OPEN_70].status is OrderStatus.OPEN  # kept: nothing is cancelled
     assert [call[0] for call in shop.calls] == ["keep"]
 
@@ -293,9 +291,8 @@ async def test_every_reply_is_fixed_text_with_no_id_and_an_offer_never_says_canc
     ("stage", "choice", "expected"),
     [
         (OFFER, ReturnChoice.REFUND, "Done! I've refunded $14.00 to your card and your order stays with you."),
-        (OFFER, ReturnChoice.CREDITS, "Done! I've added 2,100 points to your account and your order stays with you."),
-        (FINAL, ReturnChoice.CREDITS, "Done! I've added 2,100 points to your account and your order stays with you. Your free gift is on its way too."),
-        (FINAL, ReturnChoice.FREE_NEXT, "Done! Your next order is free: use the code below at checkout. Your order stays with you. Your free gift is on its way too."),
+        (OFFER, ReturnChoice.CREDITS, "Done! I've added $21.00 in credits to your account and your order stays with you."),
+        (FINAL, ReturnChoice.CREDITS, "Done! I've added $21.00 in credits to your account and your order stays with you. Your free gift is on its way too."),
     ],
 )
 async def test_taking_an_offer_is_confirmed_with_the_exact_amounts_and_the_gift(setup, stage, choice, expected):

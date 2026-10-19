@@ -39,7 +39,6 @@ from app.schemas.orders import (
 _TAKEN = {
     ReturnChoice.REFUND: (RetentionChoice.REFUND, ReturnOutcome.KEPT_WITH_REFUND),
     ReturnChoice.CREDITS: (RetentionChoice.CREDITS, ReturnOutcome.KEPT_WITH_CREDITS),
-    ReturnChoice.FREE_NEXT: (RetentionChoice.NEXT_ORDER_FREE, ReturnOutcome.KEPT_WITH_FREE_ORDER),
 }
 
 
@@ -105,7 +104,7 @@ def reply_for(result: ReturnResult) -> str:
         case ReturnOutcome.OFFER:
             return "I have your order here. Would you like to keep it and choose one of these instead?"
         case ReturnOutcome.FINAL_OFFER:
-            return "Before you go: keep your order and we'll add a free gift on top of any of these."
+            return "Before you go: keep your order and we'll add a free gift on top of either of these."
         case ReturnOutcome.CONFIRM_CANCEL:
             return "I have your order here. Do you want me to go ahead?"
         case ReturnOutcome.CHOOSE_ORDER:
@@ -116,10 +115,8 @@ def reply_for(result: ReturnResult) -> str:
             refund = _dollars(result.receipt.refund_cents or 0)
             return f"Done! I've refunded {refund} to your card and your order stays with you.{gift}"
         case ReturnOutcome.KEPT_WITH_CREDITS if result.receipt:
-            points = f"{result.receipt.credit_points or 0:,}"
-            return f"Done! I've added {points} points to your account and your order stays with you.{gift}"
-        case ReturnOutcome.KEPT_WITH_FREE_ORDER:
-            return f"Done! Your next order is free: use the code below at checkout. Your order stays with you.{gift}"
+            credits = _dollars(result.receipt.credit_cents or 0)
+            return f"Done! I've added {credits} in credits to your account and your order stays with you.{gift}"
         case ReturnOutcome.KEPT_AS_IS:
             return "No problem, your order stays as it is."
         case ReturnOutcome.RETURN_LATER:

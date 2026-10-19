@@ -380,15 +380,15 @@ def test_saying_an_order_was_cancelled_needs_the_return_step_to_have_done_it():
     assert check_unbacked_order_action_claim(_ctx(), "I can cancel it if you confirm.") is None
 
 
-def test_saying_points_were_added_needs_them_to_have_been_recorded():
+def test_saying_credits_were_added_needs_them_to_have_been_recorded():
     from app.guardrails.output_checks import check_unbacked_order_action_claim
 
-    said = "2,100 points have been added to your account."
+    said = "$21.00 in credits have been added to your account."
 
     assert check_unbacked_order_action_claim(_ctx(), said).code == "unbacked_order_action_claim"
-    assert check_unbacked_order_action_claim(_ctx(points_credited=True), said) is None
+    assert check_unbacked_order_action_claim(_ctx(credits_added=True), said) is None
     # Describing the offer is not claiming it happened.
-    assert check_unbacked_order_action_claim(_ctx(), "You could take 2,100 points added to your account.") is None
+    assert check_unbacked_order_action_claim(_ctx(), "You could take $21.00 in credits added to your account.") is None
 
 
 def test_a_refund_recorded_by_the_return_step_may_be_stated_and_otherwise_still_may_not():

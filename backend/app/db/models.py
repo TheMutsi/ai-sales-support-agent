@@ -339,10 +339,9 @@ class OrderAdjustment(Base):
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), unique=True)
-    kind: Mapped[str]  # refund_to_card | credits | next_order_free
+    kind: Mapped[str]  # refund_to_card | credits
     refund_cents: Mapped[int | None]
-    credit_points: Mapped[int | None]
-    coupon_code: Mapped[str | None]
+    credit_cents: Mapped[int | None]
     gift: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

@@ -38,15 +38,6 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
             {card.label && <b>{card.label}</b>}
             <span />
           </div>
-        ) : card.type === "coupon" ? (
-          <div key={card.id} className="mew-card mew-coupon">
-            <span className="mew-card-text">
-              <span className="mew-card-badge">Coupon</span>
-              <strong>{card.title}</strong>
-              {card.subtitle && <small>{card.subtitle}</small>}
-            </span>
-            <code className="mew-code" aria-label={`Code ${card.code}`}>{card.code}</code>
-          </div>
         ) : (
           <div key={card.id} className="mew-card mew-product">
             <button

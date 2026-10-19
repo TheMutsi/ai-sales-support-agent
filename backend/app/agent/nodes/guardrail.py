@@ -59,8 +59,8 @@ def _confirmed_return_actions(state: AgentState) -> dict[str, bool]:
         or any(o.status is OrderStatus.CANCELLED for o in listed),
         "refund_recorded": outcome is ReturnOutcome.KEPT_WITH_REFUND
         or any(o.retention and o.retention.refund_cents for o in listed),
-        "points_credited": outcome is ReturnOutcome.KEPT_WITH_CREDITS
-        or any(o.retention and o.retention.credit_points for o in listed),
+        "credits_added": outcome is ReturnOutcome.KEPT_WITH_CREDITS
+        or any(o.retention and o.retention.credit_cents for o in listed),
         "offering": outcome in (ReturnOutcome.OFFER, ReturnOutcome.CONFIRM_CANCEL),
     }
 

@@ -121,9 +121,7 @@ def _format_order(order: OrderDetails) -> str:
 def _retention_text(receipt: RetentionReceipt) -> str:
     if receipt.choice is RetentionChoice.REFUND:
         return f"a refund of ${(receipt.refund_cents or 0) / 100:,.2f} to their card"
-    if receipt.choice is RetentionChoice.NEXT_ORDER_FREE:
-        return f"their next order free (coupon {receipt.coupon_code})"
-    return f"{receipt.credit_points or 0:,} points added to their account"
+    return f"${(receipt.credit_cents or 0) / 100:,.2f} in credits added to their account"
 
 
 def response_writer_node(state: AgentState) -> dict:

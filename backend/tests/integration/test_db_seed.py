@@ -155,7 +155,7 @@ def test_resetting_the_demo_shop_restores_its_orders(db: Session):
     mail1 = db.query(Order).join(Customer).filter(Customer.email == "mail1@gmail.com").one()
     mail2 = db.query(Order).join(Customer).filter(Customer.email == "mail2@gmail.com").one()
     mail1.status = "cancelled"
-    db.add(OrderAdjustment(order_id=mail2.id, kind="credits", credit_points=2100))
+    db.add(OrderAdjustment(order_id=mail2.id, kind="credits", credit_cents=2100))
     db.commit()
 
     assert reset_demo_shop(db) == 4

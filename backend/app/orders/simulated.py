@@ -24,7 +24,6 @@ from app.schemas.orders import (
 _KIND = {
     RetentionChoice.REFUND: "refund_to_card",
     RetentionChoice.CREDITS: "credits",
-    RetentionChoice.NEXT_ORDER_FREE: "next_order_free",
 }
 _CHOICE = {kind: choice for choice, kind in _KIND.items()}
 
@@ -110,12 +109,7 @@ class SimulatedOrderSource:
                 order_id=order.order_id,
                 choice=choice,
                 refund_cents=offer.refund_cents if choice is RetentionChoice.REFUND else None,
-                credit_points=offer.credit_points if choice is RetentionChoice.CREDITS else None,
-                coupon_code=(
-                    f"FREE-{order.order_id[:6].upper()}"
-                    if choice is RetentionChoice.NEXT_ORDER_FREE
-                    else None
-                ),
+                credit_cents=offer.credit_cents if choice is RetentionChoice.CREDITS else None,
                 gift=GIFT_NAME if with_gift else None,
             )
             db.add(
@@ -123,8 +117,7 @@ class SimulatedOrderSource:
                     order_id=order.id,
                     kind=_KIND[choice],
                     refund_cents=receipt.refund_cents,
-                    credit_points=receipt.credit_points,
-                    coupon_code=receipt.coupon_code,
+                    credit_cents=receipt.credit_cents,
                     gift=receipt.gift,
                 )
             )
@@ -174,8 +167,7 @@ def _details(order: Order) -> OrderDetails:
             order_id=order.order_id,
             choice=_CHOICE[kept.kind],
             refund_cents=kept.refund_cents,
-            credit_points=kept.credit_points,
-            coupon_code=kept.coupon_code,
+            credit_cents=kept.credit_cents,
             gift=kept.gift,
         )
     return OrderDetails(

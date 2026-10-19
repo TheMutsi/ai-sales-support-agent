@@ -180,11 +180,11 @@ def test_keeping_an_order_with_the_offer_is_recorded_once_per_order(db: Session)
     first = keep(RetentionChoice.CREDITS)
     second = keep(RetentionChoice.REFUND)  # a second one must not stack
 
-    assert first is not None and (first.credit_points, first.refund_cents) == (2100, None)
+    assert first is not None and (first.credit_cents, first.refund_cents) == (2100, None)
     assert second is None
     db.expire_all()
     [adjustment] = db.query(OrderAdjustment).filter_by(order_id=order.id).all()
-    assert (adjustment.kind, adjustment.credit_points) == ("credits", 2100)
+    assert (adjustment.kind, adjustment.credit_cents) == ("credits", 2100)
     assert order.status == "open"  # kept: nothing is cancelled
 
 
@@ -211,7 +211,7 @@ def test_an_order_kept_with_the_offer_cannot_be_cancelled_afterwards(db: Session
     kept = asyncio.run(source.keep_order_with_retention(**ids, choice=RetentionChoice.REFUND))
     cancelled = asyncio.run(source.cancel_order(**ids))
 
-    assert kept is not None and (kept.refund_cents, kept.credit_points) == (1400, None)
+    assert kept is not None and (kept.refund_cents, kept.credit_cents) == (1400, None)
     assert cancelled is None
     db.expire_all()
     assert order.status == "open"
@@ -252,25 +252,12 @@ def test_an_order_kept_with_the_offer_says_so_when_read_again(db: Session):
     [read] = asyncio.run(source.list_orders(**ids))
 
     assert read.status is OrderStatus.OPEN
-    assert read.retention is not None and (read.retention.choice, read.retention.credit_points) == (
+    assert read.retention is not None and (read.retention.choice, read.retention.credit_cents) == (
         RetentionChoice.CREDITS,
         2100,
     )
 
 
-def test_the_next_order_free_is_recorded_with_a_coupon_code_and_read_back(db: Session):
-    source = SimulatedOrderSource(SessionLocal)
-    customer, order = _customer_and_order(db, "mail3@gmail.com")  # $69.99, in delivery
-    ids = {"tenant_id": customer.tenant_id, "customer_id": customer.id}
-
-    receipt = asyncio.run(
-        source.keep_order_with_retention(order_id=order.order_id, choice=RetentionChoice.NEXT_ORDER_FREE, **ids)
-    )
-    [read] = asyncio.run(source.list_orders(**ids))
-
-    assert receipt is not None and receipt.coupon_code == f"FREE-{order.order_id[:6].upper()}"
-    assert (receipt.refund_cents, receipt.credit_points) == (None, None)
-    assert read.retention is not None and read.retention.coupon_code == receipt.coupon_code
 
 
 def test_a_gift_is_recorded_only_when_asked_for_and_read_back(db: Session):

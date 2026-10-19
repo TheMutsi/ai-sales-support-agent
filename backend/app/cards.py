@@ -5,8 +5,15 @@ shows (an offer the rules made, an order that was read), so the model cannot inv
 leave out a number. The text of the reply and the cards come from the same state.
 """
 
-from app.business.returns import GIFT_DESCRIPTION, GIFT_IMAGE, GIFT_NAME, GIFT_VALUE
-from app.schemas.cards import ActionCard, Card, CardImage, CouponCard, DividerCard, ProductCard
+from app.business.returns import (
+    CREDIT_PERCENT,
+    GIFT_DESCRIPTION,
+    GIFT_IMAGE,
+    GIFT_NAME,
+    GIFT_VALUE,
+    REFUND_PERCENT,
+)
+from app.schemas.cards import ActionCard, Card, CardImage, DividerCard, ProductCard
 from app.schemas.orders import (
     OrderDetails,
     OrderStatus,
@@ -53,28 +60,21 @@ def product_card(order: OrderDetails) -> ProductCard:
 
 
 def _option_cards(offer: RetentionOffer) -> list[Card]:
-    """The three things a customer can take to keep an order."""
+    """The two things a customer can take to keep an order, each with its amount and its share."""
     return [
         ActionCard(
             id="offer-refund",
-            title=f"{_dollars(offer.refund_cents)} back to your card",
-            subtitle="Keep your order and get 20% of its price back",
-            badge="20% back",
+            title=f"{_dollars(offer.refund_cents)} ({REFUND_PERCENT}%) back to your card",
+            subtitle=f"Keep your order and get {REFUND_PERCENT}% of its price back",
+            badge=f"{REFUND_PERCENT}% back",
             message=f"I'll take the {_dollars(offer.refund_cents)} refund to my card",
         ),
         ActionCard(
-            id="offer-points",
-            title=f"{offer.credit_points:,} points",
-            subtitle="Keep your order and get 30% of its price as points",
-            badge="30% in points",
-            message=f"I'll take the {offer.credit_points:,} points",
-        ),
-        ActionCard(
-            id="offer-free",
-            title="Your next order, free",
-            subtitle="Keep your order and your next one is on us",
-            badge="Free",
-            message="I'll take the next order free",
+            id="offer-credits",
+            title=f"{_dollars(offer.credit_cents)} ({CREDIT_PERCENT}%) in credits",
+            subtitle=f"Keep your order and get {CREDIT_PERCENT}% of its price as credit to spend here",
+            badge=f"{CREDIT_PERCENT}% in credits",
+            message=f"I'll take the {_dollars(offer.credit_cents)} in credits",
         ),
     ]
 
@@ -121,21 +121,9 @@ def _return_cards(result: ReturnResult) -> list[Card]:
                     message="No, cancel my order",
                 ),
             ]
-        case ReturnOutcome.KEPT_WITH_REFUND | ReturnOutcome.KEPT_WITH_CREDITS | ReturnOutcome.KEPT_WITH_FREE_ORDER:
-            receipt = result.receipt
-            cards: list[Card] = []
-            if receipt and receipt.coupon_code:
-                cards.append(
-                    CouponCard(
-                        id=f"coupon-{receipt.coupon_code}",
-                        code=receipt.coupon_code,
-                        title="Your next order is free",
-                        subtitle="Use this code at checkout",
-                    )
-                )
-            if receipt and receipt.gift:
-                cards.append(gift_card("Your gift"))
-            return cards
+        case ReturnOutcome.KEPT_WITH_REFUND | ReturnOutcome.KEPT_WITH_CREDITS:
+            # What was taken is stated in the reply; the gift, if it came with it, is shown again.
+            return [gift_card("Your gift")] if result.receipt and result.receipt.gift else []
         case ReturnOutcome.CONFIRM_CANCEL if order is not None:
             return [
                 product_card(order),

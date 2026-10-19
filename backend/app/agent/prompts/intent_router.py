@@ -25,7 +25,7 @@ Categories:
 - order_return: wants to reject, cancel or return an order or purchase they made ("I
   don't want my order", "cancel my order", "I want to return what I bought"), or answers an
   offer or a question the assistant just made about doing that: choosing the refund or the
-  points, "cancel it anyway", "yes, cancel it", "never mind, keep it".
+  credit, "cancel it anyway", "yes, cancel it", "never mind, keep it".
 - unsupported: not about MewFlow, or there isn't enough information to tell.
 
 Boundaries that are easy to get wrong:

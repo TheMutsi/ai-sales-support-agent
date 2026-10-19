@@ -31,7 +31,6 @@ export type Card =
       /** More pictures of the same thing, drawn stacked behind the first. */
       more_images?: CardImage[];
     }
-  | { type: "coupon"; id: string; code: string; title: string; subtitle?: string | null }
   | { type: "divider"; id: string; label?: string };
 
 export interface ChatMessage {

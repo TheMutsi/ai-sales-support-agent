@@ -21,12 +21,12 @@ def _order(status: OrderStatus, amount_cents: int) -> OrderDetails:
     )
 
 
-def test_the_offer_for_69_99_is_14_dollars_back_or_2100_points():
+def test_the_offer_for_69_99_is_14_dollars_back_or_21_dollars_in_credits():
     offer = retention_offer(6999)
 
     assert offer is not None
     assert offer.refund_cents == 1400  # 20% of 69.99 = 13.998, rounded to the cent
-    assert offer.credit_points == 2100  # 30% = 20.997 dollars, one point per cent
+    assert offer.credit_cents == 2100  # 30% = 20.997 dollars, to the cent
 
 
 @pytest.mark.parametrize("amount", [2999, 4999, 0])
@@ -37,7 +37,7 @@ def test_cheaper_orders_are_not_offered_anything(amount):
 def test_the_threshold_itself_is_offered():
     offer = retention_offer(5000)
 
-    assert offer is not None and (offer.refund_cents, offer.credit_points) == (1000, 1500)
+    assert offer is not None and (offer.refund_cents, offer.credit_cents) == (1000, 1500)
 
 
 def test_an_open_order_can_be_cancelled_and_the_expensive_one_gets_the_offer_first():
@@ -69,7 +69,7 @@ def test_other_statuses_allow_and_offer_nothing(status):
 def test_rounding_is_half_up_in_integer_cents():
     offer = retention_offer(5005)  # 30% = 1501.5 cents
 
-    assert offer is not None and offer.credit_points == 1502
+    assert offer is not None and offer.credit_cents == 1502
 
 
 def test_an_order_kept_with_the_offer_allows_and_offers_nothing_more():

@@ -28,16 +28,17 @@ def _result(outcome, **kw) -> dict:
 
 def test_an_offer_shows_the_order_and_one_card_per_choice_with_the_numbers_from_the_rules():
     cards = cards_for(
-        _result(ReturnOutcome.OFFER, order=_order(), offer=RetentionOffer(refund_cents=1400, credit_points=2100))
+        _result(ReturnOutcome.OFFER, order=_order(), offer=RetentionOffer(refund_cents=1400, credit_cents=2100))
     )
 
-    assert [c.type for c in cards] == ["product", "action", "action", "action", "action"]
-    product, refund, points, free, reject = cards
+    assert [c.type for c in cards] == ["product", "action", "action", "action"]
+    product, refund, credits, reject = cards
     assert (product.name, product.price, product.badge) == ("Pro plan", "$69.99", "Open")
-    assert (refund.title, refund.badge) == ("$14.00 back to your card", "20% back")
+    assert (refund.title, refund.badge) == ("$14.00 (20%) back to your card", "20% back")
     assert refund.message == "I'll take the $14.00 refund to my card"
-    assert (points.title, points.message) == ("2,100 points", "I'll take the 2,100 points")
-    assert (free.title, free.badge, free.message) == ("Your next order, free", "Free", "I'll take the next order free")
+    assert (credits.title, credits.badge, credits.message) == (
+        "$21.00 (30%) in credits", "30% in credits", "I'll take the $21.00 in credits"
+    )
     assert reject.id == "offer-reject"
 
 
@@ -99,38 +100,29 @@ def test_a_card_type_that_no_longer_exists_does_not_break_reading_old_messages()
 
 
 def test_an_offer_without_its_order_shows_nothing():
-    assert cards_for(_result(ReturnOutcome.OFFER, offer=RetentionOffer(refund_cents=1, credit_points=1))) == []
+    assert cards_for(_result(ReturnOutcome.OFFER, offer=RetentionOffer(refund_cents=1, credit_cents=1))) == []
 
 
-def test_taking_the_free_next_order_shows_the_coupon_that_was_recorded():
-    from app.schemas.orders import RetentionChoice, RetentionReceipt
-
-    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.NEXT_ORDER_FREE, coupon_code="FREE-AAAAAA")
-
-    cards = cards_for(_result(ReturnOutcome.KEPT_WITH_FREE_ORDER, order=_order(), receipt=receipt))
-
-    assert [(c.type, c.code) for c in cards] == [("coupon", "FREE-AAAAAA")]
-    assert cards_for(_result(ReturnOutcome.KEPT_WITH_FREE_ORDER, order=_order())) == []  # no code, no coupon
 
 
 def test_the_last_offer_shows_the_free_gift_then_a_plus_then_the_same_choices():
     cards = cards_for(
-        _result(ReturnOutcome.FINAL_OFFER, order=_order(), offer=RetentionOffer(refund_cents=1400, credit_points=2100))
+        _result(ReturnOutcome.FINAL_OFFER, order=_order(), offer=RetentionOffer(refund_cents=1400, credit_cents=2100))
     )
 
-    assert [c.type for c in cards] == ["product", "divider", "action", "action", "action", "action"]
-    gift, plus, refund, points, free, cancel = cards
+    assert [c.type for c in cards] == ["product", "divider", "action", "action", "action"]
+    gift, plus, refund, credits, cancel = cards
     assert (gift.name, gift.price, gift.compare_price, gift.badge) == ("Chai Jelly", "GIFT", "$49.99", "Free gift")
     assert gift.image.url.startswith("https://cdn.shopify.com/") and plus.label == "+"
-    assert [refund.id, points.id, free.id] == ["offer-refund", "offer-points", "offer-free"]
+    assert [refund.id, credits.id] == ["offer-refund", "offer-credits"]
     assert cancel.message == "No, cancel my order"
 
 
 def test_taking_an_offer_at_the_last_chance_shows_the_gift_that_comes_with_it():
     from app.schemas.orders import RetentionChoice, RetentionReceipt
 
-    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_points=2100, gift="Chai Jelly")
-    plain = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_points=2100)
+    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_cents=2100, gift="Chai Jelly")
+    plain = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_cents=2100)
 
     with_gift = cards_for(_result(ReturnOutcome.KEPT_WITH_CREDITS, order=_order(), receipt=receipt))
     without = cards_for(_result(ReturnOutcome.KEPT_WITH_CREDITS, order=_order(), receipt=plain))
