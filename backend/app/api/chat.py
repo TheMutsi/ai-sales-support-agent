@@ -49,6 +49,7 @@ from app.api.rate_limit import limit_by_conversation
 from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
 from app.chat.turns import (
+    HandoffStatus,
     MessageIdReused,
     MessageKind,
     TurnAction,
@@ -154,7 +155,12 @@ def _build_trace_metadata(session: SessionClaims, conversation_id: uuid.UUID) ->
 
 
 class TurnStore(Protocol):
-    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT) -> None: ...
+    async def finish(
+        self,
+        content: str,
+        kind: MessageKind = MessageKind.TEXT,
+        escalation_ticket_id: uuid.UUID | None = None,
+    ) -> None: ...
 
     async def abandon(self) -> None: ...
 
@@ -179,7 +185,12 @@ class _DbTurnStore:
     def __init__(self, conversation_id: uuid.UUID, turn: TurnStart):
         self._conversation_id, self._turn = conversation_id, turn
 
-    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT) -> None:
+    async def finish(
+        self,
+        content: str,
+        kind: MessageKind = MessageKind.TEXT,
+        escalation_ticket_id: uuid.UUID | None = None,
+    ) -> None:
         def save() -> None:
             with SessionLocal() as db:
                 try:
@@ -190,6 +201,7 @@ class _DbTurnStore:
                         content=content,
                         now=datetime.now(UTC),
                         kind=kind,
+                        escalation_ticket_id=escalation_ticket_id,
                     )
                 except TurnSuperseded:
                     logger.warning("late reply dropped (conversation %s)", self._conversation_id)
@@ -328,7 +340,12 @@ async def _stream_turn(
     kind = MessageKind.IDENTITY_REQUEST if final_state.get("identity_required") else MessageKind.TEXT
     try:
         # Shielded, so a disconnect can't interrupt saving the reply halfway.
-        await asyncio.shield(store.finish(final_text, kind))
+        receipt = final_state.get("ticket_receipt")
+        await asyncio.shield(
+            store.finish(
+                final_text, kind, escalation_ticket_id=receipt.ticket_id if receipt else None
+            )
+        )
     except Exception:
         # The client already has its answer, so the stream goes on; but the turn must
         # not stay busy for the next two minutes because the reply wasn't stored.
@@ -375,6 +392,12 @@ async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
     """The stored answer to a message that was already handled, with no model call."""
     yield _format_sse("message", {"text": reply})
     yield _format_sse("done", ChatTurnSummary(conversation_id=conversation_id).model_dump(mode="json"))
+
+
+async def _handed_off(conversation_id: uuid.UUID, handoff: HandoffStatus) -> AsyncIterator[str]:
+    """The message is stored; a person has the conversation, so there is no answer to stream."""
+    summary = ChatTurnSummary(conversation_id=conversation_id, handoff=handoff.value)
+    yield _format_sse("done", summary.model_dump(mode="json"))
 
 
 @router.post(
@@ -433,6 +456,8 @@ async def _run_turn(session: SessionClaims, request: ChatRequest) -> StreamingRe
     background = None
     if turn.action is TurnAction.REPLAY:
         stream = _replay(turn.reply or "", session.conversation_id)
+    elif turn.action is TurnAction.HANDOFF:
+        stream = _handed_off(session.conversation_id, turn.handoff)
     else:
         store = _DbTurnStore(session.conversation_id, turn)
         state = _TurnState()
@@ -454,11 +479,14 @@ async def conversation_messages(
     if conversation_id != session.conversation_id:
         raise HTTPException(status_code=404, detail={"code": "conversation_not_found"})
 
-    def read() -> list[Message]:
+    def read() -> tuple[list[Message], str]:
         with SessionLocal() as db:
-            return list_messages(db, conversation_id=conversation_id)
+            conversation = db.get(Conversation, conversation_id)
+            status = conversation.handoff_status if conversation else HandoffStatus.NONE
+            return list_messages(db, conversation_id=conversation_id), status
 
-    stored = await run_in_threadpool(read)
+    stored, handoff = await run_in_threadpool(read)
     return MessageList(
-        messages=[StoredMessage.model_validate(m, from_attributes=True) for m in stored]
+        messages=[StoredMessage.model_validate(m, from_attributes=True) for m in stored],
+        handoff=handoff,
     )

@@ -113,6 +113,14 @@ class Conversation(Base):
     # message can't start another and a turn that lost the conversation can't write.
     turn_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     turn_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    # A person takes over from the assistant (see `app.chat.handoff`): `none` (the assistant
+    # answers), `waiting` (a ticket was opened, no agent has joined) or `active` (an agent is in).
+    handoff_status: Mapped[str] = mapped_column(default="none", server_default="none")
+    handoff_agent_name: Mapped[str | None]  # the name the visitor sees, while `active`
+    handoff_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    handoff_ticket_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tickets.id", ondelete="SET NULL")
+    )
 
 
 class Message(Base):
@@ -133,8 +141,10 @@ class Message(Base):
     # No separate index: the unique (conversation_id, seq) one serves lookups by conversation.
     conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id"))
     seq: Mapped[int]
-    role: Mapped[str]  # user | assistant
-    # text | identity_request. Anything but text is a form the widget shows (and an audit
+    role: Mapped[str]  # user | assistant | human (a person from the back office) | system
+    # The name a person's message is shown under; null for the assistant and the visitor.
+    author_name: Mapped[str | None]
+    # text | identity_request | system. Anything but text is a form the widget shows (and an audit
     # record), not conversation: it is kept out of the history the model receives.
     kind: Mapped[str] = mapped_column(server_default="text", default="text")
     content: Mapped[str] = mapped_column(Text)
