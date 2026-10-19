@@ -13,7 +13,7 @@ RETENTION_MIN_CENTS = 5_000
 REFUND_PERCENT = 20
 CREDIT_PERCENT = 30
 # Added to the offer the second time, when the customer has declined it once.
-GIFT_NAME = "Chai Jelly"
+GIFT_NAME = "Shapermint Essentials Everyday Wireless Jelly Bra"
 GIFT_DESCRIPTION = "Our thank-you gift for staying with us"
 GIFT_VALUE = "$49.99"  # shown struck through, next to "GIFT"
 GIFT_IMAGE = "https://cdn.shopify.com/s/files/1/0021/4889/2732/files/chai_jelly_13200.jpg?v=1792189304"

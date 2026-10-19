@@ -507,8 +507,8 @@ describe("cards", () => {
   it("stacks a second picture behind the first, shows a struck price, and lets the large view switch pictures", async () => {
     const { Cards, Lightbox } = await import("./Cards");
     const gift = {
-      type: "product" as const, id: "g", name: "Chai Jelly", price: "GIFT", compare_price: "$49.99",
-      image: { url: "https://cdn.test/gift.jpg", alt: "Chai Jelly" },
+      type: "product" as const, id: "g", name: "Shapermint Essentials Everyday Wireless Jelly Bra", price: "GIFT", compare_price: "$49.99",
+      image: { url: "https://cdn.test/gift.jpg", alt: "Shapermint Essentials Everyday Wireless Jelly Bra" },
     };
     const leggings = {
       ...product, more_images: [{ url: "https://cdn.test/back.jpg", alt: "Pro plan" }],

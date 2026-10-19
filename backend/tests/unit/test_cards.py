@@ -42,6 +42,13 @@ def test_an_offer_shows_the_order_and_one_card_per_choice_with_the_numbers_from_
     assert reject.id == "offer-reject"
 
 
+def test_the_order_to_check_is_shown_with_yes_and_no():
+    cards = cards_for(_result(ReturnOutcome.CONFIRM_ORDER, order=_order(cents=6999)))
+
+    assert [c.id for c in cards[1:]] == ["check-yes", "check-no"]
+    assert cards[0].price == "$69.99"
+
+
 def test_a_cancellation_to_confirm_offers_yes_and_no():
     cards = cards_for(_result(ReturnOutcome.CONFIRM_CANCEL, order=_order(cents=2999)))
 
@@ -112,7 +119,7 @@ def test_the_last_offer_shows_the_free_gift_then_a_plus_then_the_same_choices():
 
     assert [c.type for c in cards] == ["product", "divider", "action", "action", "action"]
     gift, plus, refund, credits, cancel = cards
-    assert (gift.name, gift.price, gift.compare_price, gift.badge) == ("Chai Jelly", "GIFT", "$49.99", "Free gift")
+    assert (gift.name, gift.price, gift.compare_price, gift.badge) == ("Shapermint Essentials Everyday Wireless Jelly Bra", "GIFT", "$49.99", "Free gift")
     assert gift.image.url.startswith("https://cdn.shopify.com/") and plus.label == "+"
     assert [refund.id, credits.id] == ["offer-refund", "offer-credits"]
     assert cancel.message == "No, cancel my order"
@@ -121,7 +128,7 @@ def test_the_last_offer_shows_the_free_gift_then_a_plus_then_the_same_choices():
 def test_taking_an_offer_at_the_last_chance_shows_the_gift_that_comes_with_it():
     from app.schemas.orders import RetentionChoice, RetentionReceipt
 
-    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_cents=2100, gift="Chai Jelly")
+    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_cents=2100, gift="Shapermint Essentials Everyday Wireless Jelly Bra")
     plain = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_cents=2100)
 
     with_gift = cards_for(_result(ReturnOutcome.KEPT_WITH_CREDITS, order=_order(), receipt=receipt))
