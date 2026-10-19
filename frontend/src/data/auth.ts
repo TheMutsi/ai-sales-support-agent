@@ -26,6 +26,8 @@ export function createAuth(api: Api, store: SessionStore) {
 
   return {
     currentToken: () => store.load()?.token,
+    /** The saved session if it is still valid; never creates one (a background poll must not). */
+    current: (): Session | null => store.load(),
     /** Uses a session obtained elsewhere (the one-time code login). */
     adopt: (session: Session) => store.save(session),
     setGetToken: (callback: GetToken | null) => (getToken = callback),

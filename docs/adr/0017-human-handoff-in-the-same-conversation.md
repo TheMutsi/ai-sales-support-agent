@@ -45,7 +45,10 @@ chat"), with polling being enough. Zendesk may later be another destination.
 A destination other than the back office (Zendesk) behind the interface; a timeout or out-of-hours
 message when nobody joins; the visitor ending the handoff themselves; localized notices;
 notifying an agent (the inbox only polls, so someone has to be looking at it); ownership of a
-conversation between agents (the placeholder identities cannot support it).
+conversation between agents (the placeholder identities cannot support it); messages the visitor
+sent during a handoff have no reply, so retrying one with the same id after the handoff ends makes
+the assistant answer it late, and the history it continues from then has consecutive visitor
+messages.
 
 ## References
 

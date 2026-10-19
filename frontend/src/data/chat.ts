@@ -10,6 +10,7 @@ import type { ChatEvent, ChatMessage, Session } from "./types";
  */
 export function createChat(api: Api, auth: Auth, store: SessionStore) {
   let state: ChatState = initialState;
+  let newest = 0; // the latest background poll
   const listeners = new Set<() => void>();
   const update = (next: ChatState) => {
     state = next;
@@ -59,14 +60,18 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
       }
     },
     /**
-     * While a person has the conversation: reads what they wrote. Quiet (a failed poll is not
-     * an error to show) and never during a turn, which owns the messages until it ends.
+     * While a person has the conversation: reads what they wrote. Background work, so it never
+     * starts a conversation or renews a session (that would fork the visitor away from the person
+     * they are talking to: a rejected or expired session just stops the poll quietly), never shows
+     * an error, and never runs during a turn, which owns the messages until it ends.
      */
     async refresh() {
-      if (state.streaming) return;
+      const session = auth.current();
+      if (state.streaming || !session) return;
+      const mine = ++newest; // only the newest poll may change the screen
       try {
-        const { messages, handoff } = await withSession((session) => api.messages(session));
-        if (state.streaming) return;
+        const { messages, handoff } = await api.messages(session);
+        if (state.streaming || mine !== newest) return;
         update({ ...state, messages: keepImages(messages, state.messages), handoff });
       } catch {
         // The next poll tries again.

@@ -167,6 +167,13 @@ describe("chat", () => {
 
 
 describe("while a person has the conversation", () => {
+  /** A chat that already has a saved session, as one has once the panel was opened. */
+  function chatWithSession(api: Api) {
+    const store = createSessionStore("pk", memoryStorage(), Date.now, null);
+    store.save(session());
+    return createChat(api, createAuth(api, store), { touch() {} } as never);
+  }
+
   const person = [
     { id: "seq-1", role: "user" as const, kind: "text" as const, content: "I want a person" },
     { id: "seq-2", role: "system" as const, kind: "system" as const, content: "Mónica joined the chat." },
@@ -177,7 +184,7 @@ describe("while a person has the conversation", () => {
     const messages = vi.fn()
       .mockResolvedValueOnce({ messages: person, handoff: "active" })
       .mockResolvedValueOnce({ messages: person, handoff: "none" });
-    const chat = createChat(fakeApi({ messages }), createAuth(fakeApi(), createSessionStore("pk", memoryStorage(), Date.now, null)), { touch() {} } as never);
+    const chat = chatWithSession(fakeApi({ messages }));
     await chat.refresh();
     expect(chat.getState().handoff).toBe("active");
     expect(chat.getState().messages.at(-1)).toMatchObject({ role: "human", author: "Mónica" });
@@ -186,23 +193,51 @@ describe("while a person has the conversation", () => {
   });
 
   it("keeps the previews of the images the visitor attached", async () => {
-    const chat = createChat(
-      fakeApi({ messages: vi.fn(async () => ({ messages: person, handoff: "active" as const })) }),
-      createAuth(fakeApi(), createSessionStore("pk", memoryStorage(), Date.now, null)),
-      { touch() {} } as never,
-    );
+    const chat = chatWithSession(fakeApi({ messages: vi.fn(async () => ({ messages: person, handoff: "active" as const })) }));
     const images = [{ url: "blob:x", alt: "receipt" }];
     await chat.send("I want a person", images);
     await chat.refresh();
     expect(chat.getState().messages[0].images).toEqual(images);
   });
 
+  it("never renews or starts a session from a poll, whatever the server says", async () => {
+    const api = fakeApi({ messages: vi.fn(async () => { throw new ApiError(401, "session_expired"); }) });
+    const store = createSessionStore("pk", memoryStorage(), Date.now, null);
+    const auth = createAuth(api, store);
+    const chat = createChat(api, auth, { touch() {} } as never);
+
+    await chat.refresh(); // no saved session: nothing to ask about
+    expect(api.messages).not.toHaveBeenCalled();
+
+    store.save(session());
+    await chat.refresh(); // a rejected session
+    expect(api.messages).toHaveBeenCalledTimes(1);
+    expect(api.startConversation).not.toHaveBeenCalled();
+    expect(api.login).not.toHaveBeenCalled();
+    expect(chat.getState().error).toBeNull();
+  });
+
+  it("lets only the newest poll change the screen", async () => {
+    let release: (value: { messages: never[]; handoff: "none" }) => void = () => {};
+    const slow = new Promise<{ messages: never[]; handoff: "none" }>((resolve) => (release = resolve));
+    const messages = vi.fn()
+      .mockReturnValueOnce(slow)
+      .mockResolvedValueOnce({ messages: person, handoff: "active" });
+    const api = fakeApi({ messages });
+    const store = createSessionStore("pk", memoryStorage(), Date.now, null);
+    store.save(session());
+    const chat = createChat(api, createAuth(api, store), { touch() {} } as never);
+
+    const first = chat.refresh();
+    await chat.refresh();
+    release({ messages: [], handoff: "none" }); // the older answer arrives last
+    await first;
+
+    expect(chat.getState().handoff).toBe("active");
+  });
+
   it("does not turn a failed poll into an error on screen", async () => {
-    const chat = createChat(
-      fakeApi({ messages: vi.fn(async () => { throw new Error("offline"); }) }),
-      createAuth(fakeApi(), createSessionStore("pk", memoryStorage(), Date.now, null)),
-      { touch() {} } as never,
-    );
+    const chat = chatWithSession(fakeApi({ messages: vi.fn(async () => { throw new Error("offline"); }) }));
     await chat.refresh();
     expect(chat.getState().error).toBeNull();
   });
