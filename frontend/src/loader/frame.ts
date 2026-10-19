@@ -11,17 +11,30 @@ export function createFrame(host: Document): HTMLIFrameElement {
     position: "fixed",
     bottom: "0",
     right: "0",
-    width: "420px",
-    height: "100%",
     maxWidth: "100%",
     maxHeight: "720px",
     border: "0",
     background: "transparent",
     colorScheme: "normal",
     zIndex: "2147483000",
-    // Only the launcher and panel inside should catch clicks, not the empty transparent area.
-    pointerEvents: "none",
   });
+  layoutFrame(frame, { open: false, visible: true });
   host.body.appendChild(frame);
   return frame;
+}
+
+/**
+ * Sizes the iframe to what is drawn inside it. `pointer-events: none` on the iframe element
+ * cannot be undone from inside its document (the whole frame, content included, stops receiving
+ * the mouse and focus), so the frame is shrunk to the launcher when closed instead, which keeps
+ * the page behind it clickable without breaking the widget's own clicks and typing.
+ */
+export function layoutFrame(
+  frame: HTMLIFrameElement,
+  state: { open: boolean; visible: boolean },
+): void {
+  const { style } = frame;
+  style.display = state.visible ? "block" : "none";
+  style.width = state.open ? "420px" : "88px";
+  style.height = state.open ? "100%" : "88px";
 }

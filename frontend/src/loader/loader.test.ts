@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createController } from "./controller";
+import { createFrame, layoutFrame } from "./frame";
 import { installGlobal, readKey } from "./global";
 
 describe("controller", () => {
@@ -77,5 +78,20 @@ describe("readKey", () => {
     s.src = "https://cdn.example.com/mew.js";
     expect(readKey(s)).toBeNull();
     expect(readKey(null)).toBeNull();
+  });
+});
+
+describe("frame", () => {
+  it("never disables pointer events, so clicks and typing reach the widget", () => {
+    const frame = createFrame(document);
+    expect(frame.style.pointerEvents).not.toBe("none");
+    expect(frame.style.display).toBe("block");
+    layoutFrame(frame, { open: true, visible: true });
+    expect(frame.style.width).toBe("420px");
+    layoutFrame(frame, { open: false, visible: true });
+    expect(frame.style.width).toBe("88px");
+    layoutFrame(frame, { open: false, visible: false });
+    expect(frame.style.display).toBe("none");
+    frame.remove();
   });
 });
