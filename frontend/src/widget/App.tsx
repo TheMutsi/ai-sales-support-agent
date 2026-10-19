@@ -8,6 +8,8 @@ import { MessageList } from "./MessageList";
 import { playPing } from "./sound";
 import { answeredCount, useUnread } from "./unread";
 
+const POLL_MS = 4000;
+
 export function App({
   controller,
   chat,
@@ -20,7 +22,18 @@ export function App({
   settings: { sound: boolean };
 }) {
   const { open, visible } = useSyncExternalStore(controller.subscribe, controller.getState);
-  const { messages, streaming, error, identity: identityRequest } = useSyncExternalStore(chat.subscribe, chat.getState);
+  const { messages, streaming, error, identity: identityRequest, handoff } = useSyncExternalStore(
+    chat.subscribe,
+    chat.getState,
+  );
+
+  // While a person has the conversation, ask for what they wrote every few seconds, open or not
+  // (a closed panel still shows the unread badge).
+  useEffect(() => {
+    if (handoff === "none") return;
+    const timer = setInterval(() => void chat.refresh(), POLL_MS);
+    return () => clearInterval(timer);
+  }, [handoff, chat]);
 
   // The conversation is only fetched (and an anonymous one only created) when the panel opens.
   useEffect(() => {

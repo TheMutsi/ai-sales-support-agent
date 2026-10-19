@@ -45,6 +45,32 @@ describe("MessageView", () => {
   });
 });
 
+describe("a person in the conversation", () => {
+  it("shows their message under their name and a notice as a notice", () => {
+    mount(
+      <>
+        <MessageView message={{ id: "1", role: "human", kind: "text", content: "Hi, I am <b>Mónica</b>", author: "Mónica" }} />
+        <MessageView message={{ id: "2", role: "system", kind: "system", content: "Mónica joined the chat." }} />
+      </>,
+    );
+    expect(container.querySelector(".mew-human .mew-author")?.textContent).toBe("Mónica");
+    expect(container.querySelector("b")).toBeNull(); // text, not HTML
+    expect(container.querySelector(".mew-notice")?.textContent).toBe("Mónica joined the chat.");
+  });
+
+  it("counts a person's message as new, and a notice as nothing", () => {
+    const base = { kind: "text" as const, content: "x" };
+    expect(
+      answeredCount([
+        { id: "1", role: "assistant", ...base },
+        { id: "2", role: "human", ...base },
+        { id: "3", role: "system", kind: "system", content: "joined" },
+        { id: "4", role: "user", ...base },
+      ]),
+    ).toBe(2);
+  });
+});
+
 describe("Composer", () => {
   const type = (textarea: HTMLTextAreaElement, value: string) =>
     act(() => {

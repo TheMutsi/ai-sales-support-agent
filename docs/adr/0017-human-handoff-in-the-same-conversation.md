@@ -1,6 +1,6 @@
 # ADR-0017: An escalation hands the same conversation to a person, who chats one to one
 
-- **Status:** Proposed (agreed with the owner; the backend foundation is the first step)
+- **Status:** Accepted (built across the handoff PRs; verified end to end in a real browser with the real agent)
 - **Introduced in:** Stage 12 (the back office)
 
 ## Context
@@ -42,8 +42,13 @@ chat"), with polling being enough. Zendesk may later be another destination.
 
 ## Not built yet
 
-The admin API (queue, claim, reply, close), the back office's inbox, and the widget showing the
-person. See the roadmap in `CLAUDE.md`.
+A destination other than the back office (Zendesk) behind the interface; a timeout or out-of-hours
+message when nobody joins; the visitor ending the handoff themselves; localized notices;
+notifying an agent (the inbox only polls, so someone has to be looking at it); ownership of a
+conversation between agents (the placeholder identities cannot support it); messages the visitor
+sent during a handoff have no reply, so retrying one with the same id after the handoff ends makes
+the assistant answer it late, and the history it continues from then has consecutive visitor
+messages.
 
 ## References
 

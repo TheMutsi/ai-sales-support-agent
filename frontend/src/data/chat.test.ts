@@ -48,6 +48,15 @@ describe("applyEvent", () => {
     expect(asked.messages.at(-1)?.kind).toBe("identity_request");
   });
 
+  it("starts waiting for a person after a turn that opened a ticket, or when told so", () => {
+    const escalated = run([{ event: "message", data: { text: "A ticket was opened." } }, { event: "done", data: { identity_required: false, identity_methods: [], ticket_created: true } }]);
+    expect(escalated.handoff).toBe("waiting");
+    const told = run([{ event: "done", data: { identity_required: false, identity_methods: [], handoff: "active" } }]);
+    expect(told.handoff).toBe("active");
+    expect(told.messages).toEqual([]); // the message was stored; there is no answer to show
+    expect(run([done]).handoff).toBe("none");
+  });
+
   it("ends the turn with an error", () => {
     const state = run([{ event: "error", data: {} }], { ...initialState, streaming: true });
     expect(state.streaming).toBe(false);
@@ -59,7 +68,7 @@ function fakeApi(overrides: Partial<Api> = {}): Api {
   return {
     startConversation: vi.fn(async () => session("anon")),
     login: vi.fn(async () => session("logged")),
-    messages: vi.fn(async () => []),
+    messages: vi.fn(async () => ({ messages: [], handoff: "none" as const })),
     chat: vi.fn(async function* () {}),
     resume: vi.fn(async function* () {}),
     ...overrides,
@@ -147,11 +156,89 @@ describe("chat", () => {
 
   it("offers the identity form again after a reload when the last stored message asked for it", async () => {
     const stored = (kind: "text" | "identity_request") => [{ id: "seq-2", role: "assistant" as const, kind, content: "Please verify" }];
-    const pending = setup(fakeApi({ messages: vi.fn(async () => stored("identity_request")) }));
+    const pending = setup(fakeApi({ messages: vi.fn(async () => ({ messages: stored("identity_request"), handoff: "none" as const })) }));
     await pending.load();
     expect(pending.getState().identity).toEqual({ methods: ["otp", "order_id"] });
-    const answered = setup(fakeApi({ messages: vi.fn(async () => stored("text")) }));
+    const answered = setup(fakeApi({ messages: vi.fn(async () => ({ messages: stored("text"), handoff: "none" as const })) }));
     await answered.load();
     expect(answered.getState().identity).toBeNull();
+  });
+});
+
+
+describe("while a person has the conversation", () => {
+  /** A chat that already has a saved session, as one has once the panel was opened. */
+  function chatWithSession(api: Api) {
+    const store = createSessionStore("pk", memoryStorage(), Date.now, null);
+    store.save(session());
+    return createChat(api, createAuth(api, store), { touch() {} } as never);
+  }
+
+  const person = [
+    { id: "seq-1", role: "user" as const, kind: "text" as const, content: "I want a person" },
+    { id: "seq-2", role: "system" as const, kind: "system" as const, content: "Mónica joined the chat." },
+    { id: "seq-3", role: "human" as const, kind: "text" as const, content: "Hi, I am Mónica.", author: "Mónica" },
+  ];
+
+  it("shows what the person wrote and when they are done", async () => {
+    const messages = vi.fn()
+      .mockResolvedValueOnce({ messages: person, handoff: "active" })
+      .mockResolvedValueOnce({ messages: person, handoff: "none" });
+    const chat = chatWithSession(fakeApi({ messages }));
+    await chat.refresh();
+    expect(chat.getState().handoff).toBe("active");
+    expect(chat.getState().messages.at(-1)).toMatchObject({ role: "human", author: "Mónica" });
+    await chat.refresh();
+    expect(chat.getState().handoff).toBe("none");
+  });
+
+  it("keeps the previews of the images the visitor attached", async () => {
+    const chat = chatWithSession(fakeApi({ messages: vi.fn(async () => ({ messages: person, handoff: "active" as const })) }));
+    const images = [{ url: "blob:x", alt: "receipt" }];
+    await chat.send("I want a person", images);
+    await chat.refresh();
+    expect(chat.getState().messages[0].images).toEqual(images);
+  });
+
+  it("never renews or starts a session from a poll, whatever the server says", async () => {
+    const api = fakeApi({ messages: vi.fn(async () => { throw new ApiError(401, "session_expired"); }) });
+    const store = createSessionStore("pk", memoryStorage(), Date.now, null);
+    const auth = createAuth(api, store);
+    const chat = createChat(api, auth, { touch() {} } as never);
+
+    await chat.refresh(); // no saved session: nothing to ask about
+    expect(api.messages).not.toHaveBeenCalled();
+
+    store.save(session());
+    await chat.refresh(); // a rejected session
+    expect(api.messages).toHaveBeenCalledTimes(1);
+    expect(api.startConversation).not.toHaveBeenCalled();
+    expect(api.login).not.toHaveBeenCalled();
+    expect(chat.getState().error).toBeNull();
+  });
+
+  it("lets only the newest poll change the screen", async () => {
+    let release: (value: { messages: never[]; handoff: "none" }) => void = () => {};
+    const slow = new Promise<{ messages: never[]; handoff: "none" }>((resolve) => (release = resolve));
+    const messages = vi.fn()
+      .mockReturnValueOnce(slow)
+      .mockResolvedValueOnce({ messages: person, handoff: "active" });
+    const api = fakeApi({ messages });
+    const store = createSessionStore("pk", memoryStorage(), Date.now, null);
+    store.save(session());
+    const chat = createChat(api, createAuth(api, store), { touch() {} } as never);
+
+    const first = chat.refresh();
+    await chat.refresh();
+    release({ messages: [], handoff: "none" }); // the older answer arrives last
+    await first;
+
+    expect(chat.getState().handoff).toBe("active");
+  });
+
+  it("does not turn a failed poll into an error on screen", async () => {
+    const chat = chatWithSession(fakeApi({ messages: vi.fn(async () => { throw new Error("offline"); }) }));
+    await chat.refresh();
+    expect(chat.getState().error).toBeNull();
   });
 });

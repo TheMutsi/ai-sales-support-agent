@@ -29,7 +29,7 @@ links back to it.
 | [0014](0014-conversation-anchored-identity-with-scopes.md) | Identity hangs off the conversation, and what a visitor may do is a set of scopes | Accepted |
 | [0015](0015-embeddable-widget-in-an-iframe.md) | The widget is one script that renders into an iframe, with its state outside React | Accepted |
 | [0016](0016-back-office-with-roles-and-a-config-cache.md) | The back office has roles from the start, a placeholder login, and a cache for tenant configuration | Proposed |
-| [0017](0017-human-handoff-in-the-same-conversation.md) | An escalation hands the same conversation to a person, who chats one to one | Proposed |
+| [0017](0017-human-handoff-in-the-same-conversation.md) | An escalation hands the same conversation to a person, who chats one to one | Accepted |
 
 For the system and agent-graph diagrams, see [`docs/architecture.md`](../architecture.md).
 

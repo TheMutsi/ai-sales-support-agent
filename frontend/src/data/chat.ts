@@ -10,6 +10,7 @@ import type { ChatEvent, ChatMessage, Session } from "./types";
  */
 export function createChat(api: Api, auth: Auth, store: SessionStore) {
   let state: ChatState = initialState;
+  let newest = 0; // the latest background poll
   const listeners = new Set<() => void>();
   const update = (next: ChatState) => {
     state = next;
@@ -49,13 +50,31 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
     /** Shows the stored conversation (after a reload, or when another tab changed it). */
     async load() {
       try {
-        const messages = await withSession((session) => api.messages(session));
+        const { messages, handoff } = await withSession((session) => api.messages(session));
         // The stored request does not say which methods it offered, so a reload offers both: the
         // server decides what a proof is worth, and a method the tenant removed just fails.
         const pending = messages.at(-1)?.kind === "identity_request";
-        update({ ...state, messages, error: null, identity: pending ? { methods: ["otp", "order_id"] } : null });
+        update({ ...state, messages, handoff, error: null, identity: pending ? { methods: ["otp", "order_id"] } : null });
       } catch {
         update({ ...state, error: "Could not load the conversation." });
+      }
+    },
+    /**
+     * While a person has the conversation: reads what they wrote. Background work, so it never
+     * starts a conversation or renews a session (that would fork the visitor away from the person
+     * they are talking to: a rejected or expired session just stops the poll quietly), never shows
+     * an error, and never runs during a turn, which owns the messages until it ends.
+     */
+    async refresh() {
+      const session = auth.current();
+      if (state.streaming || !session) return;
+      const mine = ++newest; // only the newest poll may change the screen
+      try {
+        const { messages, handoff } = await api.messages(session);
+        if (state.streaming || mine !== newest) return;
+        update({ ...state, messages: keepImages(messages, state.messages), handoff });
+      } catch {
+        // The next poll tries again.
       }
     },
     async send(text: string, images: ChatMessage["images"] = []) {
@@ -70,6 +89,13 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
       await run((session) => api.resume(session));
     },
   };
+}
+
+/** The server does not keep image previews, so the visitor's own ones are carried over by order. */
+function keepImages(fromServer: ChatMessage[], local: ChatMessage[]): ChatMessage[] {
+  const previews = local.filter((m) => m.role === "user").map((m) => m.images);
+  let visitorMessage = 0;
+  return fromServer.map((m) => (m.role === "user" ? { ...m, images: previews[visitorMessage++] } : m));
 }
 
 export type Chat = ReturnType<typeof createChat>;

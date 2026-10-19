@@ -8,9 +8,9 @@ export interface UnreadState {
   unread: number;
 }
 
-/** Finished answers only: the one still streaming is not "new" until it is complete. */
+/** Finished answers (the assistant's or a person's) only: the one still streaming is not "new" yet. */
 export const answeredCount = (messages: ChatMessage[]) =>
-  messages.filter((m) => m.role === "assistant" && m.id !== STREAMING_ID).length;
+  messages.filter((m) => (m.role === "assistant" || m.role === "human") && m.id !== STREAMING_ID).length;
 
 /**
  * Answers that arrived while the panel was closed. The first look only sets the baseline, so

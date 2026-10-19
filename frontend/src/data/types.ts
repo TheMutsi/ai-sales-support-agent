@@ -7,11 +7,17 @@ export interface Session {
   identityLevel: string;
 }
 
+/** Whether a person has taken the conversation from the assistant. */
+export type Handoff = "none" | "waiting" | "active";
+
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
-  kind: "text" | "identity_request";
+  /** `human` is a person from the shop's back office; `system` is a notice ("an agent joined"). */
+  role: "user" | "assistant" | "human" | "system";
+  kind: "text" | "identity_request" | "system";
   content: string;
+  /** The name a person's message is shown under. */
+  author?: string;
   /** Previews of images the visitor attached. Local only: they are not sent or stored yet. */
   images?: { url: string; alt: string }[];
 }
@@ -19,6 +25,9 @@ export interface ChatMessage {
 export interface TurnSummary {
   identity_required: boolean;
   identity_methods: string[];
+  ticket_created?: boolean;
+  /** Set when a person has the conversation: the message was stored and nobody answers it live. */
+  handoff?: "waiting" | "active" | null;
 }
 
 /** One server-sent event of a chat turn (see `app/api/chat.py`). */

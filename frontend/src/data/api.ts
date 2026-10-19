@@ -1,5 +1,5 @@
 import { parseSse } from "./sse";
-import type { ChatEvent, ChatMessage, Session } from "./types";
+import type { ChatEvent, ChatMessage, Handoff, Session } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -76,18 +76,23 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
       return toSession(await response.json());
     },
 
-    async messages(session: Session): Promise<ChatMessage[]> {
+    async messages(session: Session): Promise<{ messages: ChatMessage[]; handoff: Handoff }> {
       const response = await request(`/conversations/${session.conversationId}/messages`, {
         method: "GET",
         token: session.token,
       });
-      const { messages } = await response.json();
-      return messages.map((m: { seq: number; role: ChatMessage["role"]; kind: ChatMessage["kind"]; content: string }) => ({
-        id: `seq-${m.seq}`,
-        role: m.role,
-        kind: m.kind,
-        content: m.content,
-      }));
+      const { messages, handoff } = await response.json();
+      type Stored = { seq: number; role: ChatMessage["role"]; kind: ChatMessage["kind"]; content: string; author_name?: string | null };
+      return {
+        messages: messages.map((m: Stored) => ({
+          id: `seq-${m.seq}`,
+          role: m.role,
+          kind: m.kind,
+          content: m.content,
+          author: m.author_name ?? undefined,
+        })),
+        handoff: handoff ?? "none",
+      };
     },
 
     /** One chat turn. `messageId` makes a retry replay the stored answer instead of running twice. */
