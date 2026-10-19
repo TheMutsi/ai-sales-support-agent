@@ -5,7 +5,7 @@ shows (an offer the rules made, an order that was read), so the model cannot inv
 leave out a number. The text of the reply and the cards come from the same state.
 """
 
-from app.business.returns import GIFT_DESCRIPTION, GIFT_NAME
+from app.business.returns import GIFT_DESCRIPTION, GIFT_IMAGE, GIFT_NAME, GIFT_VALUE
 from app.schemas.cards import ActionCard, Card, CardImage, CouponCard, DividerCard, ProductCard
 from app.schemas.orders import (
     OrderDetails,
@@ -29,15 +29,26 @@ def _dollars(cents: int) -> str:
     return f"${cents / 100:,.2f}"
 
 
+def _name(order: OrderDetails) -> str:
+    """What the order is for: the item when it says so, else its plan."""
+    return order.item_name or f"{order.plan_slug.capitalize()} plan"
+
+
 def product_card(order: OrderDetails) -> ProductCard:
-    name = f"{order.plan_slug.capitalize()} plan"
+    """The order as a product: what was bought when the order says so, else its plan."""
+    name = _name(order)
+    if order.item_images:
+        pictures = [CardImage(url=url, alt=name) for url in order.item_images]
+    else:
+        pictures = [CardImage(url=f"/api/assets/products/{order.plan_slug}.svg", alt=name)]
     return ProductCard(
         id=order.order_id,
         name=name,
         price=_dollars(order.amount_cents),
         subtitle=f"Order placed {order.created_at:%b %d, %Y}",
         badge=_STATUS_BADGE.get(order.status, order.status.value),
-        image=CardImage(url=f"/api/assets/products/{order.plan_slug}.svg", alt=name),
+        image=pictures[0],
+        more_images=pictures[1:],
     )
 
 
@@ -73,14 +84,15 @@ def gift_card(badge: str = "Free gift") -> ProductCard:
         id="gift",
         name=GIFT_NAME,
         subtitle=GIFT_DESCRIPTION,
-        price="FREE",
+        price="GIFT",
+        compare_price=GIFT_VALUE,
         badge=badge,
-        image=CardImage(url="/api/assets/products/gift.svg", alt=GIFT_NAME),
+        image=CardImage(url=GIFT_IMAGE, alt=GIFT_NAME),
     )
 
 
 def _order_label(order: OrderDetails) -> str:
-    return f"the {order.plan_slug.capitalize()} plan order of {_dollars(order.amount_cents)} placed {order.created_at:%b %d}"
+    return f"the {_name(order)} order of {_dollars(order.amount_cents)} placed {order.created_at:%b %d}"
 
 
 def _return_cards(result: ReturnResult) -> list[Card]:
@@ -134,7 +146,7 @@ def _return_cards(result: ReturnResult) -> list[Card]:
             return [
                 ActionCard(
                     id=f"choose-{o.order_id}",
-                    title=f"{o.plan_slug.capitalize()} plan, {_dollars(o.amount_cents)}",
+                    title=f"{_name(o)}, {_dollars(o.amount_cents)}",
                     subtitle=_STATUS_BADGE.get(o.status, o.status.value),
                     message=f"I mean {_order_label(o)}",
                 )

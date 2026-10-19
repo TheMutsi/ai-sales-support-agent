@@ -120,8 +120,8 @@ def test_the_last_offer_shows_the_free_gift_then_a_plus_then_the_same_choices():
 
     assert [c.type for c in cards] == ["product", "divider", "action", "action", "action", "action"]
     gift, plus, refund, points, free, cancel = cards
-    assert (gift.name, gift.price, gift.badge) == ("Mew hoodie", "FREE", "Free gift")
-    assert gift.image.url == "/api/assets/products/gift.svg" and plus.label == "+"
+    assert (gift.name, gift.price, gift.compare_price, gift.badge) == ("Chai Jelly", "GIFT", "$49.99", "Free gift")
+    assert gift.image.url.startswith("https://cdn.shopify.com/") and plus.label == "+"
     assert [refund.id, points.id, free.id] == ["offer-refund", "offer-points", "offer-free"]
     assert cancel.message == "No, cancel my order"
 
@@ -129,7 +129,7 @@ def test_the_last_offer_shows_the_free_gift_then_a_plus_then_the_same_choices():
 def test_taking_an_offer_at_the_last_chance_shows_the_gift_that_comes_with_it():
     from app.schemas.orders import RetentionChoice, RetentionReceipt
 
-    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_points=2100, gift="Mew hoodie")
+    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_points=2100, gift="Chai Jelly")
     plain = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_points=2100)
 
     with_gift = cards_for(_result(ReturnOutcome.KEPT_WITH_CREDITS, order=_order(), receipt=receipt))
@@ -137,3 +137,16 @@ def test_taking_an_offer_at_the_last_chance_shows_the_gift_that_comes_with_it():
 
     assert [(c.type, c.badge) for c in with_gift] == [("product", "Your gift")]
     assert without == []
+
+
+def test_an_order_for_an_item_shows_its_name_and_its_pictures_stacked():
+    order = _order().model_copy(
+        update={"item_name": "Leggings x2", "item_images": ["https://cdn.test/front.jpg", "https://cdn.test/back.jpg"]}
+    )
+
+    card = cards_for({"customer_orders": [order]})[0]
+
+    assert card.name == "Leggings x2"
+    assert card.image.url == "https://cdn.test/front.jpg"
+    assert [i.url for i in card.more_images] == ["https://cdn.test/back.jpg"]
+    assert cards_for({"customer_orders": [_order()]})[0].more_images == []  # a plan has one picture

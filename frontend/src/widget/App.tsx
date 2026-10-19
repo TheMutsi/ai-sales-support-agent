@@ -48,7 +48,7 @@ export function App({
   // The conversation is only fetched (and an anonymous one only created) when the chat is shown,
   // not when the menu is: looking at the menu starts nothing.
   const [synced, setSynced] = useState(false);
-  const [zoomed, setZoomed] = useState<CardImage | null>(null);
+  const [zoomed, setZoomed] = useState<CardImage[] | null>(null);
   const showingChat = open && view === "chat";
   // A picture shown large belongs to the chat that is on screen.
   useEffect(() => {
@@ -109,7 +109,7 @@ export function App({
               <Composer disabled={streaming} onSend={(text, images) => void chat.send(text, images.map((i) => ({ url: i.url, alt: i.name })))} />
             </>
           )}
-          {zoomed && <Lightbox image={zoomed} onClose={() => setZoomed(null)} />}
+          {zoomed && zoomed.length > 0 && <Lightbox images={zoomed} onClose={() => setZoomed(null)} />}
         </section>
       )}
       <button

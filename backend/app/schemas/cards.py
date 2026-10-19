@@ -37,8 +37,12 @@ class ProductCard(BaseModel):
     name: str
     subtitle: str | None = None
     price: str | None = None
+    # A price shown struck through before `price` (what a gift would have cost).
+    compare_price: str | None = None
     badge: str | None = None
     image: CardImage
+    # More pictures of the same thing, drawn stacked behind the first.
+    more_images: list[CardImage] = Field(default_factory=list)
 
 
 class CouponCard(BaseModel):

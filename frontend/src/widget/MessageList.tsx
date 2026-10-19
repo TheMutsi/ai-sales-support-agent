@@ -16,7 +16,7 @@ export function MessageList({
   /** A person has the conversation: an offer of the assistant is no longer theirs to take. */
   locked: boolean;
   onPick: (message: string) => void;
-  onZoom: (image: CardImage) => void;
+  onZoom: (images: CardImage[]) => void;
 }) {
   const end = useRef<HTMLDivElement>(null);
   const last = messages.at(-1);

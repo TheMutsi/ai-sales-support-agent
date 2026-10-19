@@ -14,8 +14,10 @@ REFUND_PERCENT = 20
 CREDIT_PERCENT = 30
 POINTS_PER_CENT = 1  # one point is worth one cent in the shop
 # Added to the offer the second time, when the customer has declined it once.
-GIFT_NAME = "Mew hoodie"
-GIFT_DESCRIPTION = "Soft fleece hoodie with the Mew logo"
+GIFT_NAME = "Chai Jelly"
+GIFT_DESCRIPTION = "Our thank-you gift for staying with us"
+GIFT_VALUE = "$49.99"  # shown struck through, next to "GIFT"
+GIFT_IMAGE = "https://cdn.shopify.com/s/files/1/0021/4889/2732/files/chai_jelly_13200.jpg?v=1792189304"
 
 
 def _percent_of(cents: int, percent: int) -> int:

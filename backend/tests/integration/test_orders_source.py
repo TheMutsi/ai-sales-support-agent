@@ -281,5 +281,5 @@ def test_a_gift_is_recorded_only_when_asked_for_and_read_back(db: Session):
     receipt = asyncio.run(source.keep_order_with_retention(**ids, choice=RetentionChoice.CREDITS, with_gift=True))
     [read] = asyncio.run(source.list_orders(tenant_id=customer.tenant_id, customer_id=customer.id))
 
-    assert receipt is not None and receipt.gift == "Mew hoodie"
-    assert read.retention is not None and read.retention.gift == "Mew hoodie"
+    assert receipt is not None and receipt.gift == "Chai Jelly"
+    assert read.retention is not None and read.retention.gift == "Chai Jelly"

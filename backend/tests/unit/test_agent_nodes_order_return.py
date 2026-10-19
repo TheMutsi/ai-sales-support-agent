@@ -61,7 +61,7 @@ class FakeShop:
             refund_cents=offer.refund_cents if choice is RetentionChoice.REFUND else None,
             credit_points=offer.credit_points if choice is RetentionChoice.CREDITS else None,
             coupon_code="FREE-AAAAAA" if choice is RetentionChoice.NEXT_ORDER_FREE else None,
-            gift="Mew hoodie" if with_gift else None,
+            gift="Chai Jelly" if with_gift else None,
         )
         self.orders[order_id] = order.model_copy(update={"retention": receipt})
         return receipt
@@ -269,7 +269,7 @@ async def test_the_gift_comes_only_with_the_last_offer(setup):
     last, _, _ = await _run(setup, [OPEN70], ReturnChoice.CREDITS, _pending(OPEN_70, FINAL))
 
     assert first["return_result"].receipt.gift is None
-    assert last["return_result"].receipt.gift == "Mew hoodie"
+    assert last["return_result"].receipt.gift == "Chai Jelly"
 
 
 @pytest.mark.asyncio

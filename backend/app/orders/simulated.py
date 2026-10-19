@@ -186,5 +186,7 @@ def _details(order: Order) -> OrderDetails:
         currency=order.currency,
         status=OrderStatus(order.status),
         created_at=order.created_at,
+        item_name=order.item_name,
+        item_images=list(order.item_images or []),
         retention=receipt,
     )
