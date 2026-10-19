@@ -342,3 +342,21 @@ def test_carrying_a_pending_return_along_does_not_restart_its_time(db, conversat
     late = _begin(db, conversation, "yes", now=NOW + PENDING_RETURN_TTL + timedelta(seconds=1))
 
     assert late.pending_return is None
+
+
+def test_a_return_offered_again_after_it_lapsed_gets_a_fresh_time(db, conversation):
+    from app.chat.turns import PENDING_RETURN_TTL
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
+    first = _begin(db, conversation, "reject my order")
+    finish_turn(db, conversation_id=conversation.id, turn=first, content="Offer", now=NOW, pending_return=pending)
+
+    later = NOW + PENDING_RETURN_TTL + timedelta(seconds=1)
+    again = _begin(db, conversation, "reject my order again", now=later)
+    assert again.pending_return is None  # the first one lapsed
+    finish_turn(db, conversation_id=conversation.id, turn=again, content="Offer", now=later, pending_return=pending)
+
+    answer = _begin(db, conversation, "the credits", now=later + timedelta(minutes=1))
+
+    assert answer.pending_return == pending

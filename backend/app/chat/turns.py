@@ -256,11 +256,10 @@ def finish_turn(
     if not isinstance(pending_return, Keep):
         order_id = pending_return.order_id if pending_return else None
         stage = pending_return.stage.value if pending_return else None
-        if (order_id, stage) != (
-            conversation.pending_return_order_id,
-            conversation.pending_return_stage,
-        ):
-            # Timed from when it began (or moved on), not from every turn that carries it along.
+        if pending_return != turn.pending_return:
+            # Compared with what this turn started from (None once it had lapsed), so a return
+            # offered again after it lapsed is timed afresh, while one merely carried along
+            # through other turns keeps its original time.
             conversation.pending_return_at = now if pending_return else None
         conversation.pending_return_order_id, conversation.pending_return_stage = order_id, stage
     conversation.turn_started_at = conversation.turn_id = None
