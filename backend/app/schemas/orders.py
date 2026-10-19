@@ -43,3 +43,33 @@ class OrderDetails(BaseModel):
     currency: str
     status: OrderStatus
     created_at: datetime
+
+
+class RetentionChoice(StrEnum):
+    """What a customer who wants to reject an order can take instead of rejecting it."""
+
+    REFUND = "refund"  # part of the price back to the card
+    CREDITS = "credits"  # a larger part as points to spend in the shop
+
+
+class RetentionOffer(BaseModel):
+    refund_cents: int
+    credit_points: int
+
+
+class ReturnOptions(BaseModel):
+    """What may be done with an order a customer does not want, decided by the rules and never
+    by the model."""
+
+    can_cancel: bool  # not shipped yet: rejecting it cancels it
+    return_after_delivery: bool  # on its way: it cannot be rejected, it is returned once received
+    retention: RetentionOffer | None  # offered before rejecting, for orders of a certain value
+
+
+class RetentionReceipt(BaseModel):
+    """What was recorded when the customer took the offer and kept the order."""
+
+    order_id: str
+    choice: RetentionChoice
+    refund_cents: int | None = None
+    credit_points: int | None = None

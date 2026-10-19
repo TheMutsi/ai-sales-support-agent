@@ -5,7 +5,7 @@ as `OtpSender`)."""
 import uuid
 from typing import Protocol, runtime_checkable
 
-from app.schemas.orders import OrderDetails
+from app.schemas.orders import OrderDetails, RetentionChoice, RetentionOffer, RetentionReceipt
 
 
 @runtime_checkable
@@ -20,4 +20,26 @@ class OrderSource(Protocol):
     ) -> list[OrderDetails]:
         """The customer's most recent orders, newest first. Only for a customer the session
         already proved (never taken from a message); another shop's customer gives nothing."""
+        ...
+
+    async def cancel_order(
+        self, *, tenant_id: uuid.UUID, customer_id: uuid.UUID, order_id: str
+    ) -> OrderDetails | None:
+        """Cancels the customer's order if it has not shipped. None when it is not theirs, does
+        not exist or can no longer be cancelled; the status is checked at the moment of the
+        change, so two requests cannot both succeed."""
+        ...
+
+    async def keep_order_with_retention(
+        self,
+        *,
+        tenant_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        order_id: str,
+        choice: RetentionChoice,
+        offer: RetentionOffer,
+    ) -> RetentionReceipt | None:
+        """Records that the customer kept the order for the refund or the points of `offer`. At
+        most once per order, and only while it is open or in delivery; None otherwise. Moves no
+        money in the simulation."""
         ...
