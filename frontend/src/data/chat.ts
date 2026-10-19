@@ -62,8 +62,8 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
     /**
      * While a person has the conversation: reads what they wrote. Background work, so it never
      * starts a conversation or renews a session (that would fork the visitor away from the person
-     * they are talking to: a rejected or expired session just stops the poll quietly), never shows
-     * an error, and never runs during a turn, which owns the messages until it ends.
+     * they are talking to), shows an error only for a rejected session, and never runs during a
+     * turn, which owns the messages until it ends.
      */
     async refresh() {
       const session = auth.current();
@@ -73,8 +73,12 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
         const { messages, handoff } = await api.messages(session);
         if (state.streaming || mine !== newest) return;
         update({ ...state, messages: keepImages(messages, state.messages), handoff });
-      } catch {
-        // The next poll tries again.
+      } catch (error) {
+        // A rejected session will not come back by polling: say so once, and send() renews it.
+        if (error instanceof ApiError && error.status === 401 && mine === newest && !state.streaming) {
+          update({ ...state, error: "Your session expired. Send a message to continue." });
+        }
+        // Anything else: the next poll tries again.
       }
     },
     async send(text: string, images: ChatMessage["images"] = []) {

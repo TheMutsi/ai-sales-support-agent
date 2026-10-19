@@ -62,10 +62,13 @@ def close(
     ticket = db.get(Ticket, conversation.handoff_ticket_id) if conversation.handoff_ticket_id else None
     if ticket is not None:
         ticket.status, ticket.resolved_at, ticket.resolution_notes = "resolved", now, notes
+    # Closing while still waiting: nobody joined, so nobody "left".
+    notice = (
+        f"{agent_name} left the chat. The assistant is back."
+        if conversation.handoff_status == HandoffStatus.ACTIVE
+        else "The assistant is back."
+    )
     conversation.handoff_status = HandoffStatus.NONE
     conversation.handoff_agent_name = None
-    _append(
-        db, conversation, "system", f"{agent_name} left the chat. The assistant is back.", now,
-        kind=MessageKind.SYSTEM,
-    )
+    _append(db, conversation, "system", notice, now, kind=MessageKind.SYSTEM)
     db.commit()

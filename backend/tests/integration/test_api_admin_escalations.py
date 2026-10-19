@@ -168,3 +168,16 @@ def test_the_name_defaults_to_the_role_and_is_limited(world):
     default = client.post("/api/admin/session", json={"role": "agent", "tenant_id": str(world["a"].id)}).json()
     assert default["name"] == "Agent"
     assert client.post("/api/admin/session", json={"role": "agent", "tenant_id": str(world["a"].id), "name": "x" * 41}).status_code == 422
+
+
+def test_a_blank_name_falls_back_to_the_role(world):
+    blank = client.post("/api/admin/session", json={"role": "agent", "tenant_id": str(world["a"].id), "name": "   "})
+    assert blank.json()["name"] == "Agent"
+
+
+def test_closing_a_chat_nobody_joined_does_not_say_someone_left(world):
+    agent = _login("agent", world["a"].id, name="Mónica")
+    assert client.post(_url(world, world["old"], "close"), json={}, headers=agent).status_code == 204
+    visitor = _visitor(world, world["old"])
+    last = client.get(f"/api/conversations/{world['old']}/messages", headers=visitor).json()["messages"][-1]
+    assert (last["kind"], last["content"]) == ("system", "The assistant is back.")
