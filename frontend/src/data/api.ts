@@ -1,5 +1,5 @@
 import { parseSse } from "./sse";
-import type { Card, ChatEvent, ChatMessage, Handoff, Session } from "./types";
+import type { Card, ChatEvent, ChatInput, ChatMessage, Handoff, Session } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -121,8 +121,8 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
     },
 
     /** One chat turn. `messageId` makes a retry replay the stored answer instead of running twice. */
-    async *chat(session: Session, message: string, messageId: string, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
-      const response = await request("/chat", { body: { message, message_id: messageId }, token: session.token, signal });
+    async *chat(session: Session, input: ChatInput, messageId: string, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
+      const response = await request("/chat", { body: { input, message_id: messageId }, token: session.token, signal });
       yield* withCards(parseSse(response.body!));
     },
 

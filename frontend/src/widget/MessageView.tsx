@@ -1,7 +1,7 @@
 import type { ChatMessage } from "../data/types";
 import { Markdown } from "./markdown";
 import { toParts, type MessagePart } from "./parts";
-import { Cards } from "./Cards";
+import { Cards, type ActionCard } from "./Cards";
 import type { CardImage } from "../data/types";
 
 function Part({ part }: { part: MessagePart }) {
@@ -29,7 +29,7 @@ export const Avatar = () => (
 export interface CardControls {
   /** Whether this message is the latest, so its action cards may still be used. */
   active: boolean;
-  onPick: (message: string) => void;
+  onPick: (card: ActionCard) => void;
   onZoom: (images: CardImage[]) => void;
 }
 

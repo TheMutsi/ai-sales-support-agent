@@ -17,7 +17,7 @@ export interface CardImage {
 
 /** Things a reply can show next to its text (see `app/schemas/cards.py`). */
 export type Card =
-  | { type: "action"; id: string; title: string; subtitle?: string | null; badge?: string | null; message: string }
+  | { type: "action"; id: string; title: string; subtitle?: string | null; badge?: string | null; message: string; action?: string | null; order_id?: string | null }
   | {
       type: "product";
       id: string;
@@ -64,3 +64,11 @@ export type ChatEvent =
   | { event: "correction"; data: { text: string } }
   | { event: "error"; data: { message?: string } }
   | { event: "done"; data: TurnSummary };
+
+/**
+ * What a turn sends: text a model reads, or a button the visitor clicked (decided by rules on the
+ * server; the text it shows in the conversation comes from the card, so it is not sent).
+ */
+export type ChatInput =
+  | { type: "text"; message: string }
+  | { type: "action"; action: string; order_id?: string | null };

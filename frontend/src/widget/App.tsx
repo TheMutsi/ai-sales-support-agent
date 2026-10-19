@@ -26,7 +26,7 @@ export function App({
   settings: { sound: boolean };
 }) {
   const { open, visible } = useSyncExternalStore(controller.subscribe, controller.getState);
-  const { messages, streaming, error, identity: identityRequest, handoff } = useSyncExternalStore(
+  const { messages, streaming, error, identity: identityRequest, handoff, broken } = useSyncExternalStore(
     chat.subscribe,
     chat.getState,
   );
@@ -96,7 +96,7 @@ export function App({
                 waiting={waiting}
                 busy={streaming}
                 locked={handoff !== "none"}
-                onPick={(message) => void chat.send(message)}
+                onPick={(card) => void chat.pick(card)}
                 onZoom={setZoomed}
               />
               {identityRequest &&
@@ -106,7 +106,14 @@ export function App({
                   <div className="mew-error" role="status">Please log in on the shop's site to continue.</div>
                 ))}
               {error && <div className="mew-error" role="alert">{error}</div>}
+              {broken ? (
+                <div className="mew-broken" role="alert">
+                  <p>There was a problem with this conversation. Please start a new one.</p>
+                  <button type="button" onClick={() => chat.restart()}>Start a new conversation</button>
+                </div>
+              ) : (
               <Composer disabled={streaming} onSend={(text, images) => void chat.send(text, images.map((i) => ({ url: i.url, alt: i.name })))} />
+              )}
             </>
           )}
           {zoomed && zoomed.length > 0 && <Lightbox images={zoomed} onClose={() => setZoomed(null)} />}

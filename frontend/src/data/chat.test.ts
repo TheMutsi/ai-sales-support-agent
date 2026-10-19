@@ -253,3 +253,44 @@ describe("cards of a turn", () => {
     expect(state.messages.at(-1)).toMatchObject({ role: "assistant", content: "Sure?", cards: [card] });
   });
 });
+
+
+describe("a button click", () => {
+  const card = { type: "action" as const, id: "offer-refund", title: "$14.00 back", message: "I'll take the $14.00 refund", action: "take_refund", order_id: null };
+
+  function chatWithSession(api: Api) {
+    const store = createSessionStore("pk", memoryStorage(), Date.now, null);
+    store.save(session());
+    return createChat(api, createAuth(api, store), store);
+  }
+
+  it("is sent as the action, not as text, and says in the conversation what its card says", async () => {
+    const api = fakeApi();
+    const chat = chatWithSession(api);
+
+    await chat.pick(card);
+
+    expect(api.chat).toHaveBeenCalledWith(expect.anything(), { type: "action", action: "take_refund", order_id: null }, expect.any(String));
+    expect(chat.getState().messages[0]).toMatchObject({ role: "user", content: "I'll take the $14.00 refund" });
+  });
+
+  it("is sent as written when the card was stored before actions existed", async () => {
+    const api = fakeApi();
+    const chat = chatWithSession(api);
+
+    await chat.pick({ ...card, action: undefined });
+
+    expect(api.chat).toHaveBeenCalledWith(expect.anything(), { type: "text", message: "I'll take the $14.00 refund" }, expect.any(String));
+  });
+
+  it("ends the conversation when the server rejects it as malformed, and restart begins a new one", async () => {
+    const api = fakeApi({ chat: vi.fn(() => { throw new ApiError(422, "validation_error"); }) as never });
+    const chat = chatWithSession(api);
+
+    await chat.pick(card);
+    expect(chat.getState()).toMatchObject({ broken: true, streaming: false, error: null });
+
+    chat.restart();
+    expect(chat.getState()).toMatchObject({ broken: false, messages: [] });
+  });
+});

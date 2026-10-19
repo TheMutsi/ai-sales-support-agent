@@ -80,7 +80,7 @@ describe("cards", () => {
     const session = { token: "t", conversationId: "c1", expiresAt: "", identityLevel: "store_login" };
 
     const events = [];
-    for await (const event of api.chat(session, "hi", "m1")) events.push(event);
+    for await (const event of api.chat(session, { type: "text", message: "hi" }, "m1")) events.push(event);
 
     const done = events.at(-1)!;
     expect(done.event === "done" && done.data.cards?.[0]).toMatchObject({ image: { url: "http://api.test/api/assets/products/pro.svg" } });

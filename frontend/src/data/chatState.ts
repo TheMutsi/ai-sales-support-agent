@@ -9,9 +9,11 @@ export interface ChatState {
   identity: { methods: string[] } | null;
   /** A person has the conversation: the widget polls for what they write. */
   handoff: Handoff;
+  /** The server refused what was sent as malformed (our own widget cannot do that): this conversation cannot go on. */
+  broken: boolean;
 }
 
-export const initialState: ChatState = { messages: [], streaming: false, error: null, identity: null, handoff: "none" };
+export const initialState: ChatState = { messages: [], streaming: false, error: null, identity: null, handoff: "none", broken: false };
 
 /** Id of the assistant message being written by the current turn. */
 export const STREAMING_ID = "streaming";

@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import type { Card, CardImage } from "../data/types";
 import { ChevronRight } from "./icons";
 
+/** A card the visitor can click. */
+export type ActionCard = Extract<Card, { type: "action" }>;
+
 interface Handlers {
-  /** An action card was chosen: send its message as the visitor. */
-  onPick: (message: string) => void;
+  /** An action card was chosen: it is sent as the action it carries, saying what its message says. */
+  onPick: (card: ActionCard) => void;
   /** A product's pictures were chosen: show them large (the first one first). */
   onZoom: (images: CardImage[]) => void;
 }
@@ -23,7 +26,7 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
             type="button"
             className="mew-card mew-action"
             disabled={!active}
-            onClick={() => onPick(card.message)}
+            onClick={() => onPick(card)}
           >
             <span className="mew-card-text">
               {card.badge && <span className="mew-card-badge">{card.badge}</span>}
