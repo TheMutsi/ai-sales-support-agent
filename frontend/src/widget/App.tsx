@@ -50,7 +50,14 @@ export function App({
     if (showingChat) void chat.load();
   }, [showingChat, chat]);
 
-  const unread = useUnread(answeredCount(messages), open, () => settings.sound && playPing());
+  // On the menu, still look (without starting anything) for a conversation a person is in, so a
+  // visitor who reloads while waiting for one is taken to it instead of to a menu that hides it.
+  useEffect(() => {
+    if (open && view === "menu") void chat.refresh();
+  }, [open, view, chat]);
+
+  // "Seen" means the chat is on screen: an answer that arrives while the menu is showing is unread.
+  const unread = useUnread(answeredCount(messages), showingChat, () => settings.sound && playPing());
 
   if (!visible) return null;
   // Typing dots show from the moment of sending until the first word of the answer arrives.
@@ -60,7 +67,7 @@ export function App({
       {open && (
         <section className="mew-panel" aria-label="Chat">
           {view === "menu" ? (
-            <Menu onHelp={() => setView("chat")} onClose={() => controller.run("close")} />
+            <Menu unread={unread} onHelp={() => setView("chat")} onClose={() => controller.run("close")} />
           ) : (
             <>
               <header className="mew-header mew-header-chat">
@@ -72,7 +79,7 @@ export function App({
                   <strong>Chat with us</strong>
                   <span>How can we help you today?</span>
                 </div>
-                <button type="button" className="mew-collapse" aria-label="Close chat" onClick={() => controller.run("close")}>
+                <button type="button" className="mew-collapse" aria-label="Minimize chat" onClick={() => controller.run("close")}>
                   <ChevronDown />
                 </button>
               </header>
@@ -95,7 +102,7 @@ export function App({
         onClick={() => controller.run(open ? "close" : "open")}
       >
         {open ? <ChevronDown size={26} /> : <ChatIcon size={26} />}
-        {!open && unread > 0 && (
+        {!showingChat && unread > 0 && (
           <span className="mew-badge" role="status" aria-label={unread === 1 ? "1 unread message" : `${unread} unread messages`}>
             {unread > 9 ? "9+" : unread}
           </span>

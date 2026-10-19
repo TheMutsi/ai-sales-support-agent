@@ -74,6 +74,7 @@ export function Composer({
         <textarea
           value={text}
           rows={1}
+          autoFocus
           placeholder="Type a message"
           aria-label="Message"
           onChange={(event) => setText(event.target.value)}

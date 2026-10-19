@@ -18,7 +18,15 @@ interface Entry {
  * The home view: a greeting and the things a visitor can do. Only "Help & Support" leads
  * anywhere (to the chat); the other entries are drawn but do nothing yet.
  */
-export function Menu({ onHelp, onClose }: { onHelp: () => void; onClose: () => void }) {
+export function Menu({
+  unread = 0,
+  onHelp,
+  onClose,
+}: {
+  unread?: number;
+  onHelp: () => void;
+  onClose: () => void;
+}) {
   const entries: Entry[] = [
     { label: "Manage Order", icon: <CartIcon /> },
     { label: "Track my Order", icon: <PinIcon /> },
@@ -35,7 +43,7 @@ export function Menu({ onHelp, onClose }: { onHelp: () => void; onClose: () => v
           <strong>Hi There 👋</strong>
           <span>How can we help you today?</span>
         </div>
-        <button type="button" className="mew-collapse" aria-label="Close chat" onClick={onClose}>
+        <button type="button" className="mew-collapse" aria-label="Minimize chat" onClick={onClose}>
           <ChevronDown />
         </button>
       </header>
@@ -50,6 +58,9 @@ export function Menu({ onHelp, onClose }: { onHelp: () => void; onClose: () => v
           >
             <span className="mew-menu-icon">{entry.icon}</span>
             <span className="mew-menu-label">{entry.label}</span>
+            {entry.onSelect && unread > 0 && (
+              <span className="mew-menu-badge" role="status" aria-label={`${unread} unread`}>{unread > 9 ? "9+" : unread}</span>
+            )}
             <ChevronRight />
           </button>
         ))}
