@@ -124,6 +124,12 @@ def _return_cards(result: ReturnResult) -> list[Card]:
         case ReturnOutcome.KEPT_WITH_REFUND | ReturnOutcome.KEPT_WITH_CREDITS:
             # What was taken is stated in the reply; the gift, if it came with it, is shown again.
             return [gift_card("Your gift")] if result.receipt and result.receipt.gift else []
+        case ReturnOutcome.CONFIRM_ORDER if order is not None:
+            return [
+                product_card(order),
+                ActionCard(id="check-yes", title="Yes, this one", message="Yes, I want to cancel this order"),
+                ActionCard(id="check-no", title="No, keep my order", message="No, keep my order"),
+            ]
         case ReturnOutcome.CONFIRM_CANCEL if order is not None:
             return [
                 product_card(order),

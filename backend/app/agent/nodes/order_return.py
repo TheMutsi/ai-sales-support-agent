@@ -15,6 +15,7 @@ import uuid
 from langchain_core.messages import AIMessage, SystemMessage
 
 from app.agent.prompts.order_return import (
+    CHECK_SITUATION,
     CONFIRM_SITUATION,
     FINAL_OFFER_SITUATION,
     NO_PENDING_SITUATION,
@@ -69,6 +70,14 @@ async def _read(state: AgentState, orders: list[OrderDetails], situation: str) -
     return reading
 
 
+def _check(order: OrderDetails) -> tuple[PendingReturn, ReturnResult]:
+    """Show the order and ask if it is the one, before offering or cancelling anything."""
+    return (
+        PendingReturn(order_id=order.order_id, stage=ReturnStage.CHECK),
+        ReturnResult(outcome=ReturnOutcome.CONFIRM_ORDER, order=order),
+    )
+
+
 def _start(order: OrderDetails) -> tuple[PendingReturn | None, ReturnResult]:
     options = return_options(order)
     if options.retention is not None:
@@ -105,6 +114,8 @@ def reply_for(result: ReturnResult) -> str:
             return "I have your order here. Would you like to keep it and choose one of these instead?"
         case ReturnOutcome.FINAL_OFFER:
             return "Before you go: keep your order and we'll add a free gift on top of either of these."
+        case ReturnOutcome.CONFIRM_ORDER:
+            return "Is this the order you want to cancel? If it's another one, just tell me which."
         case ReturnOutcome.CONFIRM_CANCEL:
             return "I have your order here. Do you want me to go ahead?"
         case ReturnOutcome.CHOOSE_ORDER:
@@ -185,6 +196,19 @@ async def order_return_node(state: AgentState) -> dict:
     by_id = {o.order_id: o for o in orders}
     pending = state.get("pending_return")
 
+    if pending is not None and pending.order_id in by_id and pending.stage is ReturnStage.CHECK:
+        order = by_id[pending.order_id]
+        candidates = [o for o in orders if _actionable(o)] or [order]
+        reading = await _read(state, candidates, CHECK_SITUATION.format(order_id=order.order_id))
+        named = by_id.get(reading.order_id) if reading.order_id else None
+        if named is not None and named.order_id != order.order_id and _actionable(named):
+            return _answer(*_start(named))  # they named another order: that one is meant
+        if reading.choice is ReturnChoice.KEEP:
+            return _answer(None, ReturnResult(outcome=ReturnOutcome.KEPT_AS_IS, order=order))
+        if reading.choice is ReturnChoice.REJECT:
+            return _answer(*_start(order))
+        return _answer(*_check(order))  # not understood: ask again, same place
+
     if pending is not None and pending.order_id in by_id:
         order = by_id[pending.order_id]
         situation = {
@@ -197,16 +221,16 @@ async def order_return_node(state: AgentState) -> dict:
 
     candidates = [o for o in orders if _actionable(o)]
     if not candidates:
-        return {
-            "pending_return": None,
-            "return_result": ReturnResult(outcome=ReturnOutcome.NOTHING_TO_RETURN),
-        }
+        return _answer(None, ReturnResult(outcome=ReturnOutcome.NOTHING_TO_RETURN))
     order = candidates[0] if len(candidates) == 1 else None
+    reading = None
     if order is None:
         reading = await _read(state, candidates, NO_PENDING_SITUATION)
         order = by_id.get(reading.order_id) if reading.order_id else None
     if order is None:
         result = ReturnResult(outcome=ReturnOutcome.CHOOSE_ORDER, candidates=candidates)
-        return {"pending_return": None, "return_result": result}
-    new_pending, result = _start(order)
-    return _answer(new_pending, result)
+        return _answer(None, result)
+    # Only when the customer named it is it taken as meant; a single order is still asked about.
+    if reading is None:
+        return _answer(*_check(order))
+    return _answer(*_start(order))

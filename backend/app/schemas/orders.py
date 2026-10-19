@@ -72,6 +72,7 @@ class ReturnOptions(BaseModel):
 
 
 class ReturnStage(StrEnum):
+    CHECK = "check"  # the customer was shown the order and asked whether it is the one they mean
     OFFER = "offer"  # the customer was offered to keep the order for a refund or points
     FINAL_OFFER = "final_offer"  # they declined the offer and were offered it again, with a gift
     CONFIRM = "confirm"  # the customer was asked to confirm cancelling it
@@ -87,6 +88,7 @@ class PendingReturn(BaseModel):
 class ReturnOutcome(StrEnum):
     NOTHING_TO_RETURN = "nothing_to_return"
     CHOOSE_ORDER = "choose_order"
+    CONFIRM_ORDER = "confirm_order"  # one order shown: "is this the one?", before anything else
     OFFER = "offer"
     FINAL_OFFER = "final_offer"
     CONFIRM_CANCEL = "confirm_cancel"

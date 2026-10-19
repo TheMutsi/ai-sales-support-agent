@@ -14,7 +14,8 @@ Answer with:
 - choice, exactly one of:
   - reject: they want to reject, cancel or return the order, or they confirm that they do
     ("yes, cancel it", "no thanks, I just want to cancel", "return it").
-  - refund: they take the offer of part of the price back on their card.
+  - refund: they take the offer of part of the price back on their card. Only when they say so
+    ("the refund", "the money back"); a "no" is never refund or credits.
   - credits: they take the offer of credit.
   - keep: they changed their mind and want to keep the order as it is, without the offer
     ("never mind", "forget it", "leave it").
@@ -24,15 +25,23 @@ Read the latest message only, with the conversation for context. Do not answer t
 
 NO_PENDING_SITUATION = "The customer has just asked to reject or return an order."
 
+CHECK_SITUATION = (
+    "The customer was shown order {order_id} and asked whether it is the one they want to cancel. "
+    "Their latest message answers that: yes (reject), no and they want to keep it (keep), or they "
+    "name a different order from the list (set order_id to that one)."
+)
+
 OFFER_SITUATION = (
     "The customer was offered to keep order {order_id} and get either part of the price back "
     "on their card (refund) or as credit to spend in the shop (credits), or to reject it anyway. Their latest message "
-    "answers that offer."
+    "answers that offer. Declining the offer in any words (\"no\", \"no thanks\", \"no thank you\", \"no gracias\", \"I don't "
+    "want it\") means they still want to reject the order: choice is reject, never unclear."
 )
 
 FINAL_OFFER_SITUATION = (
     "The customer declined the offer for order {order_id} once and was offered it again, this "
-    "time with a free gift on top of either. Their latest message answers that."
+    "time with a free gift on top of either. Their latest message answers that. Declining again in "
+    "any words (\"no\", \"no thanks\", \"no thank you\", \"no gracias\") means reject, never unclear."
 )
 
 CONFIRM_SITUATION = (

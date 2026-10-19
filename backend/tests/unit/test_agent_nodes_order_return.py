@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.agent.nodes import order_return as module
-from app.agent.nodes.order_return import order_return_node
+from app.agent.nodes.order_return import order_return_node, reply_for
 from app.business.returns import retention_offer
 from app.schemas.agent import ReturnChoice, ReturnReading
 from app.schemas.orders import (
@@ -60,7 +60,7 @@ class FakeShop:
             order_id=order_id, choice=choice,
             refund_cents=offer.refund_cents if choice is RetentionChoice.REFUND else None,
             credit_cents=offer.credit_cents if choice is RetentionChoice.CREDITS else None,
-            gift="Chai Jelly" if with_gift else None,
+            gift="Shapermint Essentials Everyday Wireless Jelly Bra" if with_gift else None,
         )
         self.orders[order_id] = order.model_copy(update={"retention": receipt})
         return receipt
@@ -115,20 +115,37 @@ SHIPPED30 = _order(SHIPPED_30, OrderStatus.IN_DELIVERY, 2999)
 OFFER, CONFIRM, FINAL = ReturnStage.OFFER, ReturnStage.CONFIRM, ReturnStage.FINAL_OFFER
 
 
+CHECK = ReturnStage.CHECK
+
+
+async def _yes_this_one(setup, order, others=()):
+    """Asks to cancel, then answers "yes, this one" to the question that shows the order."""
+    return await _run(setup, [order, *others], ReturnChoice.REJECT, _pending(order.order_id, CHECK))
+
+
 @pytest.mark.asyncio
-async def test_asking_to_reject_the_69_99_open_order_makes_the_offer_and_changes_nothing(setup):
+async def test_asking_to_cancel_one_order_shows_it_and_asks_if_it_is_the_one_before_anything_else(setup):
     result, shop, reader = await _run(setup, [OPEN70])
+
+    assert result["return_result"].outcome is ReturnOutcome.CONFIRM_ORDER
+    assert result["return_result"].order.order_id == OPEN_70
+    assert result["pending_return"] == _pending(OPEN_70, CHECK)
+    assert shop.calls == [] and reader.asked == 0  # nothing offered, nothing changed, no model
+
+
+@pytest.mark.asyncio
+async def test_yes_this_one_makes_the_offer_on_the_69_99_order_and_changes_nothing(setup):
+    result, shop, _ = await _yes_this_one(setup, OPEN70)
 
     returned = result["return_result"]
     assert returned.outcome is ReturnOutcome.OFFER
     assert (returned.offer.refund_cents, returned.offer.credit_cents) == (1400, 2100)
-    assert result["pending_return"] == _pending(OPEN_70, OFFER)
-    assert shop.calls == [] and reader.asked == 0  # one candidate: nothing to ask the model
+    assert result["pending_return"] == _pending(OPEN_70, OFFER) and shop.calls == []
 
 
 @pytest.mark.asyncio
-async def test_the_29_99_open_order_asks_for_confirmation_before_cancelling(setup):
-    result, shop, _ = await _run(setup, [OPEN30])
+async def test_yes_this_one_asks_for_confirmation_on_the_29_99_order_before_cancelling(setup):
+    result, shop, _ = await _yes_this_one(setup, OPEN30)
 
     assert result["return_result"].outcome is ReturnOutcome.CONFIRM_CANCEL
     assert result["pending_return"] == _pending(OPEN_30, CONFIRM) and shop.calls == []
@@ -136,7 +153,7 @@ async def test_the_29_99_open_order_asks_for_confirmation_before_cancelling(setu
 
 @pytest.mark.asyncio
 async def test_an_order_in_delivery_cannot_be_rejected_only_returned_later(setup):
-    result, shop, _ = await _run(setup, [SHIPPED30])
+    result, shop, _ = await _yes_this_one(setup, SHIPPED30)
 
     assert result["return_result"].outcome is ReturnOutcome.RETURN_LATER
     assert result["pending_return"] is None and shop.calls == []
@@ -144,10 +161,34 @@ async def test_an_order_in_delivery_cannot_be_rejected_only_returned_later(setup
 
 @pytest.mark.asyncio
 async def test_the_69_99_order_in_delivery_gets_the_offer_too(setup):
-    result, _, _ = await _run(setup, [SHIPPED70])
+    result, _, _ = await _yes_this_one(setup, SHIPPED70)
 
     assert result["return_result"].outcome is ReturnOutcome.OFFER
     assert result["pending_return"] == _pending(SHIPPED_70, OFFER)
+
+
+@pytest.mark.asyncio
+async def test_no_to_the_order_shown_keeps_it_and_clears_the_place(setup):
+    result, shop, _ = await _run(setup, [OPEN70], ReturnChoice.KEEP, _pending(OPEN_70, CHECK))
+
+    assert result["return_result"].outcome is ReturnOutcome.KEPT_AS_IS
+    assert result["pending_return"] is None and shop.calls == []
+
+
+@pytest.mark.asyncio
+async def test_naming_another_order_instead_moves_to_that_one(setup):
+    result, _, _ = await _run(setup, [OPEN70, OPEN30], ReturnChoice.UNCLEAR, _pending(OPEN_70, CHECK), order_id=OPEN_30)
+
+    assert result["return_result"].outcome is ReturnOutcome.CONFIRM_CANCEL
+    assert result["return_result"].order.order_id == OPEN_30
+
+
+@pytest.mark.asyncio
+async def test_an_answer_that_does_not_fit_asks_which_order_again(setup):
+    result, shop, _ = await _run(setup, [OPEN70], ReturnChoice.UNCLEAR, _pending(OPEN_70, CHECK))
+
+    assert result["return_result"].outcome is ReturnOutcome.CONFIRM_ORDER
+    assert result["pending_return"] == _pending(OPEN_70, CHECK) and shop.calls == []
 
 
 @pytest.mark.asyncio
@@ -233,6 +274,9 @@ async def test_with_several_orders_the_customer_picks_one_and_a_made_up_id_is_ig
     assert {o.order_id for o in asked["return_result"].candidates} == {OPEN_30, OPEN_70}
     assert chosen["return_result"].outcome is ReturnOutcome.OFFER
     assert chosen["return_result"].order.order_id == OPEN_70
+    # No node after this one writes a reply, so each branch must add its own: otherwise the last
+    # message in the state is the customer's, and it is sent back to them as the answer.
+    assert asked["messages"][-1].content == reply_for(asked["return_result"])
 
 
 @pytest.mark.asyncio
@@ -243,6 +287,7 @@ async def test_an_order_already_kept_or_cancelled_is_not_offered_again(setup):
     result, _, _ = await _run(setup, orders)
 
     assert result["return_result"].outcome is ReturnOutcome.NOTHING_TO_RETURN
+    assert result["messages"][-1].content == reply_for(result["return_result"])
 
 
 @pytest.mark.asyncio
@@ -267,14 +312,14 @@ async def test_the_gift_comes_only_with_the_last_offer(setup):
     last, _, _ = await _run(setup, [OPEN70], ReturnChoice.CREDITS, _pending(OPEN_70, FINAL))
 
     assert first["return_result"].receipt.gift is None
-    assert last["return_result"].receipt.gift == "Chai Jelly"
+    assert last["return_result"].receipt.gift == "Shapermint Essentials Everyday Wireless Jelly Bra"
 
 
 @pytest.mark.asyncio
 async def test_every_reply_is_fixed_text_with_no_id_and_an_offer_never_says_cancel(setup):
-    offer, _, _ = await _run(setup, [OPEN70])
+    offer, _, _ = await _yes_this_one(setup, OPEN70)
     final, _, _ = await _run(setup, [OPEN70], ReturnChoice.REJECT, _pending(OPEN_70, OFFER))
-    confirm, _, _ = await _run(setup, [OPEN30])
+    confirm, _, _ = await _yes_this_one(setup, OPEN30)
     cancelled, _, _ = await _run(setup, [OPEN70], ReturnChoice.REJECT, _pending(OPEN_70, FINAL))
 
     for update in (offer, final, confirm):
@@ -303,7 +348,6 @@ async def test_taking_an_offer_is_confirmed_with_the_exact_amounts_and_the_gift(
 
 @pytest.mark.asyncio
 async def test_the_other_outcomes_have_their_own_fixed_replies(setup):
-    from app.agent.nodes.order_return import reply_for
     from app.schemas.orders import ReturnResult
 
     replies = {outcome: reply_for(ReturnResult(outcome=outcome)) for outcome in ReturnOutcome}
