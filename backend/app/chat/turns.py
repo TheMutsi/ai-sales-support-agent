@@ -32,11 +32,22 @@ class MessageKind(StrEnum):
     # `reply_to_seq`: the user's message still has no answer, and re-sending it with the
     # same id after identifying is what resumes the turn.
     IDENTITY_REQUEST = "identity_request"
+    # "An agent joined", "the assistant is back": a notice in the conversation, not something
+    # anyone said. Kept out of the history the model receives.
+    SYSTEM = "system"
+
+
+class HandoffStatus(StrEnum):
+    NONE = "none"
+    WAITING = "waiting"  # a ticket was opened and no agent has joined yet
+    ACTIVE = "active"  # an agent is in the conversation
 
 
 class TurnAction(StrEnum):
     RUN = "run"
     REPLAY = "replay"
+    # A person has the conversation: the message is stored and nobody else answers it.
+    HANDOFF = "handoff"
 
 
 class TurnInProgress(Exception):
@@ -59,6 +70,13 @@ class TurnStart:
     user_text: str = ""
     history: list[Message] = field(default_factory=list)  # oldest first, excludes the new message
     reply: str | None = None
+    handoff: HandoffStatus = HandoffStatus.NONE  # set with `HANDOFF`
+
+
+ESCALATION_NOTICE = (
+    "You asked to speak with a person. An agent will join this chat when one is free; "
+    "you can keep writing here."
+)
 
 
 def _lock(db: Session, conversation_id: uuid.UUID) -> Conversation:
@@ -87,6 +105,8 @@ def _history_before(db: Session, conversation_id: uuid.UUID, seq: int, limit: in
             Message.conversation_id == conversation_id,
             Message.seq < seq,
             Message.kind == MessageKind.TEXT,
+            # What a person said is not the assistant's to continue from.
+            Message.role.in_(("user", "assistant")),
         )
         .order_by(Message.seq.desc())
         .limit(limit)
@@ -150,11 +170,18 @@ def begin_turn(
         if reply is not None:
             db.commit()  # nothing changed; ends the transaction and frees the lock
             return TurnStart(TurnAction.REPLAY, reply=reply.content)
+        if conversation.handoff_status != HandoffStatus.NONE:
+            db.commit()
+            return TurnStart(TurnAction.HANDOFF, handoff=HandoffStatus(conversation.handoff_status))
         if _busy(conversation, now):
             db.commit()
             raise TurnInProgress
         conversation.turn_started_at, conversation.turn_id = now, turn_id
         user_text, history_seq = existing.content, existing.seq
+    elif conversation.handoff_status != HandoffStatus.NONE:
+        _append(db, conversation, "user", content, now, client_message_id)
+        db.commit()
+        return TurnStart(TurnAction.HANDOFF, handoff=HandoffStatus(conversation.handoff_status))
     else:
         if _busy(conversation, now):
             db.commit()
@@ -179,13 +206,21 @@ def finish_turn(
     content: str,
     now: datetime,
     kind: MessageKind = MessageKind.TEXT,
+    escalation_ticket_id: uuid.UUID | None = None,
 ) -> None:
+    """Saves the reply. If the turn opened a ticket, the conversation now waits for a person:
+    from here on the assistant stops answering it (see `begin_turn`)."""
     conversation = _lock(db, conversation_id)
     if conversation.turn_id != turn.turn_id:
         db.commit()
         raise TurnSuperseded
     reply_to = turn.user_seq if kind is MessageKind.TEXT else None
     _append(db, conversation, "assistant", content, now, reply_to_seq=reply_to, kind=kind)
+    if escalation_ticket_id is not None and conversation.handoff_status == HandoffStatus.NONE:
+        conversation.handoff_status = HandoffStatus.WAITING
+        conversation.handoff_requested_at = now
+        conversation.handoff_ticket_id = escalation_ticket_id
+        _append(db, conversation, "system", ESCALATION_NOTICE, now, kind=MessageKind.SYSTEM)
     conversation.turn_started_at = conversation.turn_id = None
     db.commit()
 

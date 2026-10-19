@@ -31,14 +31,17 @@ class ChatMessage(BaseModel):
 
 class StoredMessage(BaseModel):
     seq: int
-    role: Literal["user", "assistant"]
-    kind: Literal["text", "identity_request"]
+    role: Literal["user", "assistant", "human", "system"]
+    kind: Literal["text", "identity_request", "system"]
     content: str
+    author_name: str | None = None  # a person's message is shown under this name
     created_at: datetime
 
 
 class MessageList(BaseModel):
     messages: list[StoredMessage]
+    # `waiting` or `active` while a person has the conversation, so a polling widget knows.
+    handoff: Literal["none", "waiting", "active"] = "none"
 
 
 class ChatRequest(BaseModel):
@@ -58,6 +61,8 @@ class ChatTurnSummary(BaseModel):
     """
 
     conversation_id: uuid.UUID
+    # Set when a person has the conversation: the message was stored and no one else answers it.
+    handoff: Literal["waiting", "active"] | None = None
     intent: Intent | None = None
     guardrail_flags: list[str] = Field(default_factory=list)
     ticket_created: bool = False

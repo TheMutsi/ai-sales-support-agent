@@ -270,7 +270,7 @@ def test_a_new_conversation_has_no_messages(shop):
         f"/api/conversations/{shop['conversation'].id}/messages", headers=_auth(shop)
     )
 
-    assert response.status_code == 200 and response.json() == {"messages": []}
+    assert response.status_code == 200 and response.json() == {"messages": [], "handoff": "none"}
 
 
 def test_messages_need_a_session():
