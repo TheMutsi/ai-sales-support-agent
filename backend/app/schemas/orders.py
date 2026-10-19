@@ -71,6 +71,7 @@ class ReturnOptions(BaseModel):
 
 class ReturnStage(StrEnum):
     OFFER = "offer"  # the customer was offered to keep the order for a refund or points
+    FINAL_OFFER = "final_offer"  # they declined the offer and were offered it again, with a gift
     CONFIRM = "confirm"  # the customer was asked to confirm cancelling it
 
 
@@ -85,6 +86,7 @@ class ReturnOutcome(StrEnum):
     NOTHING_TO_RETURN = "nothing_to_return"
     CHOOSE_ORDER = "choose_order"
     OFFER = "offer"
+    FINAL_OFFER = "final_offer"
     CONFIRM_CANCEL = "confirm_cancel"
     RETURN_LATER = "return_later"
     CANCELLED = "cancelled"
@@ -103,6 +105,7 @@ class RetentionReceipt(BaseModel):
     refund_cents: int | None = None
     credit_points: int | None = None
     coupon_code: str | None = None  # for a free next order
+    gift: str | None = None  # a free gift, when the offer was taken at the last chance
 
 
 class ReturnResult(BaseModel):

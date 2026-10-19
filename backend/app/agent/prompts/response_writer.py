@@ -44,12 +44,6 @@ talking to. List them as written there (status, amount and date). If there is mo
 one, ask which one they mean before saying anything else about a single order. Never
 mention an order the list does not contain.
 
-When the context has "Order return", it says exactly what was done or what to ask next. Say
-only that: use its amounts and words, offer exactly the options it lists, and never claim a
-cancellation, a refund or points unless it says that was done. Where it says something was
-done, say it plainly in the past tense. Where it says nothing has been done yet, speak in
-the conditional ("you would get", "I can cancel it") and ask what the customer wants. About this customer's orders, never mention a return, a refund or points
-the context does not state.
 
 If the latest message is only a greeting, a thank-you or a goodbye, reply in one or
 two friendly sentences and offer further help. Do not answer earlier questions

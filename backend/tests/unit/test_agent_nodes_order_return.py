@@ -50,7 +50,7 @@ class FakeShop:
         self.orders[order_id] = order.model_copy(update={"status": OrderStatus.CANCELLED})
         return self.orders[order_id]
 
-    async def keep_order_with_retention(self, *, tenant_id, customer_id, order_id, choice):
+    async def keep_order_with_retention(self, *, tenant_id, customer_id, order_id, choice, with_gift=False):
         self.calls.append(("keep", order_id, choice))
         order = self.orders[order_id]
         offer = retention_offer(order.amount_cents)
@@ -61,6 +61,7 @@ class FakeShop:
             refund_cents=offer.refund_cents if choice is RetentionChoice.REFUND else None,
             credit_points=offer.credit_points if choice is RetentionChoice.CREDITS else None,
             coupon_code="FREE-AAAAAA" if choice is RetentionChoice.NEXT_ORDER_FREE else None,
+            gift="Mew hoodie" if with_gift else None,
         )
         self.orders[order_id] = order.model_copy(update={"retention": receipt})
         return receipt
@@ -112,7 +113,7 @@ async def _run(setup, orders, choice=None, pending=None, order_id=None):
 OPEN70, OPEN30 = _order(OPEN_70, OrderStatus.OPEN, 6999), _order(OPEN_30, OrderStatus.OPEN, 2999)
 SHIPPED70 = _order(SHIPPED_70, OrderStatus.IN_DELIVERY, 6999)
 SHIPPED30 = _order(SHIPPED_30, OrderStatus.IN_DELIVERY, 2999)
-OFFER, CONFIRM = ReturnStage.OFFER, ReturnStage.CONFIRM
+OFFER, CONFIRM, FINAL = ReturnStage.OFFER, ReturnStage.CONFIRM, ReturnStage.FINAL_OFFER
 
 
 @pytest.mark.asyncio
@@ -172,16 +173,25 @@ async def test_taking_the_offer_keeps_the_order_and_records_what_was_chosen(
 
 
 @pytest.mark.asyncio
-async def test_declining_the_offer_cancels_an_open_order(setup):
+async def test_declining_the_offer_once_makes_the_last_offer_with_a_gift_and_changes_nothing(setup):
     result, shop, _ = await _run(setup, [OPEN70], ReturnChoice.REJECT, _pending(OPEN_70, OFFER))
+
+    assert result["return_result"].outcome is ReturnOutcome.FINAL_OFFER
+    assert result["pending_return"] == _pending(OPEN_70, FINAL)
+    assert shop.calls == [] and shop.orders[OPEN_70].status is OrderStatus.OPEN
+
+
+@pytest.mark.asyncio
+async def test_declining_the_last_offer_cancels_an_open_order(setup):
+    result, shop, _ = await _run(setup, [OPEN70], ReturnChoice.REJECT, _pending(OPEN_70, FINAL))
 
     assert result["return_result"].outcome is ReturnOutcome.CANCELLED
     assert shop.orders[OPEN_70].status is OrderStatus.CANCELLED and result["pending_return"] is None
 
 
 @pytest.mark.asyncio
-async def test_declining_the_offer_on_an_order_in_delivery_leaves_it_for_a_later_return(setup):
-    result, shop, _ = await _run(setup, [SHIPPED70], ReturnChoice.REJECT, _pending(SHIPPED_70, OFFER))
+async def test_declining_the_last_offer_on_an_order_in_delivery_leaves_it_for_a_later_return(setup):
+    result, shop, _ = await _run(setup, [SHIPPED70], ReturnChoice.REJECT, _pending(SHIPPED_70, FINAL))
 
     assert result["return_result"].outcome is ReturnOutcome.RETURN_LATER
     assert shop.calls == [] and shop.orders[SHIPPED_70].status is OrderStatus.IN_DELIVERY
@@ -251,3 +261,55 @@ async def test_a_stale_pending_return_for_an_order_that_changed_does_nothing_and
 async def test_it_needs_a_verified_customer():
     with pytest.raises(ValueError, match="verified customer"):
         await order_return_node({"tenant_id": TENANT, "customer_id": None, "messages": []})
+
+
+@pytest.mark.asyncio
+async def test_the_gift_comes_only_with_the_last_offer(setup):
+    first, _, _ = await _run(setup, [OPEN70], ReturnChoice.CREDITS, _pending(OPEN_70, OFFER))
+    last, _, _ = await _run(setup, [OPEN70], ReturnChoice.CREDITS, _pending(OPEN_70, FINAL))
+
+    assert first["return_result"].receipt.gift is None
+    assert last["return_result"].receipt.gift == "Mew hoodie"
+
+
+@pytest.mark.asyncio
+async def test_every_reply_is_fixed_text_with_no_id_and_an_offer_never_says_cancel(setup):
+    offer, _, _ = await _run(setup, [OPEN70])
+    final, _, _ = await _run(setup, [OPEN70], ReturnChoice.REJECT, _pending(OPEN_70, OFFER))
+    confirm, _, _ = await _run(setup, [OPEN30])
+    cancelled, _, _ = await _run(setup, [OPEN70], ReturnChoice.REJECT, _pending(OPEN_70, FINAL))
+
+    for update in (offer, final, confirm):
+        text = update["messages"][0].content
+        assert not any(ch.isdigit() for ch in text)
+        assert "cancel" not in text.lower() and "reject" not in text.lower()
+    assert cancelled["messages"][0].content == "Done: your order has been cancelled. Take care!"
+    for update in (offer, final, confirm, cancelled):
+        assert OPEN_70 not in update["messages"][0].content and OPEN_30 not in update["messages"][0].content
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stage", "choice", "expected"),
+    [
+        (OFFER, ReturnChoice.REFUND, "Done! I've refunded $14.00 to your card and your order stays with you."),
+        (OFFER, ReturnChoice.CREDITS, "Done! I've added 2,100 points to your account and your order stays with you."),
+        (FINAL, ReturnChoice.CREDITS, "Done! I've added 2,100 points to your account and your order stays with you. Your free gift is on its way too."),
+        (FINAL, ReturnChoice.FREE_NEXT, "Done! Your next order is free: use the code below at checkout. Your order stays with you. Your free gift is on its way too."),
+    ],
+)
+async def test_taking_an_offer_is_confirmed_with_the_exact_amounts_and_the_gift(setup, stage, choice, expected):
+    result, _, _ = await _run(setup, [OPEN70], choice, _pending(OPEN_70, stage))
+
+    assert result["messages"][0].content == expected
+
+
+@pytest.mark.asyncio
+async def test_the_other_outcomes_have_their_own_fixed_replies(setup):
+    from app.agent.nodes.order_return import reply_for
+    from app.schemas.orders import ReturnResult
+
+    replies = {outcome: reply_for(ReturnResult(outcome=outcome)) for outcome in ReturnOutcome}
+
+    assert all(replies[o] for o in ReturnOutcome if o not in (ReturnOutcome.KEPT_WITH_REFUND, ReturnOutcome.KEPT_WITH_CREDITS))
+    assert "go ahead" in replies[ReturnOutcome.CONFIRM_CANCEL] and "once it arrives" in replies[ReturnOutcome.RETURN_LATER]

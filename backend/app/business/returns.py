@@ -13,6 +13,9 @@ RETENTION_MIN_CENTS = 5_000
 REFUND_PERCENT = 20
 CREDIT_PERCENT = 30
 POINTS_PER_CENT = 1  # one point is worth one cent in the shop
+# Added to the offer the second time, when the customer has declined it once.
+GIFT_NAME = "Mew hoodie"
+GIFT_DESCRIPTION = "Soft fleece hoodie with the Mew logo"
 
 
 def _percent_of(cents: int, percent: int) -> int:

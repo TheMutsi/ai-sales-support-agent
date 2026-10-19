@@ -5,8 +5,15 @@ shows (an offer the rules made, an order that was read), so the model cannot inv
 leave out a number. The text of the reply and the cards come from the same state.
 """
 
-from app.schemas.cards import ActionCard, Card, CardImage, CouponCard, ProductCard
-from app.schemas.orders import OrderDetails, OrderStatus, ReturnOutcome, ReturnResult
+from app.business.returns import GIFT_DESCRIPTION, GIFT_NAME
+from app.schemas.cards import ActionCard, Card, CardImage, CouponCard, DividerCard, ProductCard
+from app.schemas.orders import (
+    OrderDetails,
+    OrderStatus,
+    RetentionOffer,
+    ReturnOutcome,
+    ReturnResult,
+)
 
 _STATUS_BADGE = {
     OrderStatus.OPEN: "Open",
@@ -34,49 +41,89 @@ def product_card(order: OrderDetails) -> ProductCard:
     )
 
 
+def _option_cards(offer: RetentionOffer) -> list[Card]:
+    """The three things a customer can take to keep an order."""
+    return [
+        ActionCard(
+            id="offer-refund",
+            title=f"{_dollars(offer.refund_cents)} back to your card",
+            subtitle="Keep your order and get 20% of its price back",
+            badge="20% back",
+            message=f"I'll take the {_dollars(offer.refund_cents)} refund to my card",
+        ),
+        ActionCard(
+            id="offer-points",
+            title=f"{offer.credit_points:,} points",
+            subtitle="Keep your order and get 30% of its price as points",
+            badge="30% in points",
+            message=f"I'll take the {offer.credit_points:,} points",
+        ),
+        ActionCard(
+            id="offer-free",
+            title="Your next order, free",
+            subtitle="Keep your order and your next one is on us",
+            badge="Free",
+            message="I'll take the next order free",
+        ),
+    ]
+
+
+def gift_card(badge: str = "Free gift") -> ProductCard:
+    return ProductCard(
+        id="gift",
+        name=GIFT_NAME,
+        subtitle=GIFT_DESCRIPTION,
+        price="FREE",
+        badge=badge,
+        image=CardImage(url="/api/assets/products/gift.svg", alt=GIFT_NAME),
+    )
+
+
+def _order_label(order: OrderDetails) -> str:
+    return f"the {order.plan_slug.capitalize()} plan order of {_dollars(order.amount_cents)} placed {order.created_at:%b %d}"
+
+
 def _return_cards(result: ReturnResult) -> list[Card]:
     order, offer = result.order, result.offer
     match result.outcome:
         case ReturnOutcome.OFFER if order is not None and offer is not None:
             return [
                 product_card(order),
-                ActionCard(
-                    id="offer-refund",
-                    title=f"{_dollars(offer.refund_cents)} back to your card",
-                    subtitle="Keep your order and get 20% of its price back",
-                    badge="20% back",
-                    message=f"I'll take the {_dollars(offer.refund_cents)} refund to my card",
-                ),
-                ActionCard(
-                    id="offer-points",
-                    title=f"{offer.credit_points:,} points",
-                    subtitle="Keep your order and get 30% of its price as points",
-                    badge="30% in points",
-                    message=f"I'll take the {offer.credit_points:,} points",
-                ),
-                ActionCard(
-                    id="offer-free",
-                    title="Your next order, free",
-                    subtitle="Keep your order and your next one is on us",
-                    badge="Free",
-                    message="I'll take the next order free",
-                ),
+                *_option_cards(offer),
                 ActionCard(
                     id="offer-reject",
                     title="No thanks",
-                    subtitle="Reject the order anyway",
-                    message="No thanks, I want to reject it anyway",
+                    subtitle="I still want to cancel it",
+                    message="No thanks, I want to cancel it",
                 ),
             ]
-        case ReturnOutcome.KEPT_WITH_FREE_ORDER if result.receipt and result.receipt.coupon_code:
+        case ReturnOutcome.FINAL_OFFER if order is not None and offer is not None:
+            # The gift and, below a "+", the same three options: both things at once.
             return [
-                CouponCard(
-                    id=f"coupon-{result.receipt.coupon_code}",
-                    code=result.receipt.coupon_code,
-                    title="Your next order is free",
-                    subtitle="Use this code at checkout",
-                )
+                gift_card(),
+                DividerCard(id="gift-plus", label="+"),
+                *_option_cards(offer),
+                ActionCard(
+                    id="offer-reject",
+                    title="No, cancel my order",
+                    message="No, cancel my order",
+                ),
             ]
+        case ReturnOutcome.KEPT_WITH_REFUND | ReturnOutcome.KEPT_WITH_CREDITS | ReturnOutcome.KEPT_WITH_FREE_ORDER:
+            receipt = result.receipt
+            cards: list[Card] = []
+            if receipt and receipt.coupon_code:
+                cards.append(
+                    CouponCard(
+                        id=f"coupon-{receipt.coupon_code}",
+                        code=receipt.coupon_code,
+                        title="Your next order is free",
+                        subtitle="Use this code at checkout",
+                    )
+                )
+            if receipt and receipt.gift:
+                cards.append(gift_card("Your gift"))
+            return cards
         case ReturnOutcome.CONFIRM_CANCEL if order is not None:
             return [
                 product_card(order),
@@ -89,7 +136,7 @@ def _return_cards(result: ReturnResult) -> list[Card]:
                     id=f"choose-{o.order_id}",
                     title=f"{o.plan_slug.capitalize()} plan, {_dollars(o.amount_cents)}",
                     subtitle=_STATUS_BADGE.get(o.status, o.status.value),
-                    message=f"I mean order {o.order_id}",
+                    message=f"I mean {_order_label(o)}",
                 )
                 for o in result.candidates
             ]

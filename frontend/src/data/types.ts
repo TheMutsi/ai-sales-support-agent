@@ -19,7 +19,8 @@ export interface CardImage {
 export type Card =
   | { type: "action"; id: string; title: string; subtitle?: string | null; badge?: string | null; message: string }
   | { type: "product"; id: string; name: string; subtitle?: string | null; price?: string | null; badge?: string | null; image: CardImage }
-  | { type: "coupon"; id: string; code: string; title: string; subtitle?: string | null };
+  | { type: "coupon"; id: string; code: string; title: string; subtitle?: string | null }
+  | { type: "divider"; id: string; label?: string };
 
 export interface ChatMessage {
   id: string;

@@ -35,10 +35,16 @@ are, or whether something happened.
 - The source enforces the invariants under a row lock: an order is cancelled only while open and
   only if it was not kept with the offer; the offer is recorded at most once per order and its
   amounts are computed from the order, not taken from the caller.
-- The writer is given a `ReturnResult` with the numbers already formatted and says only what it
-  states. Output guardrails: a refund claim is allowed only when the return step recorded one,
-  and `unbacked_order_action_claim` blocks "your order has been cancelled" or "points have been
-  added" without it.
+- Everything this step says is fixed text it writes itself from the result (`reply_for`), and the
+  graph ends there: no model words a question or reports what happened, so a reply cannot invent
+  an amount, an order number or a cancellation. The offers are **cards** (see `app/cards.py`), the
+  text never names cancelling (the "No thanks" card is the button for that) and never shows an id.
+- Two chances: the first offer is the three options (refund, points, next order free); declining it
+  shows the **last offer**, the same three plus a free gift (a product card, a "+" and the choices);
+  declining that cancels an open order (or, for one in delivery, says to return it once it arrives).
+  Output guardrails: a refund claim is allowed only when the return step recorded one, and
+  `unbacked_order_action_claim` blocks "your order has been cancelled" or "points have been added"
+  in the replies of other steps.
 - Nothing moves money: the refund and the points are recorded in `order_adjustments` and
   stated to the customer, which is all the simulation does.
 

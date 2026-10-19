@@ -109,3 +109,6 @@
 .mew-coupon { border: 2px dashed var(--mew-brand-2); background: #fff7f5; }
 .mew-code { flex: none; padding: 6px 10px; border-radius: 8px; background: #fff; border: 1px solid var(--mew-line);
   color: var(--mew-brand); font: 700 13px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.5px; user-select: all; }
+.mew-divider { display: flex; align-items: center; gap: 10px; color: var(--mew-brand); }
+.mew-divider span { flex: 1; border-top: 2px dashed var(--mew-line); }
+.mew-divider b { font-size: 18px; line-height: 1; }

@@ -53,7 +53,11 @@ def test_several_orders_to_choose_from_become_cards_that_name_the_order():
 
     cards = cards_for(_result(ReturnOutcome.CHOOSE_ORDER, candidates=[first, second]))
 
-    assert [c.message for c in cards] == [f"I mean order {'A' * 20}", f"I mean order {'B' * 20}"]
+    assert [c.message for c in cards] == [
+        "I mean the Pro plan order of $69.99 placed Oct 01",
+        "I mean the Starter plan order of $29.99 placed Oct 01",
+    ]
+    assert all("A" * 20 not in (c.title + c.message) for c in cards)  # the visitor never sees an id
     assert cards[1].title == "Starter plan, $29.99"
 
 
@@ -107,3 +111,29 @@ def test_taking_the_free_next_order_shows_the_coupon_that_was_recorded():
 
     assert [(c.type, c.code) for c in cards] == [("coupon", "FREE-AAAAAA")]
     assert cards_for(_result(ReturnOutcome.KEPT_WITH_FREE_ORDER, order=_order())) == []  # no code, no coupon
+
+
+def test_the_last_offer_shows_the_free_gift_then_a_plus_then_the_same_choices():
+    cards = cards_for(
+        _result(ReturnOutcome.FINAL_OFFER, order=_order(), offer=RetentionOffer(refund_cents=1400, credit_points=2100))
+    )
+
+    assert [c.type for c in cards] == ["product", "divider", "action", "action", "action", "action"]
+    gift, plus, refund, points, free, cancel = cards
+    assert (gift.name, gift.price, gift.badge) == ("Mew hoodie", "FREE", "Free gift")
+    assert gift.image.url == "/api/assets/products/gift.svg" and plus.label == "+"
+    assert [refund.id, points.id, free.id] == ["offer-refund", "offer-points", "offer-free"]
+    assert cancel.message == "No, cancel my order"
+
+
+def test_taking_an_offer_at_the_last_chance_shows_the_gift_that_comes_with_it():
+    from app.schemas.orders import RetentionChoice, RetentionReceipt
+
+    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_points=2100, gift="Mew hoodie")
+    plain = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_points=2100)
+
+    with_gift = cards_for(_result(ReturnOutcome.KEPT_WITH_CREDITS, order=_order(), receipt=receipt))
+    without = cards_for(_result(ReturnOutcome.KEPT_WITH_CREDITS, order=_order(), receipt=plain))
+
+    assert [(c.type, c.badge) for c in with_gift] == [("product", "Your gift")]
+    assert without == []

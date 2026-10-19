@@ -271,3 +271,15 @@ def test_the_next_order_free_is_recorded_with_a_coupon_code_and_read_back(db: Se
     assert receipt is not None and receipt.coupon_code == f"FREE-{order.order_id[:6].upper()}"
     assert (receipt.refund_cents, receipt.credit_points) == (None, None)
     assert read.retention is not None and read.retention.coupon_code == receipt.coupon_code
+
+
+def test_a_gift_is_recorded_only_when_asked_for_and_read_back(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    customer, order = _customer_and_order(db, "mail2@gmail.com")
+    ids = {"tenant_id": customer.tenant_id, "customer_id": customer.id, "order_id": order.order_id}
+
+    receipt = asyncio.run(source.keep_order_with_retention(**ids, choice=RetentionChoice.CREDITS, with_gift=True))
+    [read] = asyncio.run(source.list_orders(tenant_id=customer.tenant_id, customer_id=customer.id))
+
+    assert receipt is not None and receipt.gift == "Mew hoodie"
+    assert read.retention is not None and read.retention.gift == "Mew hoodie"

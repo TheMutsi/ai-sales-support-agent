@@ -31,6 +31,11 @@ OFFER_SITUATION = (
     "answers that offer."
 )
 
+FINAL_OFFER_SITUATION = (
+    "The customer declined the offer for order {order_id} once and was offered it again, this "
+    "time with a free gift on top of any of the three. Their latest message answers that."
+)
+
 CONFIRM_SITUATION = (
     "The customer was asked to confirm that they want to cancel order {order_id}. Their latest "
     "message answers that question."

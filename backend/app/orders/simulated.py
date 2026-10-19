@@ -11,7 +11,7 @@ from collections.abc import Callable
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.business.returns import retention_offer
+from app.business.returns import GIFT_NAME, retention_offer
 from app.db.models import Customer, Order, OrderAdjustment
 from app.schemas.orders import (
     OrderDetails,
@@ -83,13 +83,21 @@ class SimulatedOrderSource:
         customer_id: uuid.UUID,
         order_id: str,
         choice: RetentionChoice,
+        with_gift: bool = False,
     ) -> RetentionReceipt | None:
         if not is_valid_order_id(order_id):
             return None
-        return await asyncio.to_thread(self._retain, tenant_id, customer_id, order_id, choice)
+        return await asyncio.to_thread(
+            self._retain, tenant_id, customer_id, order_id, choice, with_gift
+        )
 
     def _retain(
-        self, tenant_id: uuid.UUID, customer_id: uuid.UUID, order_id: str, choice: RetentionChoice
+        self,
+        tenant_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        order_id: str,
+        choice: RetentionChoice,
+        with_gift: bool,
     ) -> RetentionReceipt | None:
         with self._session_factory() as db:
             order = self._owned_order(db, tenant_id, customer_id, order_id)
@@ -108,6 +116,7 @@ class SimulatedOrderSource:
                     if choice is RetentionChoice.NEXT_ORDER_FREE
                     else None
                 ),
+                gift=GIFT_NAME if with_gift else None,
             )
             db.add(
                 OrderAdjustment(
@@ -116,6 +125,7 @@ class SimulatedOrderSource:
                     refund_cents=receipt.refund_cents,
                     credit_points=receipt.credit_points,
                     coupon_code=receipt.coupon_code,
+                    gift=receipt.gift,
                 )
             )
             try:
@@ -166,6 +176,7 @@ def _details(order: Order) -> OrderDetails:
             refund_cents=kept.refund_cents,
             credit_points=kept.credit_points,
             coupon_code=kept.coupon_code,
+            gift=kept.gift,
         )
     return OrderDetails(
         order_id=order.order_id,
