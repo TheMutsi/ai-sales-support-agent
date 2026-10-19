@@ -6,7 +6,7 @@ import { createChat } from "./data/chat";
 import { createIdentity } from "./data/identity";
 import { createSessionStore } from "./data/sessionStore";
 import { createController } from "./loader/controller";
-import { createFrame } from "./loader/frame";
+import { createFrame, layoutFrame } from "./loader/frame";
 import { installGlobal, readKey } from "./loader/global";
 import { App } from "./widget/App";
 import styles from "./widget/styles.css?inline";
@@ -36,6 +36,8 @@ function boot() {
   });
 
   const frame = createFrame(document);
+  controller.subscribe(() => layoutFrame(frame, controller.getState()));
+  layoutFrame(frame, controller.getState());
   const doc = frame.contentDocument!;
   const style = doc.createElement("style");
   style.textContent = styles;
