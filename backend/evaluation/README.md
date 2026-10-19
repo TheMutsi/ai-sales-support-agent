@@ -4,7 +4,8 @@
 > order, ADR-0018) and `order-012` ("Please cancel my order.") changed meaning: cancelling an order
 > is now `order_return`, handled without a ticket, where it used to be a `refund_request` that
 > failed on purpose. Run 17's numbers below are for the old 82-case set and the old definition; no
-> full run has been made on the new one (only the `order-*` and `return-*` cases, once each).
+> full run has been made on the new one (only the `order-*` and `return-*` cases, once each). The
+> intent and escalation metrics are not comparable across this change.
 
 Two fixed datasets, a dev set (`dataset.jsonl`, 82 cases at the time of writing) and a 16-case held-out set
 (`heldout.jsonl`), run against the **real, running `/api/chat` endpoint** and

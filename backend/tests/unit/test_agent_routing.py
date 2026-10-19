@@ -282,16 +282,20 @@ def test_rejecting_an_order_needs_a_verified_customer_and_reaches_the_return_ste
     ) == "request_identity"
 
 
-def test_while_a_return_is_pending_the_answers_the_classifier_misfiles_continue_it():
+def test_while_a_return_is_pending_a_bare_answer_filed_as_small_talk_continues_it():
     from app.schemas.orders import PendingReturn, ReturnStage
 
     pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
 
-    for intent in (Intent.SMALL_TALK, Intent.REFUND_REQUEST, Intent.ORDER_STATUS):
-        assert route_after_intent(_returning(intent, pending=pending)) == "order_return"
-    # `unsupported` takes the safety judge first, which then dispatches the same way.
+    assert route_after_intent(_returning(Intent.SMALL_TALK, pending=pending)) == "order_return"
+    assert route_after_intent(_returning(Intent.ORDER_RETURN, pending=pending)) == "order_return"
+    # Other requests must not complete a return: a subscription cancellation is not an answer,
+    # a request for a person still gets a ticket and "where is my order" still gets its status.
+    assert route_after_intent(_returning(Intent.REFUND_REQUEST, pending=pending)) == "get_customer_context"
+    assert route_after_intent(_returning(Intent.ORDER_STATUS, pending=pending)) == "get_customer_orders"
+    assert route_after_intent(_returning(Intent.HUMAN_ESCALATION, pending=pending)) == "human_escalation"
     unsupported = {**_returning(Intent.UNSUPPORTED, pending=pending), "input_blocked": False}
-    assert route_after_safety_judge(unsupported) == "order_return"
+    assert route_after_safety_judge(unsupported) == "human_escalation"
     # A different question goes its own way, and the pending return waits.
     assert route_after_intent(_returning(Intent.PRICING_QUESTION, pending=pending)) == "get_plan_catalog"
 

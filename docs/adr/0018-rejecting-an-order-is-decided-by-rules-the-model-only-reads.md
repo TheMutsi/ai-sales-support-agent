@@ -28,9 +28,10 @@ are, or whether something happened.
   the confirmation, applies the choice through `OrderSource.cancel_order` or
   `keep_order_with_retention`, or asks again.
 - Where the customer is lives on the conversation (`pending_return_order_id`, `pending_return_stage`),
-  written when the reply is stored. While one is pending, the answers the classifier files under
-  `small_talk`, `unsupported`, `refund_request` or `order_status` continue it; a different
-  question goes its own way and the pending return waits.
+  written when the reply is stored, and dropped if not answered within 15 minutes. While one is
+  pending, a bare answer the classifier files as `small_talk` ("yes") continues it; any other
+  request (a subscription cancellation, a person, an order status, a question) goes its own way
+  and the pending return waits until it lapses.
 - The source enforces the invariants under a row lock: an order is cancelled only while open and
   only if it was not kept with the offer; the offer is recorded at most once per order and its
   amounts are computed from the order, not taken from the caller.
@@ -43,14 +44,17 @@ are, or whether something happened.
 
 ## Consequences
 
-- The model can misread a message, but a misreading cannot cancel an order without a
-  confirmation turn, cannot pick an order that is not the customer's, and cannot invent an amount.
+- The model can misread a message, but a misreading cannot cancel an order on the first request
+  (there is always an offer or a confirmation turn first), cannot pick an order that is not the
+  customer's, and cannot invent an amount. A misread answer *during* the 15 minutes after an
+  offer can still cancel an open order: declining the offer and confirming a cancellation are
+  each one turn.
 - Cancelling an open $29.99 order takes two turns (ask, confirm); an open $69.99 order takes the
   offer first. Declining the offer for an order in delivery changes nothing: the return after
   delivery is only explained, there is no return action yet.
 - The existing `refund_request` path (ticket for a person) is untouched; "cancel my order" moved
   from it to this flow (evaluation case `order-012` changed accordingly).
-- Not built: the return after delivery, expiring a stale pending return, telling "already kept"
+- Not built: the return after delivery, telling "already kept"
   from "not allowed" to the customer, a real refund or points API.
 
 ## Alternatives

@@ -24,10 +24,10 @@ _SAFETY_CONFIDENCE_THRESHOLD = 0.95
 # instead of relying only on LangGraph's generic recursion limit.
 _MAX_TOOL_CALL_ROUNDS = 2
 
-# What the classifier may call a reply to an offer or a question about a return.
-_RETURN_FOLLOW_UPS = frozenset(
-    {Intent.ORDER_RETURN, Intent.SMALL_TALK, Intent.UNSUPPORTED, Intent.REFUND_REQUEST, Intent.ORDER_STATUS}
-)
+# What the classifier may call a bare answer to an offer or a question about a return ("yes",
+# "the first one"). Anything else, a cancelled subscription or a request for a person included,
+# goes its own way and must not complete a return.
+_RETURN_FOLLOW_UPS = frozenset({Intent.ORDER_RETURN, Intent.SMALL_TALK})
 
 
 def route_after_input_guardrail(state: AgentState) -> Literal["__end__", Node.INTENT_ROUTER]:
@@ -91,9 +91,9 @@ def _dispatch_by_intent(
     # A missing list means "no scopes", never "all of them": forgetting to set it must
     # lock the visitor out, not open the account.
     scopes = set(state.get("scopes") or [])
-    # Someone in the middle of a return answers the assistant's offer or question, and the
-    # classifier files "the 20%" or "yes" under almost anything: while one is pending those
-    # follow-ups continue it. A different question (prices, features) goes its own way.
+    # Someone in the middle of a return answers the assistant's offer or question: a bare "yes"
+    # is filed as small talk, so while one is pending (it lapses after a few minutes, see
+    # `PENDING_RETURN_TTL`) that continues it. A different request goes its own way.
     if (
         state.get("pending_return") is not None
         and state.get("customer_id")
