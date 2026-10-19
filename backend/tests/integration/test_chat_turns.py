@@ -360,3 +360,33 @@ def test_a_return_offered_again_after_it_lapsed_gets_a_fresh_time(db, conversati
     answer = _begin(db, conversation, "the credits", now=later + timedelta(minutes=1))
 
     assert answer.pending_return == pending
+
+
+def test_the_cards_of_a_reply_are_stored_with_it_and_a_plain_reply_has_none(db, conversation):
+    from app.schemas.cards import ActionCard
+    from app.schemas.chat import StoredMessage
+
+    card = ActionCard(id="offer-refund", title="$14.00 back", message="I'll take the refund")
+    first = _begin(db, conversation, "reject my order")
+    finish_turn(db, conversation_id=conversation.id, turn=first, content="Here are your options", now=NOW, cards=[card])
+    second = _begin(db, conversation, "thanks", now=NOW + timedelta(seconds=5))
+    finish_turn(db, conversation_id=conversation.id, turn=second, content="You're welcome", now=NOW)
+
+    stored = [StoredMessage.model_validate(m, from_attributes=True) for m in list_messages(db, conversation_id=conversation.id)]
+
+    assistant = [m for m in stored if m.role == "assistant"]
+    assert [c.id for c in assistant[0].cards] == ["offer-refund"] and assistant[1].cards == []
+
+
+def test_a_retried_message_replays_its_reply_with_its_cards(db, conversation):
+    from app.schemas.cards import ActionCard
+
+    card = ActionCard(id="confirm-yes", title="Yes, cancel it", message="Yes, cancel it")
+    message_id = uuid.uuid4()
+    first = _begin(db, conversation, "cancel my order", message_id=message_id)
+    finish_turn(db, conversation_id=conversation.id, turn=first, content="Sure?", now=NOW, cards=[card])
+
+    again = _begin(db, conversation, "cancel my order", message_id=message_id, now=NOW + timedelta(seconds=3))
+
+    assert again.action is TurnAction.REPLAY and again.reply == "Sure?"
+    assert [c["id"] for c in again.reply_cards] == ["confirm-yes"]

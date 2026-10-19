@@ -114,7 +114,7 @@ class _Store:
         self.abandoned = 0
         self._fail_finish = fail_finish
 
-    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT, escalation_ticket_id=None, pending_return=None) -> None:
+    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT, escalation_ticket_id=None, pending_return=None, cards=None) -> None:
         if self._fail_finish:
             raise RuntimeError("db down")
         self.finished.append(content)

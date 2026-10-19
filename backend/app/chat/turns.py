@@ -21,6 +21,7 @@ from enum import StrEnum
 from sqlalchemy.orm import Session
 
 from app.db.models import Conversation, Message
+from app.schemas.cards import Card
 from app.schemas.orders import PendingReturn, ReturnStage
 
 DEFAULT_HISTORY_LIMIT = 20
@@ -83,6 +84,7 @@ class TurnStart:
     user_text: str = ""
     history: list[Message] = field(default_factory=list)  # oldest first, excludes the new message
     reply: str | None = None
+    reply_cards: list | None = None  # the stored cards of that reply, as saved
     handoff: HandoffStatus = HandoffStatus.NONE  # set with `HANDOFF`
     pending_return: PendingReturn | None = None  # the customer's unfinished return, with `RUN`
 
@@ -138,6 +140,7 @@ def _append(
     client_message_id: uuid.UUID | None = None,
     reply_to_seq: int | None = None,
     kind: MessageKind = MessageKind.TEXT,
+    cards: list[Card] | None = None,
 ) -> Message:
     conversation.last_seq += 1
     conversation.last_activity_at = now
@@ -150,6 +153,7 @@ def _append(
         client_message_id=client_message_id,
         reply_to_seq=reply_to_seq,
         created_at=now,
+        cards=[card.model_dump(mode="json") for card in cards] if cards else None,
     )
     db.add(message)
     return message
@@ -183,7 +187,7 @@ def begin_turn(
         )
         if reply is not None:
             db.commit()  # nothing changed; ends the transaction and frees the lock
-            return TurnStart(TurnAction.REPLAY, reply=reply.content)
+            return TurnStart(TurnAction.REPLAY, reply=reply.content, reply_cards=reply.cards)
         if conversation.handoff_status != HandoffStatus.NONE:
             db.commit()
             return TurnStart(TurnAction.HANDOFF, handoff=HandoffStatus(conversation.handoff_status))
@@ -238,6 +242,7 @@ def finish_turn(
     kind: MessageKind = MessageKind.TEXT,
     escalation_ticket_id: uuid.UUID | None = None,
     pending_return: PendingReturn | None | Keep = KEEP,
+    cards: list[Card] | None = None,
 ) -> None:
     """Saves the reply. If the turn opened a ticket, the conversation now waits for a person:
     from here on the assistant stops answering it (see `begin_turn`). `pending_return` replaces
@@ -247,7 +252,7 @@ def finish_turn(
         db.commit()
         raise TurnSuperseded
     reply_to = turn.user_seq if kind is MessageKind.TEXT else None
-    _append(db, conversation, "assistant", content, now, reply_to_seq=reply_to, kind=kind)
+    _append(db, conversation, "assistant", content, now, reply_to_seq=reply_to, kind=kind, cards=cards)
     if escalation_ticket_id is not None and conversation.handoff_status == HandoffStatus.NONE:
         conversation.handoff_status = HandoffStatus.WAITING
         conversation.handoff_requested_at = now

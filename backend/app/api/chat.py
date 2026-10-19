@@ -48,6 +48,7 @@ from app.api.origins import origin_guard_for_session
 from app.api.rate_limit import limit_by_conversation
 from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
+from app.cards import cards_for
 from app.chat.turns import (
     KEEP,
     HandoffStatus,
@@ -69,6 +70,7 @@ from app.core.llm import get_chat_model_name
 from app.core.tenant_config import tenant_configs
 from app.db.models import Conversation, Message
 from app.db.session import SessionLocal
+from app.schemas.cards import Card
 from app.schemas.chat import ChatRequest, ChatTurnSummary, MessageList, StoredMessage
 from app.schemas.orders import PendingReturn
 from app.schemas.rag import SourceReference
@@ -138,6 +140,7 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
         ticket_id=ticket_receipt.ticket_id if ticket_receipt else None,
         identity_required=final_state.get("identity_required", False),
         identity_methods=final_state.get("identity_methods", []),
+        cards=cards_for(final_state),
     )
 
 
@@ -165,6 +168,7 @@ class TurnStore(Protocol):
         kind: MessageKind = MessageKind.TEXT,
         escalation_ticket_id: uuid.UUID | None = None,
         pending_return: PendingReturn | None | Keep = KEEP,
+        cards: list[Card] | None = None,
     ) -> None: ...
 
     async def abandon(self) -> None: ...
@@ -196,6 +200,7 @@ class _DbTurnStore:
         kind: MessageKind = MessageKind.TEXT,
         escalation_ticket_id: uuid.UUID | None = None,
         pending_return: PendingReturn | None | Keep = KEEP,
+        cards: list[Card] | None = None,
     ) -> None:
         def save() -> None:
             with SessionLocal() as db:
@@ -209,6 +214,7 @@ class _DbTurnStore:
                         kind=kind,
                         escalation_ticket_id=escalation_ticket_id,
                         pending_return=pending_return,
+                        cards=cards,
                     )
                 except TurnSuperseded:
                     logger.warning("late reply dropped (conversation %s)", self._conversation_id)
@@ -355,6 +361,7 @@ async def _stream_turn(
                 escalation_ticket_id=receipt.ticket_id if receipt else None,
                 # Absent means "this run did not touch it", never "clear it".
                 pending_return=final_state.get("pending_return", KEEP),
+                cards=cards_for(final_state),
             )
         )
     except Exception:
@@ -399,10 +406,14 @@ def _scope_overrides(session: SessionClaims) -> dict | None:
     return tenant.scope_overrides if tenant is not None else None
 
 
-async def _replay(reply: str, conversation_id: uuid.UUID) -> AsyncIterator[str]:
-    """The stored answer to a message that was already handled, with no model call."""
+async def _replay(
+    reply: str, conversation_id: uuid.UUID, cards: list | None = None
+) -> AsyncIterator[str]:
+    """The stored answer to a message that was already handled, with no model call: its cards
+    too, so a retried request shows what the first one did."""
     yield _format_sse("message", {"text": reply})
-    yield _format_sse("done", ChatTurnSummary(conversation_id=conversation_id).model_dump(mode="json"))
+    summary = ChatTurnSummary(conversation_id=conversation_id, cards=cards or [])
+    yield _format_sse("done", summary.model_dump(mode="json"))
 
 
 async def _handed_off(conversation_id: uuid.UUID, handoff: HandoffStatus) -> AsyncIterator[str]:
@@ -466,7 +477,7 @@ async def _run_turn(session: SessionClaims, request: ChatRequest) -> StreamingRe
 
     background = None
     if turn.action is TurnAction.REPLAY:
-        stream = _replay(turn.reply or "", session.conversation_id)
+        stream = _replay(turn.reply or "", session.conversation_id, turn.reply_cards)
     elif turn.action is TurnAction.HANDOFF:
         stream = _handed_off(session.conversation_id, turn.handoff)
     else:
