@@ -31,6 +31,7 @@ import re
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import aclosing, nullcontext
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Annotated, Any, Protocol
 
@@ -50,6 +51,7 @@ from app.api.rate_limit import limit_by_conversation
 from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
 from app.cards import cards_for
+from app.chat.actions import latest_cards, offered_card
 from app.chat.turns import (
     KEEP,
     HandoffStatus,
@@ -72,7 +74,13 @@ from app.core.tenant_config import tenant_configs
 from app.db.models import Conversation, Message
 from app.db.session import SessionLocal
 from app.schemas.cards import Card
-from app.schemas.chat import ChatRequest, ChatTurnSummary, MessageList, StoredMessage
+from app.schemas.chat import (
+    ActionInput,
+    ChatRequest,
+    ChatTurnSummary,
+    MessageList,
+    StoredMessage,
+)
 from app.schemas.orders import PendingReturn
 from app.schemas.rag import SourceReference
 
@@ -99,6 +107,8 @@ def _build_initial_state(
         "tenant_id": str(session.tenant_id),
         "order_id": session.order_id,
         "pending_return": turn.pending_return,
+        "action": turn.click,
+        "action_order_id": turn.click_order_id,
         "scopes": sorted(s.value for s in scopes_for(session.level, scope_overrides)),
         "scope_overrides": scope_overrides,
     }
@@ -383,6 +393,33 @@ async def _stream_turn(
     yield _format_sse("done", summary.model_dump(mode="json"))
 
 
+class ActionNotOffered(Exception):
+    """A click on a button the latest reply did not offer. Carries the cards that were."""
+
+    def __init__(self, cards: list[Card]):
+        self.cards = cards
+
+
+def _text_of(db, conversation_id: uuid.UUID, request: ChatRequest) -> str:
+    """What the message says in the conversation. A click says what its card says (the client
+    never supplies it), and a retry of a click that was already stored says what was stored."""
+    entry = request.input
+    if not isinstance(entry, ActionInput):
+        return entry.message
+    stored = (
+        db.query(Message)
+        .filter_by(conversation_id=conversation_id, client_message_id=request.message_id)
+        .one_or_none()
+    )
+    if stored is not None:
+        return stored.content
+    cards = latest_cards(db, conversation_id)
+    card = offered_card(cards, entry.action, entry.order_id)
+    if card is None:
+        raise ActionNotOffered(cards)
+    return card.message
+
+
 def _open_turn(session: SessionClaims, request: ChatRequest) -> TurnStart:
     """Checks the session still matches its conversation, then starts the turn (sync)."""
     with SessionLocal() as db:
@@ -393,13 +430,17 @@ def _open_turn(session: SessionClaims, request: ChatRequest) -> TurnStart:
             or conversation.customer_id != session.customer_id
         ):
             raise LookupError("session does not match its conversation")
-        return begin_turn(
+        turn = begin_turn(
             db,
             conversation_id=conversation.id,
             client_message_id=request.message_id,
-            content=request.message,
+            content=_text_of(db, conversation.id, request),
             now=datetime.now(UTC),
         )
+        entry = request.input
+        if isinstance(entry, ActionInput) and turn.action is TurnAction.RUN:
+            turn = replace(turn, click=entry.action, click_order_id=entry.order_id)
+        return turn
 
 
 def _scope_overrides(session: SessionClaims) -> dict | None:
@@ -409,6 +450,8 @@ def _scope_overrides(session: SessionClaims) -> dict | None:
     tenant = tenant_configs.get(session.tenant_id)
     return tenant.scope_overrides if tenant is not None else None
 
+
+_NOT_UNDERSTOOD = "Sorry, I didn't understand that. Could you ask it another way?"
 
 # How long between the words of a reply nobody generated; about the pace of a fast typist.
 _TYPING_DELAY_SECONDS = 0.03
@@ -480,6 +523,11 @@ async def _run_turn(session: SessionClaims, request: ChatRequest) -> StreamingRe
     # HTTP status instead of an event inside a 200 response.
     try:
         turn = await run_in_threadpool(_open_turn, session, request)
+    except ActionNotOffered as missed:
+        # Not an error: a button from an older question is a normal thing for a visitor to press.
+        # Nothing is stored or run; the question that is open is shown again.
+        stream = _replay(_NOT_UNDERSTOOD, session.conversation_id, missed.cards)
+        return StreamingResponse(stream, media_type="text/event-stream")
     except TurnInProgress:
         raise HTTPException(status_code=409, detail={"code": "turn_in_progress"}) from None
     except MessageIdReused:

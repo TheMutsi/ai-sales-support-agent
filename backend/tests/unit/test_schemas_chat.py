@@ -11,7 +11,7 @@ from app.schemas.chat import ChatRequest
 def test_accepts_a_message_with_its_idempotency_id():
     request = ChatRequest(message="how much is the pro plan?", message_id=uuid.uuid4())
 
-    assert request.message == "how much is the pro plan?"
+    assert request.input.type == "text" and request.input.message == "how much is the pro plan?"
 
 
 @pytest.mark.parametrize("body", [{"message": ""}, {"message_id": str(uuid.uuid4())}, {}])

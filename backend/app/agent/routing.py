@@ -30,6 +30,16 @@ _MAX_TOOL_CALL_ROUNDS = 2
 _RETURN_FOLLOW_UPS = frozenset({Intent.ORDER_RETURN, Intent.SMALL_TALK})
 
 
+def route_start(state: AgentState) -> Literal[Node.INPUT_GUARDRAIL, Node.ORDER_RETURN]:
+    """A button click goes straight to the step that owns it: no input filter, no classifier, no
+    model, because there is no free text to read. Buttons only exist for a verified customer's
+    returns, so a click without that scope is not trusted: it takes the ordinary path."""
+    scopes = set(state.get("scopes") or [])
+    if state.get("action") is not None and state.get("customer_id") and Scope.REFUND_REQUEST in scopes:
+        return Node.ORDER_RETURN
+    return Node.INPUT_GUARDRAIL
+
+
 def route_after_input_guardrail(state: AgentState) -> Literal["__end__", Node.INTENT_ROUTER]:
     return END if state["input_blocked"] else Node.INTENT_ROUTER
 

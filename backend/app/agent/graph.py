@@ -21,6 +21,7 @@ from app.agent.routing import (
     route_after_intent,
     route_after_response_writer,
     route_after_safety_judge,
+    route_start,
 )
 from app.agent.state import AgentState
 
@@ -50,7 +51,7 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_node(Node.RESPONSE_WRITER, response_writer_node)
     builder.add_node(Node.GUARDRAIL, guardrail_node)
 
-    builder.add_edge(START, Node.INPUT_GUARDRAIL)
+    builder.add_conditional_edges(START, route_start)
     builder.add_conditional_edges(Node.INPUT_GUARDRAIL, route_after_input_guardrail)
     builder.add_conditional_edges(Node.INTENT_ROUTER, route_after_intent)
     builder.add_conditional_edges(Node.SAFETY_JUDGE, route_after_safety_judge)
