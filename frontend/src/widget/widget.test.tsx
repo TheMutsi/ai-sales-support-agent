@@ -310,3 +310,29 @@ describe("IdentityForm with an order number", () => {
   });
 });
 
+
+describe("the menu", () => {
+  it("only lets 'Help & Support' lead anywhere; the other entries are drawn and do nothing", async () => {
+    const { Menu } = await import("./Menu");
+    const onHelp = vi.fn();
+    mount(<Menu onHelp={onHelp} onClose={() => {}} />);
+    const items = Array.from(container.querySelectorAll<HTMLButtonElement>(".mew-menu-item"));
+
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Manage Order",
+      "Track my Order",
+      "Exchanges & Returns",
+      "Manage Memberships",
+      "Manage my TV Show Order",
+      "Help & Support",
+    ]);
+    items.slice(0, -1).forEach((item) => {
+      expect(item.getAttribute("aria-disabled")).toBe("true");
+      act(() => item.click());
+    });
+    expect(onHelp).not.toHaveBeenCalled();
+
+    act(() => items.at(-1)!.click());
+    expect(onHelp).toHaveBeenCalledTimes(1);
+  });
+});

@@ -1,10 +1,12 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { Chat } from "../data/chat";
 import type { Identity } from "../data/identity";
 import type { Controller } from "../loader/controller";
 import { Composer } from "./Composer";
 import { IdentityForm } from "./IdentityForm";
+import { ChevronDown, ChevronLeft, ChatIcon } from "./icons";
 import { MessageList } from "./MessageList";
+import { Logo, Menu } from "./Menu";
 import { playPing } from "./sound";
 import { answeredCount, useUnread } from "./unread";
 
@@ -35,10 +37,18 @@ export function App({
     return () => clearInterval(timer);
   }, [handoff, chat]);
 
-  // The conversation is only fetched (and an anonymous one only created) when the panel opens.
+  // The panel starts on the menu; a conversation a person is already in goes straight to the chat.
+  const [view, setView] = useState<"menu" | "chat">(handoff === "none" ? "menu" : "chat");
   useEffect(() => {
-    if (open) void chat.load();
-  }, [open, chat]);
+    if (handoff !== "none") setView("chat");
+  }, [handoff]);
+
+  // The conversation is only fetched (and an anonymous one only created) when the chat is shown,
+  // not when the menu is: looking at the menu starts nothing.
+  const showingChat = open && view === "chat";
+  useEffect(() => {
+    if (showingChat) void chat.load();
+  }, [showingChat, chat]);
 
   const unread = useUnread(answeredCount(messages), open, () => settings.sound && playPing());
 
@@ -49,16 +59,34 @@ export function App({
     <div className="mew-root">
       {open && (
         <section className="mew-panel" aria-label="Chat">
-          <header>Mew</header>
-          <MessageList messages={messages} waiting={waiting} />
-          {identityRequest &&
-            (identityRequest.methods.some((m) => m === "otp" || m === "order_id") ? (
-              <IdentityForm identity={identity} methods={identityRequest.methods} />
-            ) : (
-              <div className="mew-error" role="status">Please log in on the shop's site to continue.</div>
-            ))}
-          {error && <div className="mew-error" role="alert">{error}</div>}
-          <Composer disabled={streaming} onSend={(text, images) => void chat.send(text, images.map((i) => ({ url: i.url, alt: i.name })))} />
+          {view === "menu" ? (
+            <Menu onHelp={() => setView("chat")} onClose={() => controller.run("close")} />
+          ) : (
+            <>
+              <header className="mew-header mew-header-chat">
+                <button type="button" className="mew-back" onClick={() => setView("menu")}>
+                  <ChevronLeft /> Back to menu
+                </button>
+                <Logo online />
+                <div className="mew-title">
+                  <strong>Chat with us</strong>
+                  <span>How can we help you today?</span>
+                </div>
+                <button type="button" className="mew-collapse" aria-label="Close chat" onClick={() => controller.run("close")}>
+                  <ChevronDown />
+                </button>
+              </header>
+              <MessageList messages={messages} waiting={waiting} />
+              {identityRequest &&
+                (identityRequest.methods.some((m) => m === "otp" || m === "order_id") ? (
+                  <IdentityForm identity={identity} methods={identityRequest.methods} />
+                ) : (
+                  <div className="mew-error" role="status">Please log in on the shop's site to continue.</div>
+                ))}
+              {error && <div className="mew-error" role="alert">{error}</div>}
+              <Composer disabled={streaming} onSend={(text, images) => void chat.send(text, images.map((i) => ({ url: i.url, alt: i.name })))} />
+            </>
+          )}
         </section>
       )}
       <button
@@ -66,7 +94,7 @@ export function App({
         aria-label={open ? "Close chat" : "Open chat"}
         onClick={() => controller.run(open ? "close" : "open")}
       >
-        {open ? "×" : "💬"}
+        {open ? <ChevronDown size={26} /> : <ChatIcon size={26} />}
         {!open && unread > 0 && (
           <span className="mew-badge" role="status" aria-label={unread === 1 ? "1 unread message" : `${unread} unread messages`}>
             {unread > 9 ? "9+" : unread}

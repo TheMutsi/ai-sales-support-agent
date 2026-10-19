@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { rejection, type Attachment } from "./attachments";
+import { SendIcon } from "./icons";
 
 export function Composer({
   disabled,
@@ -73,13 +74,13 @@ export function Composer({
         <textarea
           value={text}
           rows={1}
-          placeholder="Write a message"
+          placeholder="Type a message"
           aria-label="Message"
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
         />
-        <button type="submit" disabled={disabled || !text.trim()}>
-          Send
+        <button type="submit" className="mew-send" aria-label="Send" disabled={disabled || !text.trim()}>
+          <SendIcon />
         </button>
       </div>
     </form>

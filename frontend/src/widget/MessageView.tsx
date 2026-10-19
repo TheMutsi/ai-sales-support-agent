@@ -17,6 +17,13 @@ function Part({ part }: { part: MessagePart }) {
   }
 }
 
+/** The assistant's picture next to what it says. */
+export const Avatar = () => (
+  <span className="mew-avatar" aria-hidden="true">
+    M
+  </span>
+);
+
 export function MessageView({ message }: { message: ChatMessage }) {
   // A notice ("Mónica joined the chat") is not anyone's speech.
   if (message.role === "system") return <div className="mew-notice">{message.content}</div>;
@@ -33,8 +40,11 @@ export function MessageView({ message }: { message: ChatMessage }) {
   // The assistant writes markdown; what a visitor types is shown as typed.
   if (message.role === "assistant") {
     return (
-      <div className="mew-message mew-assistant">
-        <Markdown text={message.content} />
+      <div className="mew-row-assistant">
+        <Avatar />
+        <div className="mew-message mew-assistant">
+          <Markdown text={message.content} />
+        </div>
       </div>
     );
   }
