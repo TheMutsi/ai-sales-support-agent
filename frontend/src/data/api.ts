@@ -26,11 +26,13 @@ const toSession = (json: SessionJson): Session => ({
 
 export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch = fetch) {
   /** A picture on our API comes as a path; the widget lives on the shop's page, so make it absolute. */
+  const safeUrl = (url: string): string => {
+    const absolute = url.startsWith("/") ? `${baseUrl}${url}` : url;
+    return /^https?:\/\//i.test(absolute) ? absolute : ""; // a picture is only ever http(s)
+  };
   const resolveCards = (cards: Card[] | undefined): Card[] | undefined =>
     cards?.map((card) =>
-      card.type === "product" && card.image.url.startsWith("/")
-        ? { ...card, image: { ...card.image, url: `${baseUrl}${card.image.url}` } }
-        : card,
+      card.type === "product" ? { ...card, image: { ...card.image, url: safeUrl(card.image.url) } } : card,
     );
 
   async function request(path: string, init: { method?: "GET" | "POST"; body?: unknown; token?: string; signal?: AbortSignal } = {}) {

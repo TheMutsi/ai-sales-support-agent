@@ -6,12 +6,15 @@ export function MessageList({
   messages,
   waiting,
   busy,
+  locked,
   onPick,
   onZoom,
 }: {
   messages: ChatMessage[];
   waiting: boolean;
   busy: boolean;
+  /** A person has the conversation: an offer of the assistant is no longer theirs to take. */
+  locked: boolean;
   onPick: (message: string) => void;
   onZoom: (image: CardImage) => void;
 }) {
@@ -30,7 +33,7 @@ export function MessageList({
         <MessageView
           key={message.id}
           message={message}
-          cards={{ active: !busy && message.id === last?.id, onPick, onZoom }}
+          cards={{ active: !busy && !locked && message.id === last?.id, onPick, onZoom }}
         />
       ))}
       {waiting && (

@@ -187,8 +187,25 @@ def test_resetting_the_demo_shop_leaves_other_tenants_and_other_environments_alo
 
     db.expire_all()
     assert conversation.pending_return_order_id == "A" * 20  # not the demo shop's
+    db.query(Conversation).delete()  # the next test's fixture deletes customers
+    db.commit()
 
     production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
     monkeypatch.setattr(seed_module, "get_settings", lambda: production)
     with pytest.raises(RuntimeError, match="local"):
         reset_demo_shop(db)
+
+
+def test_resetting_the_demo_shop_restores_the_plan_of_each_order(db: Session):
+    from app.db.seed import reset_demo_shop
+
+    seed(db)
+    starter = db.query(Plan).filter_by(slug="starter").one()
+    mail2 = db.query(Order).join(Customer).filter(Customer.email == "mail2@gmail.com").one()
+    mail2.plan_id = starter.id
+    db.commit()
+
+    reset_demo_shop(db)
+
+    db.expire_all()
+    assert mail2.plan.slug == "pro"

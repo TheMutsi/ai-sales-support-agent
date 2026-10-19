@@ -1,4 +1,4 @@
-import { act } from "react";
+import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
@@ -457,5 +457,42 @@ describe("cards", () => {
     mount(<MessageView message={{ id: "1", role: "assistant", kind: "text", content: "Pick one", cards: [action] }} cards={cardsProps} />);
     expect(container.querySelector(".mew-assistant")?.textContent).toBe("Pick one");
     expect(container.querySelectorAll(".mew-card")).toHaveLength(1);
+  });
+
+  it("only lets the latest reply's cards be used, and not while busy or when a person has the chat", async () => {
+    const { MessageList } = await import("./MessageList");
+    const messages = [
+      { id: "1", role: "assistant" as const, kind: "text" as const, content: "old", cards: [action] },
+      { id: "2", role: "assistant" as const, kind: "text" as const, content: "new", cards: [action] },
+    ];
+    const state = (busy: boolean, locked: boolean) => {
+      act(() => root?.unmount());
+      mount(<MessageList messages={messages} waiting={false} busy={busy} locked={locked} onPick={() => {}} onZoom={() => {}} />);
+      return Array.from(container.querySelectorAll<HTMLButtonElement>(".mew-action")).map((b) => b.disabled);
+    };
+
+    expect(state(false, false)).toEqual([true, false]);
+    expect(state(true, false)).toEqual([true, true]);
+    expect(state(false, true)).toEqual([true, true]);
+  });
+
+  it("gives the focus back to the picture when the large one is closed", async () => {
+    const { Cards, Lightbox } = await import("./Cards");
+    const Host = () => {
+      const [image, setImage] = React.useState<typeof product.image | null>(null);
+      return (
+        <>
+          <Cards cards={[product]} active onPick={() => {}} onZoom={setImage} />
+          {image && <Lightbox image={image} onClose={() => setImage(null)} />}
+        </>
+      );
+    };
+    mount(<Host />);
+    const thumb = container.querySelector<HTMLButtonElement>(".mew-product-image")!;
+    act(() => thumb.focus());
+    act(() => thumb.click());
+    expect(document.activeElement).toBe(container.querySelector(".mew-lightbox-close"));
+    act(() => container.querySelector<HTMLButtonElement>(".mew-lightbox-close")!.click());
+    expect(document.activeElement).toBe(thumb);
   });
 });

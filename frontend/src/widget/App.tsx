@@ -50,6 +50,10 @@ export function App({
   const [synced, setSynced] = useState(false);
   const [zoomed, setZoomed] = useState<CardImage | null>(null);
   const showingChat = open && view === "chat";
+  // A picture shown large belongs to the chat that is on screen.
+  useEffect(() => {
+    if (!showingChat) setZoomed(null);
+  }, [showingChat]);
   useEffect(() => {
     if (showingChat) void chat.load().finally(() => setSynced(true));
   }, [showingChat, chat]);
@@ -91,6 +95,7 @@ export function App({
                 messages={messages}
                 waiting={waiting}
                 busy={streaming}
+                locked={handoff !== "none"}
                 onPick={(message) => void chat.send(message)}
                 onZoom={setZoomed}
               />

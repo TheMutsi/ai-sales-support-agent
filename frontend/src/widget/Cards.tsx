@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { Card, CardImage } from "../data/types";
 import { ChevronRight } from "./icons";
 
@@ -40,7 +40,7 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
               aria-label={`Enlarge ${card.image.alt}`}
               onClick={() => onZoom(card.image)}
             >
-              <img src={card.image.url} alt={card.image.alt} loading="lazy" />
+              {card.image.url && <img src={card.image.url} alt={card.image.alt} loading="lazy" />}
             </button>
             <span className="mew-card-text">
               {card.badge && <span className="mew-card-badge">{card.badge}</span>}
@@ -57,6 +57,10 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
 
 /** A picture shown large over the panel; Escape, the backdrop or the button close it. */
 export function Lightbox({ image, onClose }: { image: CardImage; onClose: () => void }) {
+  // Closing puts the focus back where it was (the picture that was chosen). Read while rendering,
+  // before the close button takes the focus.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
+  useEffect(() => () => opener?.focus?.(), [opener]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);

@@ -86,3 +86,18 @@ describe("cards", () => {
     expect(done.event === "done" && done.data.cards?.[0]).toMatchObject({ image: { url: "http://api.test/api/assets/products/pro.svg" } });
   });
 });
+
+
+describe("picture addresses", () => {
+  it("accepts only http(s) ones and drops anything else", async () => {
+    const card = (url: string) => ({ type: "product", id: url, name: "x", image: { url, alt: "x" } });
+    const fetchFn = vi.fn(async () =>
+      new Response(JSON.stringify({ messages: [{ seq: 1, role: "assistant", kind: "text", content: "", cards: [card("javascript:alert(1)"), card("data:image/svg+xml,x"), card("https://cdn.test/a.png")] }] })),
+    );
+    const api = createApi("http://api.test", "pk_x", fetchFn as unknown as typeof fetch);
+
+    const { messages } = await api.messages({ token: "t", conversationId: "c1", expiresAt: "", identityLevel: "store_login" });
+
+    expect(messages[0].cards?.map((c) => (c.type === "product" ? c.image.url : null))).toEqual(["", "", "https://cdn.test/a.png"]);
+  });
+});
