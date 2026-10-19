@@ -140,6 +140,10 @@ def test_seed_creates_the_demo_shop_customers_with_one_order_each(db: Session):
         o.customer.email: o.plan.slug
         for o in db.query(Order).join(Customer).filter(Customer.email.like("mail%@gmail.com"))
     }
+    assert all(
+        o.item_name.startswith("Shapermint Essentials") and len(o.item_images) == 2
+        for o in db.query(Order).join(Customer).filter(Customer.email.like("mail%@gmail.com"))
+    )
     assert plans == {"mail1@gmail.com": "starter", "mail2@gmail.com": "pro", "mail3@gmail.com": "pro", "mail4@gmail.com": "starter"}
 
 

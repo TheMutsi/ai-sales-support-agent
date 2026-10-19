@@ -30,7 +30,7 @@ export interface CardControls {
   /** Whether this message is the latest, so its action cards may still be used. */
   active: boolean;
   onPick: (message: string) => void;
-  onZoom: (image: CardImage) => void;
+  onZoom: (images: CardImage[]) => void;
 }
 
 export function MessageView({ message, cards }: { message: ChatMessage; cards?: CardControls }) {

@@ -43,6 +43,9 @@ class OrderDetails(BaseModel):
     currency: str
     status: OrderStatus
     created_at: datetime
+    # What was bought, when it is not just a plan: a name and picture URLs (the first is the main one).
+    item_name: str | None = None
+    item_images: list[str] = Field(default_factory=list)
     # Set when the customer kept this order with the retention offer (it then stays as it is).
     retention: "RetentionReceipt | None" = None
 

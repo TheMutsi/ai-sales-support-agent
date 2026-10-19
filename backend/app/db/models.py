@@ -321,6 +321,10 @@ class Order(Base):
     currency: Mapped[str] = mapped_column(String(3), default="usd")
     status: Mapped[str] = mapped_column(default="paid")  # app.schemas.orders.OrderStatus
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # What was bought, when the shop sells something other than a plan: its name and its pictures
+    # (the first is the main one). Null for an order that is just a plan.
+    item_name: Mapped[str | None]
+    item_images: Mapped[list | None] = mapped_column(JSON)
 
     customer: Mapped["Customer"] = relationship()
     plan: Mapped["Plan"] = relationship()

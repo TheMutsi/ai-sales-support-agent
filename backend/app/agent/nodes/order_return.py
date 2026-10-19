@@ -54,7 +54,7 @@ def _dollars(cents: int) -> str:
 
 def _listing(orders: list[OrderDetails]) -> str:
     return "\n".join(
-        f"- order_id {o.order_id}: {_dollars(o.amount_cents)}, {o.plan_slug} plan, placed "
+        f"- order_id {o.order_id}: {_dollars(o.amount_cents)}, {o.item_name or o.plan_slug + ' plan'}, placed "
         f"{o.created_at:%b %d}, status {o.status.value}"
         for o in orders
     )

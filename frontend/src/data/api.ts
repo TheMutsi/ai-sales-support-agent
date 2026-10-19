@@ -32,7 +32,13 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
   };
   const resolveCards = (cards: Card[] | undefined): Card[] | undefined =>
     cards?.map((card) =>
-      card.type === "product" ? { ...card, image: { ...card.image, url: safeUrl(card.image.url) } } : card,
+      card.type === "product"
+        ? {
+            ...card,
+            image: { ...card.image, url: safeUrl(card.image.url) },
+            more_images: card.more_images?.map((image) => ({ ...image, url: safeUrl(image.url) })),
+          }
+        : card,
     );
 
   async function request(path: string, init: { method?: "GET" | "POST"; body?: unknown; token?: string; signal?: AbortSignal } = {}) {

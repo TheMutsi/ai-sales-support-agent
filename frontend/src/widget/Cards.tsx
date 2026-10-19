@@ -5,8 +5,8 @@ import { ChevronRight } from "./icons";
 interface Handlers {
   /** An action card was chosen: send its message as the visitor. */
   onPick: (message: string) => void;
-  /** A product picture was chosen: show it large. */
-  onZoom: (image: CardImage) => void;
+  /** A product's pictures were chosen: show them large (the first one first). */
+  onZoom: (images: CardImage[]) => void;
 }
 
 /**
@@ -53,14 +53,22 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
               type="button"
               className="mew-product-image"
               aria-label={`Enlarge ${card.image.alt}`}
-              onClick={() => onZoom(card.image)}
+              onClick={() => onZoom([card.image, ...(card.more_images ?? [])].filter((i) => i.url))}
             >
-              {card.image.url && <img src={card.image.url} alt={card.image.alt} loading="lazy" />}
+              {card.more_images?.[0]?.url && (
+                <img className="mew-stack-back" src={card.more_images[0].url} alt="" loading="lazy" />
+              )}
+              {card.image.url && <img className="mew-stack-front" src={card.image.url} alt={card.image.alt} loading="lazy" />}
             </button>
             <span className="mew-card-text">
               {card.badge && <span className="mew-card-badge">{card.badge}</span>}
               <strong>{card.name}</strong>
-              {card.price && <span className="mew-price">{card.price}</span>}
+              {(card.price || card.compare_price) && (
+                <span className="mew-price-row">
+                  {card.compare_price && <s className="mew-compare">{card.compare_price}</s>}
+                  {card.price && <span className="mew-price">{card.price}</span>}
+                </span>
+              )}
               {card.subtitle && <small>{card.subtitle}</small>}
             </span>
           </div>
@@ -71,7 +79,9 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
 }
 
 /** A picture shown large over the panel; Escape, the backdrop or the button close it. */
-export function Lightbox({ image, onClose }: { image: CardImage; onClose: () => void }) {
+export function Lightbox({ images, onClose }: { images: CardImage[]; onClose: () => void }) {
+  const [shown, setShown] = useState(0);
+  const image = images[shown] ?? images[0];
   // Closing puts the focus back where it was (the picture that was chosen). Read while rendering,
   // before the close button takes the focus.
   const [opener] = useState(() => document.activeElement as HTMLElement | null);
@@ -87,6 +97,21 @@ export function Lightbox({ image, onClose }: { image: CardImage; onClose: () => 
         ×
       </button>
       <img src={image.url} alt={image.alt} onClick={(event) => event.stopPropagation()} />
+      {images.length > 1 && (
+        <div className="mew-lightbox-thumbs" onClick={(event) => event.stopPropagation()}>
+          {images.map((other, index) => (
+            <button
+              key={other.url}
+              type="button"
+              aria-label={`Show picture ${index + 1}`}
+              aria-current={index === shown ? "true" : undefined}
+              onClick={() => setShown(index)}
+            >
+              <img src={other.url} alt="" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

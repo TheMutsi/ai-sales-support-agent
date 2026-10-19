@@ -109,7 +109,7 @@ def _status_text(status: OrderStatus) -> str:
 def _format_order(order: OrderDetails) -> str:
     """The amount in dollars, like the plan catalog: converting cents is not left to the model."""
     line = (
-        f"- {order.plan_slug.capitalize()} plan order: "
+        f"- {order.item_name or order.plan_slug.capitalize() + ' plan'} order: "
         f"${order.amount_cents / 100:,.2f} {order.currency}, status {_status_text(order.status)}, "
         f"placed {order.created_at:%Y-%m-%d}"
     )

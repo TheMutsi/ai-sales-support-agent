@@ -442,11 +442,11 @@ describe("cards", () => {
     expect(container.querySelector(".mew-product strong")?.textContent).toBe("Pro plan");
     expect(container.querySelector(".mew-price")?.textContent).toBe("$69.99");
     act(() => container.querySelector<HTMLButtonElement>(".mew-product-image")!.click());
-    expect(onZoom).toHaveBeenCalledWith(product.image);
+    expect(onZoom).toHaveBeenCalledWith([product.image]);
 
     act(() => root!.unmount());
     const onClose = vi.fn();
-    mount(<Lightbox image={product.image} onClose={onClose} />);
+    mount(<Lightbox images={[product.image]} onClose={onClose} />);
     expect(container.querySelector(".mew-lightbox img")?.getAttribute("src")).toBe(product.image.url);
     act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     expect(onClose).toHaveBeenCalled();
@@ -479,11 +479,11 @@ describe("cards", () => {
   it("gives the focus back to the picture when the large one is closed", async () => {
     const { Cards, Lightbox } = await import("./Cards");
     const Host = () => {
-      const [image, setImage] = React.useState<typeof product.image | null>(null);
+      const [images, setImages] = React.useState<(typeof product.image)[] | null>(null);
       return (
         <>
-          <Cards cards={[product]} active onPick={() => {}} onZoom={setImage} />
-          {image && <Lightbox image={image} onClose={() => setImage(null)} />}
+          <Cards cards={[product]} active onPick={() => {}} onZoom={setImages} />
+          {images && <Lightbox images={images} onClose={() => setImages(null)} />}
         </>
       );
     };
@@ -509,5 +509,32 @@ describe("cards", () => {
     const order = Array.from(container.querySelector(".mew-cards")!.children).map((el) => el.className.split(" ").pop());
     expect(order).toEqual(["mew-product", "mew-divider", "mew-action"]);
     expect(container.querySelector(".mew-divider b")?.textContent).toBe("+");
+  });
+
+  it("stacks a second picture behind the first, shows a struck price, and lets the large view switch pictures", async () => {
+    const { Cards, Lightbox } = await import("./Cards");
+    const gift = {
+      type: "product" as const, id: "g", name: "Chai Jelly", price: "GIFT", compare_price: "$49.99",
+      image: { url: "https://cdn.test/gift.jpg", alt: "Chai Jelly" },
+    };
+    const leggings = {
+      ...product, more_images: [{ url: "https://cdn.test/back.jpg", alt: "Pro plan" }],
+    };
+    const onZoom = vi.fn();
+    mount(<Cards cards={[gift, leggings]} active onPick={() => {}} onZoom={onZoom} />);
+
+    expect(container.querySelector(".mew-compare")?.textContent).toBe("$49.99");
+    expect(container.querySelector(".mew-compare")?.tagName).toBe("S");
+    const [first, second] = Array.from(container.querySelectorAll(".mew-product-image"));
+    expect(first.querySelectorAll("img")).toHaveLength(1);
+    expect(second.querySelector(".mew-stack-back")?.getAttribute("src")).toBe("https://cdn.test/back.jpg");
+    act(() => (second as HTMLButtonElement).click());
+    expect(onZoom).toHaveBeenCalledWith([leggings.image, leggings.more_images[0]]);
+
+    act(() => root!.unmount());
+    mount(<Lightbox images={[leggings.image, leggings.more_images[0]]} onClose={() => {}} />);
+    expect(container.querySelector(".mew-lightbox > img")?.getAttribute("src")).toBe(leggings.image.url);
+    act(() => container.querySelectorAll<HTMLButtonElement>(".mew-lightbox-thumbs button")[1].click());
+    expect(container.querySelector(".mew-lightbox > img")?.getAttribute("src")).toBe("https://cdn.test/back.jpg");
   });
 });

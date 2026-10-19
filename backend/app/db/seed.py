@@ -128,6 +128,15 @@ def seed(db: Session) -> None:
 
 # The example page's login buttons: one customer per case, each with one order. Amounts are
 # what was charged (cents), which is not always a plan's list price.
+# What the demo orders are for: one product with two pictures, so a card can show them stacked.
+DEMO_ITEM = {
+    "name": "Shapermint Essentials High-Waisted Shaping Leggings x2",
+    "images": [
+        "https://cdn.shopify.com/s/files/1/0021/4889/2732/files/01_42075_PDP.jpg?v=1773936617",
+        "https://cdn.shopify.com/s/files/1/0021/4889/2732/files/06_42075_PDP.jpg?v=1773936617",
+    ],
+}
+
 DEMO_SHOP = [
     {"email": "mail1@gmail.com", "status": "open", "amount_cents": 2999},
     {"email": "mail2@gmail.com", "status": "open", "amount_cents": 6999},
@@ -174,6 +183,7 @@ def _ensure_demo_shop(db: Session, plans: dict[str, Plan], tenant_id, now: datet
                 Order(
                     order_id=order_id, customer_id=customer.id,
                     plan_id=_demo_plan(plans, entry["amount_cents"]).id,
+                    item_name=DEMO_ITEM["name"], item_images=DEMO_ITEM["images"],
                     amount_cents=entry["amount_cents"], status=entry["status"],
                     created_at=now - timedelta(days=2),
                 )
@@ -235,6 +245,7 @@ def reset_demo_shop(db: Session) -> int:
         order.status = wanted[order.order_id]["status"]
         order.amount_cents = wanted[order.order_id]["amount_cents"]
         order.plan_id = _demo_plan(plans, order.amount_cents).id
+        order.item_name, order.item_images = DEMO_ITEM["name"], DEMO_ITEM["images"]
     customer_ids = [
         c.id
         for c in db.query(Customer).filter(Customer.email.in_(emails), Customer.tenant_id == tenant.id)
