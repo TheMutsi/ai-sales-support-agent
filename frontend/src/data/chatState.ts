@@ -46,7 +46,10 @@ export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
     case "done": {
       const finished = state.messages.filter((m) => m.id !== STREAMING_ID || m.content !== "");
       const kind: ChatMessage["kind"] = event.data.identity_required ? "identity_request" : "text";
-      const messages = finished.map((m) => (m.id === STREAMING_ID ? { ...m, id: `answer-${finished.length}`, kind } : m));
+      const cards = event.data.cards?.length ? event.data.cards : undefined;
+      const messages = finished.map((m) =>
+        m.id === STREAMING_ID ? { ...m, id: `answer-${finished.length}`, kind, cards } : m,
+      );
       return {
         ...state,
         messages,

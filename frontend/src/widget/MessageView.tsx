@@ -1,6 +1,8 @@
 import type { ChatMessage } from "../data/types";
 import { Markdown } from "./markdown";
 import { toParts, type MessagePart } from "./parts";
+import { Cards } from "./Cards";
+import type { CardImage } from "../data/types";
 
 function Part({ part }: { part: MessagePart }) {
   switch (part.type) {
@@ -24,7 +26,14 @@ export const Avatar = () => (
   </span>
 );
 
-export function MessageView({ message }: { message: ChatMessage }) {
+export interface CardControls {
+  /** Whether this message is the latest, so its action cards may still be used. */
+  active: boolean;
+  onPick: (message: string) => void;
+  onZoom: (image: CardImage) => void;
+}
+
+export function MessageView({ message, cards }: { message: ChatMessage; cards?: CardControls }) {
   // A notice ("Mónica joined the chat") is not anyone's speech.
   if (message.role === "system") return <div className="mew-notice">{message.content}</div>;
   if (message.role === "human") {
@@ -42,8 +51,13 @@ export function MessageView({ message }: { message: ChatMessage }) {
     return (
       <div className="mew-row-assistant">
         <Avatar />
-        <div className="mew-message mew-assistant">
-          <Markdown text={message.content} />
+        <div className="mew-stack">
+          <div className="mew-message mew-assistant">
+            <Markdown text={message.content} />
+          </div>
+          {cards && message.cards && message.cards.length > 0 && (
+            <Cards cards={message.cards} active={cards.active} onPick={cards.onPick} onZoom={cards.onZoom} />
+          )}
         </div>
       </div>
     );

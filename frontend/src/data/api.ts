@@ -1,5 +1,5 @@
 import { parseSse } from "./sse";
-import type { ChatEvent, ChatMessage, Handoff, Session } from "./types";
+import type { Card, ChatEvent, ChatMessage, Handoff, Session } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -25,6 +25,14 @@ const toSession = (json: SessionJson): Session => ({
 });
 
 export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch = fetch) {
+  /** A picture on our API comes as a path; the widget lives on the shop's page, so make it absolute. */
+  const resolveCards = (cards: Card[] | undefined): Card[] | undefined =>
+    cards?.map((card) =>
+      card.type === "product" && card.image.url.startsWith("/")
+        ? { ...card, image: { ...card.image, url: `${baseUrl}${card.image.url}` } }
+        : card,
+    );
+
   async function request(path: string, init: { method?: "GET" | "POST"; body?: unknown; token?: string; signal?: AbortSignal } = {}) {
     const headers: Record<string, string> = {};
     if (init.body !== undefined) headers["Content-Type"] = "application/json";
@@ -40,6 +48,14 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
       throw new ApiError(response.status, detail?.code ?? "unknown");
     }
     return response;
+  }
+
+  async function* withCards(events: AsyncGenerator<ChatEvent>): AsyncGenerator<ChatEvent> {
+    for await (const event of events) {
+      yield event.event === "done" && event.data.cards
+        ? { ...event, data: { ...event.data, cards: resolveCards(event.data.cards) } }
+        : event;
+    }
   }
 
   return {
@@ -82,7 +98,7 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
         token: session.token,
       });
       const { messages, handoff } = await response.json();
-      type Stored = { seq: number; role: ChatMessage["role"]; kind: ChatMessage["kind"]; content: string; author_name?: string | null };
+      type Stored = { seq: number; role: ChatMessage["role"]; kind: ChatMessage["kind"]; content: string; author_name?: string | null; cards?: Card[] };
       return {
         messages: messages.map((m: Stored) => ({
           id: `seq-${m.seq}`,
@@ -90,6 +106,7 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
           kind: m.kind,
           content: m.content,
           author: m.author_name ?? undefined,
+          cards: m.cards?.length ? resolveCards(m.cards) : undefined,
         })),
         handoff: handoff ?? "none",
       };
@@ -98,12 +115,12 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
     /** One chat turn. `messageId` makes a retry replay the stored answer instead of running twice. */
     async *chat(session: Session, message: string, messageId: string, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
       const response = await request("/chat", { body: { message, message_id: messageId }, token: session.token, signal });
-      yield* parseSse(response.body!);
+      yield* withCards(parseSse(response.body!));
     },
 
     async *resume(session: Session, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
       const response = await request("/chat/resume", { body: {}, token: session.token, signal });
-      yield* parseSse(response.body!);
+      yield* withCards(parseSse(response.body!));
     },
   };
 }

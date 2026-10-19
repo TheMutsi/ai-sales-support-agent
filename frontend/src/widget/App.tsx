@@ -3,6 +3,8 @@ import type { Chat } from "../data/chat";
 import type { Identity } from "../data/identity";
 import type { Controller } from "../loader/controller";
 import { Composer } from "./Composer";
+import { Lightbox } from "./Cards";
+import type { CardImage } from "../data/types";
 import { IdentityForm } from "./IdentityForm";
 import { ChevronDown, ChevronLeft, ChatIcon } from "./icons";
 import { MessageList } from "./MessageList";
@@ -46,6 +48,7 @@ export function App({
   // The conversation is only fetched (and an anonymous one only created) when the chat is shown,
   // not when the menu is: looking at the menu starts nothing.
   const [synced, setSynced] = useState(false);
+  const [zoomed, setZoomed] = useState<CardImage | null>(null);
   const showingChat = open && view === "chat";
   useEffect(() => {
     if (showingChat) void chat.load().finally(() => setSynced(true));
@@ -84,7 +87,13 @@ export function App({
                   <ChevronDown />
                 </button>
               </header>
-              <MessageList messages={messages} waiting={waiting} />
+              <MessageList
+                messages={messages}
+                waiting={waiting}
+                busy={streaming}
+                onPick={(message) => void chat.send(message)}
+                onZoom={setZoomed}
+              />
               {identityRequest &&
                 (identityRequest.methods.some((m) => m === "otp" || m === "order_id") ? (
                   <IdentityForm identity={identity} methods={identityRequest.methods} />
@@ -95,6 +104,7 @@ export function App({
               <Composer disabled={streaming} onSend={(text, images) => void chat.send(text, images.map((i) => ({ url: i.url, alt: i.name })))} />
             </>
           )}
+          {zoomed && <Lightbox image={zoomed} onClose={() => setZoomed(null)} />}
         </section>
       )}
       <button

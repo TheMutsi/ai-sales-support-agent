@@ -84,3 +84,25 @@
 .mew-md > :last-child { margin-bottom: 0; }
 .mew-md code { padding: 1px 4px; border-radius: 4px; background: rgb(0 0 0 / 8%); font-size: 0.9em; }
 .mew-assistant .mew-md { white-space: normal; }
+.mew-panel { position: relative; }
+.mew-stack { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mew-cards { display: flex; flex-direction: column; gap: 8px; }
+.mew-card { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid var(--mew-line);
+  border-radius: 14px; background: #fff; font: inherit; color: #2a2a2a; text-align: left; }
+.mew-action { cursor: pointer; box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }
+.mew-action:hover:not(:disabled) { border-color: var(--mew-brand-2); box-shadow: 0 2px 8px rgb(143 42 46 / 18%); }
+.mew-action:disabled { opacity: 0.5; cursor: default; }
+.mew-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.mew-card-text strong { font-size: 14px; }
+.mew-card-text small { color: #6b6b6b; font-size: 12px; }
+.mew-card-badge { align-self: flex-start; padding: 1px 8px; border-radius: 999px; background: #fde7e3; color: var(--mew-brand);
+  font-size: 11px; font-weight: 700; }
+.mew-price { color: var(--mew-brand); font-weight: 700; }
+.mew-product-image { flex: none; width: 64px; height: 64px; padding: 0; border: 0; border-radius: 12px; overflow: hidden;
+  cursor: zoom-in; background: #f1f2f4; }
+.mew-product-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mew-lightbox { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 24px;
+  background: rgb(20 8 8 / 82%); }
+.mew-lightbox img { max-width: 100%; max-height: 100%; border-radius: 16px; background: #fff; }
+.mew-lightbox-close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border: 0; border-radius: 50%;
+  background: rgb(255 255 255 / 20%); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; }

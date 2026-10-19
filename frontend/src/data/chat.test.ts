@@ -242,3 +242,14 @@ describe("while a person has the conversation", () => {
     expect(chat.getState().error).toBeNull();
   });
 });
+
+describe("cards of a turn", () => {
+  it("attach to the answer that the done event closes", async () => {
+    const { applyEvent, initialState } = await import("./chatState");
+    const card = { type: "action" as const, id: "a", title: "Yes", message: "Yes, cancel it" };
+    let state = applyEvent(initialState, { event: "delta", data: { text: "Sure?" } });
+    state = applyEvent(state, { event: "done", data: { identity_required: false, identity_methods: [], cards: [card] } });
+
+    expect(state.messages.at(-1)).toMatchObject({ role: "assistant", content: "Sure?", cards: [card] });
+  });
+});
