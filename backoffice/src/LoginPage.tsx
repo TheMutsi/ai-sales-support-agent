@@ -7,6 +7,7 @@ export function LoginPage({ onEnter }: { onEnter: (session: AdminSession) => voi
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [role, setRole] = useState<Role>("admin");
   const [tenantId, setTenantId] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,7 +20,7 @@ export function LoginPage({ onEnter }: { onEnter: (session: AdminSession) => voi
   }, []);
 
   const enter = () =>
-    login(role, role === "operator" ? null : tenantId)
+    login(role, role === "operator" ? null : tenantId, name.trim())
       .then(onEnter)
       .catch(() => setError("Could not enter."));
 
@@ -37,6 +38,10 @@ export function LoginPage({ onEnter }: { onEnter: (session: AdminSession) => voi
             <option key={name}>{name}</option>
           ))}
         </select>
+      </label>
+      <label>
+        Your name <span className="hint">(what a visitor sees when you join their chat)</span>
+        <input value={name} maxLength={40} onChange={(event) => setName(event.target.value)} />
       </label>
       {role !== "operator" && (
         <label>

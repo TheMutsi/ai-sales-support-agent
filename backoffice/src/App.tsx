@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, listTenants, type AdminSession, type TenantOption } from "./api";
 import { ConfigPage } from "./ConfigPage";
 import { ConversationsPage } from "./ConversationsPage";
+import { EscalationsPage } from "./EscalationsPage";
 import { LoginPage } from "./LoginPage";
 import { loadSession, saveSession } from "./session";
 
@@ -9,7 +10,7 @@ export function App() {
   const [session, setSession] = useState<AdminSession | null>(loadSession);
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [page, setPage] = useState<"config" | "conversations">("config");
+  const [page, setPage] = useState<"config" | "conversations" | "escalations">("config");
 
   const leave = useCallback(() => {
     saveSession(null);
@@ -74,13 +75,23 @@ export function App() {
             Conversations
           </button>
         )}
+        {session.permissions.includes("escalations:read") && (
+          <button
+            className={page === "escalations" ? "tab active" : "tab"}
+            onClick={() => setPage("escalations")}
+          >
+            Escalations
+          </button>
+        )}
       </nav>
-      <main className={page === "conversations" ? "wide" : undefined}>
+      <main className={page === "config" ? undefined : "wide"}>
         {tenantId ? (
           page === "config" ? (
             <ConfigPage key={tenantId} session={session} tenantId={tenantId} onExpired={leave} />
-          ) : (
+          ) : page === "conversations" ? (
             <ConversationsPage key={tenantId} session={session} tenantId={tenantId} onExpired={leave} />
+          ) : (
+            <EscalationsPage key={tenantId} session={session} tenantId={tenantId} onExpired={leave} />
           )
         ) : (
           <p>No tenant to show.</p>

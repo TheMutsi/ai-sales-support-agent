@@ -35,6 +35,9 @@ const MESSAGES: Record<string, string> = {
   wrong_tenant: "This session belongs to another tenant.",
   session_expired: "Your session expired. Enter again.",
   invalid_session: "Your session is not valid. Enter again.",
+  not_waiting: "Someone else already took this conversation.",
+  not_active: "Nobody is in this conversation yet. Join it first.",
+  not_in_handoff: "This conversation was already closed.",
 };
 
 /** A known code in plain words; a validation problem (a 422) already says what is wrong. */

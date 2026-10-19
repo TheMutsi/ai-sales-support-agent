@@ -6,6 +6,7 @@ export type Role = "viewer" | "agent" | "admin" | "operator";
 export interface AdminSession {
   token: string;
   role: Role;
+  name: string;
   tenant_id: string | null;
   expires_at: string;
   permissions: string[];
@@ -50,15 +51,15 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
         : "request_failed";
     throw new ApiError(response.status, code);
   }
-  return response.json();
+  return response.status === 204 ? (undefined as T) : response.json();
 }
 
 export const listLoginOptions = () => request<TenantOption[]>("/login-options");
 
-export const login = (role: Role, tenantId: string | null) =>
+export const login = (role: Role, tenantId: string | null, name?: string) =>
   request<AdminSession>("/session", {
     method: "POST",
-    body: JSON.stringify({ role, tenant_id: tenantId }),
+    body: JSON.stringify({ role, tenant_id: tenantId, name: name || null }),
   });
 
 export const listTenants = (token: string) => request<TenantOption[]>("/tenants", {}, token);
@@ -85,7 +86,16 @@ export interface ConversationSummary {
 
 export interface ConversationDetail extends Omit<ConversationSummary, "message_count" | "first_message"> {
   linked_via: string | null;
-  messages: { seq: number; role: string; kind: string; content: string; created_at: string }[];
+  handoff_status: string;
+  handoff_agent_name: string | null;
+  messages: {
+    seq: number;
+    role: string;
+    kind: string;
+    content: string;
+    author_name: string | null;
+    created_at: string;
+  }[];
   identification: {
     method: string;
     outcome: string;
@@ -104,3 +114,41 @@ export const listConversations = (token: string, tenantId: string, before?: stri
 
 export const readConversation = (token: string, tenantId: string, conversationId: string) =>
   request<ConversationDetail>(`/tenants/${tenantId}/conversations/${conversationId}`, {}, token);
+
+export interface EscalationItem {
+  id: string;
+  handoff_status: "waiting" | "active";
+  agent_name: string | null;
+  requested_at: string | null;
+  customer: { name: string; email_masked: string } | null;
+  ticket: { category: string; subject: string; priority: string } | null;
+  last_message: string | null;
+}
+
+const inbox = (tenantId: string, conversationId?: string, action?: string) =>
+  `/tenants/${tenantId}/escalations${conversationId ? `/${conversationId}/${action}` : ""}`;
+
+export const listEscalations = (token: string, tenantId: string) =>
+  request<EscalationItem[]>(inbox(tenantId), {}, token);
+
+export const claimEscalation = (token: string, tenantId: string, conversationId: string) =>
+  request<void>(inbox(tenantId, conversationId, "claim"), { method: "POST" }, token);
+
+export const replyToVisitor = (token: string, tenantId: string, conversationId: string, text: string) =>
+  request<unknown>(
+    inbox(tenantId, conversationId, "messages"),
+    { method: "POST", body: JSON.stringify({ text }) },
+    token,
+  );
+
+export const closeEscalation = (
+  token: string,
+  tenantId: string,
+  conversationId: string,
+  notes: string,
+) =>
+  request<void>(
+    inbox(tenantId, conversationId, "close"),
+    { method: "POST", body: JSON.stringify({ notes: notes || null }) },
+    token,
+  );
