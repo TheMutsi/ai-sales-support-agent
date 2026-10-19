@@ -142,6 +142,11 @@ class Conversation(Base):
     # A person takes over from the assistant (see `app.chat.handoff`): `none` (the assistant
     # answers), `waiting` (a ticket was opened, no agent has joined) or `active` (an agent is in).
     handoff_status: Mapped[str] = mapped_column(default="none", server_default="none")
+    # A return the customer is in the middle of (see `app.agent.nodes.order_return`): which order
+    # and whether they were offered to keep it or asked to confirm cancelling it.
+    pending_return_order_id: Mapped[str | None]
+    pending_return_stage: Mapped[str | None]
+    pending_return_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     handoff_agent_name: Mapped[str | None]  # the name the visitor sees, while `active`
     handoff_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     handoff_ticket_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -317,6 +322,7 @@ class Order(Base):
 
     customer: Mapped["Customer"] = relationship()
     plan: Mapped["Plan"] = relationship()
+    adjustment: Mapped["OrderAdjustment | None"] = relationship(uselist=False)
 
 
 class OrderAdjustment(Base):

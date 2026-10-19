@@ -25,7 +25,7 @@ from langgraph.graph.message import add_messages
 
 from app.schemas.agent import Intent
 from app.schemas.business import EligibilityResult, UpsellDecision
-from app.schemas.orders import OrderDetails
+from app.schemas.orders import OrderDetails, PendingReturn, ReturnResult
 from app.schemas.tools import CheckoutSession, CustomerContext, PlanSummary, TicketReceipt
 
 
@@ -53,6 +53,10 @@ class AgentState(TypedDict):
     order_details: OrderDetails | None
     # All of a verified customer's own orders (newest first), when the session names none.
     customer_orders: list[OrderDetails] | None
+    # A return the customer is in the middle of (stored on the conversation between turns) and
+    # what the `order_return` step did this turn.
+    pending_return: PendingReturn | None
+    return_result: ReturnResult | None
 
     eligibility_result: EligibilityResult | None
     upsell_decision: UpsellDecision | None

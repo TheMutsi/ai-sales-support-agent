@@ -239,3 +239,20 @@ def test_another_tenants_id_cannot_cancel_or_keep_an_order(db: Session):
 
     assert asyncio.run(source.cancel_order(**ids)) is None
     assert asyncio.run(source.keep_order_with_retention(**ids, choice=RetentionChoice.REFUND)) is None
+
+
+def test_an_order_kept_with_the_offer_says_so_when_read_again(db: Session):
+    source = SimulatedOrderSource(SessionLocal)
+    customer, order = _customer_and_order(db, "mail2@gmail.com")
+    ids = {"tenant_id": customer.tenant_id, "customer_id": customer.id}
+    asyncio.run(
+        source.keep_order_with_retention(order_id=order.order_id, choice=RetentionChoice.CREDITS, **ids)
+    )
+
+    [read] = asyncio.run(source.list_orders(**ids))
+
+    assert read.status is OrderStatus.OPEN
+    assert read.retention is not None and (read.retention.choice, read.retention.credit_points) == (
+        RetentionChoice.CREDITS,
+        2100,
+    )

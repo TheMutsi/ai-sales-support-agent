@@ -286,3 +286,77 @@ def test_the_latest_unanswered_question_is_the_pending_one(db, conversation):
     _ask_for_identity(db, conversation, _begin(db, conversation, "and my refund?"))
 
     assert pending_message(db, conversation_id=conversation.id).content == "and my refund?"
+
+
+def test_a_pending_return_is_kept_between_turns_and_cleared_when_asked(db, conversation):
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
+    first = _begin(db, conversation, "I want to reject my order")
+    finish_turn(
+        db, conversation_id=conversation.id, turn=first, content="Here is an offer", now=NOW,
+        pending_return=pending,
+    )
+
+    second = _begin(db, conversation, "tell me about the plans", now=NOW + timedelta(seconds=5))
+    assert second.pending_return == pending  # the next turn starts from it
+    finish_turn(db, conversation_id=conversation.id, turn=second, content="Plans...", now=NOW)  # not touched
+    third = _begin(db, conversation, "the credits", now=NOW + timedelta(seconds=10))
+    assert third.pending_return == pending
+
+    finish_turn(
+        db, conversation_id=conversation.id, turn=third, content="Done", now=NOW, pending_return=None
+    )
+    assert _begin(db, conversation, "thanks", now=NOW + timedelta(seconds=15)).pending_return is None
+
+
+def test_a_pending_return_is_dropped_when_it_is_not_answered_in_time(db, conversation):
+    from app.chat.turns import PENDING_RETURN_TTL
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.CONFIRM)
+    first = _begin(db, conversation, "cancel my order")
+    finish_turn(
+        db, conversation_id=conversation.id, turn=first, content="Confirm?", now=NOW, pending_return=pending
+    )
+
+    soon = _begin(db, conversation, "yes", now=NOW + PENDING_RETURN_TTL)
+    finish_turn(db, conversation_id=conversation.id, turn=soon, content="ok", now=NOW + PENDING_RETURN_TTL)
+    late = _begin(db, conversation, "yes", now=NOW + PENDING_RETURN_TTL + timedelta(seconds=1))
+
+    assert soon.pending_return == pending  # still within the time
+    assert late.pending_return is None  # a later "yes" cannot complete it
+
+
+def test_carrying_a_pending_return_along_does_not_restart_its_time(db, conversation):
+    from app.chat.turns import PENDING_RETURN_TTL
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
+    first = _begin(db, conversation, "reject my order")
+    finish_turn(db, conversation_id=conversation.id, turn=first, content="Offer", now=NOW, pending_return=pending)
+    other = NOW + PENDING_RETURN_TTL / 2
+    second = _begin(db, conversation, "what plans are there?", now=other)
+    finish_turn(db, conversation_id=conversation.id, turn=second, content="Plans", now=other, pending_return=pending)
+
+    late = _begin(db, conversation, "yes", now=NOW + PENDING_RETURN_TTL + timedelta(seconds=1))
+
+    assert late.pending_return is None
+
+
+def test_a_return_offered_again_after_it_lapsed_gets_a_fresh_time(db, conversation):
+    from app.chat.turns import PENDING_RETURN_TTL
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
+    first = _begin(db, conversation, "reject my order")
+    finish_turn(db, conversation_id=conversation.id, turn=first, content="Offer", now=NOW, pending_return=pending)
+
+    later = NOW + PENDING_RETURN_TTL + timedelta(seconds=1)
+    again = _begin(db, conversation, "reject my order again", now=later)
+    assert again.pending_return is None  # the first one lapsed
+    finish_turn(db, conversation_id=conversation.id, turn=again, content="Offer", now=later, pending_return=pending)
+
+    answer = _begin(db, conversation, "the credits", now=later + timedelta(minutes=1))
+
+    assert answer.pending_return == pending

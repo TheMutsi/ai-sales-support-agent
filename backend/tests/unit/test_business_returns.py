@@ -70,3 +70,19 @@ def test_rounding_is_half_up_in_integer_cents():
     offer = retention_offer(5005)  # 30% = 1501.5 cents
 
     assert offer is not None and offer.credit_points == 1502
+
+
+def test_an_order_kept_with_the_offer_allows_and_offers_nothing_more():
+    from app.schemas.orders import RetentionChoice, RetentionReceipt
+
+    kept = _order(OrderStatus.OPEN, 6999).model_copy(
+        update={
+            "retention": RetentionReceipt(
+                order_id="A1b2C3d4E5f6G7h8I9j0", choice=RetentionChoice.REFUND, refund_cents=1400
+            )
+        }
+    )
+
+    options = return_options(kept)
+
+    assert (options.can_cancel, options.return_after_delivery, options.retention) == (False, False, None)

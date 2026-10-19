@@ -106,7 +106,7 @@ def test_the_chat_hands_the_agent_the_tenant_and_the_order_of_the_session():
         level=IdentityLevel.ORDER_LOOKUP,
         order_id=ORDER_ID,
     )
-    turn = type("Turn", (), {"history": [], "user_text": "where is my order?"})()
+    turn = type("Turn", (), {"history": [], "user_text": "where is my order?", "pending_return": None})()
 
     state = _build_initial_state(turn, session)
 

@@ -43,6 +43,8 @@ class OrderDetails(BaseModel):
     currency: str
     status: OrderStatus
     created_at: datetime
+    # Set when the customer kept this order with the retention offer (it then stays as it is).
+    retention: "RetentionReceipt | None" = None
 
 
 class RetentionChoice(StrEnum):
@@ -66,6 +68,31 @@ class ReturnOptions(BaseModel):
     retention: RetentionOffer | None  # offered before rejecting, for orders of a certain value
 
 
+class ReturnStage(StrEnum):
+    OFFER = "offer"  # the customer was offered to keep the order for a refund or points
+    CONFIRM = "confirm"  # the customer was asked to confirm cancelling it
+
+
+class PendingReturn(BaseModel):
+    """A return the customer is in the middle of: kept on the conversation between turns."""
+
+    order_id: str
+    stage: ReturnStage
+
+
+class ReturnOutcome(StrEnum):
+    NOTHING_TO_RETURN = "nothing_to_return"
+    CHOOSE_ORDER = "choose_order"
+    OFFER = "offer"
+    CONFIRM_CANCEL = "confirm_cancel"
+    RETURN_LATER = "return_later"
+    CANCELLED = "cancelled"
+    KEPT_WITH_REFUND = "kept_with_refund"
+    KEPT_WITH_CREDITS = "kept_with_credits"
+    KEPT_AS_IS = "kept_as_is"
+    NOT_AVAILABLE = "not_available"  # the order changed under us: nothing was done
+
+
 class RetentionReceipt(BaseModel):
     """What was recorded when the customer took the offer and kept the order."""
 
@@ -73,3 +100,17 @@ class RetentionReceipt(BaseModel):
     choice: RetentionChoice
     refund_cents: int | None = None
     credit_points: int | None = None
+
+
+class ReturnResult(BaseModel):
+    """What the `order_return` step did or needs the writer to ask, with the numbers already
+    worked out. The writer may say what is here and nothing else."""
+
+    outcome: ReturnOutcome
+    order: OrderDetails | None = None
+    candidates: list[OrderDetails] = []
+    offer: RetentionOffer | None = None
+    receipt: RetentionReceipt | None = None
+
+
+OrderDetails.model_rebuild()  # resolves its reference to RetentionReceipt, declared below it
