@@ -49,13 +49,27 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
     /** Shows the stored conversation (after a reload, or when another tab changed it). */
     async load() {
       try {
-        const messages = await withSession((session) => api.messages(session));
+        const { messages, handoff } = await withSession((session) => api.messages(session));
         // The stored request does not say which methods it offered, so a reload offers both: the
         // server decides what a proof is worth, and a method the tenant removed just fails.
         const pending = messages.at(-1)?.kind === "identity_request";
-        update({ ...state, messages, error: null, identity: pending ? { methods: ["otp", "order_id"] } : null });
+        update({ ...state, messages, handoff, error: null, identity: pending ? { methods: ["otp", "order_id"] } : null });
       } catch {
         update({ ...state, error: "Could not load the conversation." });
+      }
+    },
+    /**
+     * While a person has the conversation: reads what they wrote. Quiet (a failed poll is not
+     * an error to show) and never during a turn, which owns the messages until it ends.
+     */
+    async refresh() {
+      if (state.streaming) return;
+      try {
+        const { messages, handoff } = await withSession((session) => api.messages(session));
+        if (state.streaming) return;
+        update({ ...state, messages: keepImages(messages, state.messages), handoff });
+      } catch {
+        // The next poll tries again.
       }
     },
     async send(text: string, images: ChatMessage["images"] = []) {
@@ -70,6 +84,13 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
       await run((session) => api.resume(session));
     },
   };
+}
+
+/** The server does not keep image previews, so the visitor's own ones are carried over by order. */
+function keepImages(fromServer: ChatMessage[], local: ChatMessage[]): ChatMessage[] {
+  const previews = local.filter((m) => m.role === "user").map((m) => m.images);
+  let visitorMessage = 0;
+  return fromServer.map((m) => (m.role === "user" ? { ...m, images: previews[visitorMessage++] } : m));
 }
 
 export type Chat = ReturnType<typeof createChat>;

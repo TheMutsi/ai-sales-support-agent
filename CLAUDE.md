@@ -172,7 +172,7 @@ Tests are not a separate stage — per the TDD philosophy above, each stage ship
 
 ### Stage 12 status (the back office, in progress)
 
-Built: the tenant configuration cache, the admin API (`/api/admin`: roles and permissions per action, placeholder login, tenant list, tenant configuration; mounted only with `ADMIN_API_ENABLED=true` in a local environment) and the `backoffice/` shell (login pending page with a role picker, tenant combo, configuration page). Next: secrets and integrations, a viewer of conversations and messages, an inbox of escalations (ADR-0016).
+Built: the tenant configuration cache, the admin API (`/api/admin`: roles and permissions per action, placeholder login, tenant list, tenant configuration; mounted only with `ADMIN_API_ENABLED=true` in a local environment) and the `backoffice/` shell (login pending page with a role picker, tenant combo, configuration page). Also built: a viewer of conversations and messages with the identification timeline, and the human handoff (ADR-0017): an escalation leaves the conversation waiting for a person, who joins from the back office's Escalations tab under the name they entered at login, chats one to one with the visitor (the widget polls every few seconds and shows their messages and "joined/left" notices) and closes it, which gives it back to the assistant and resolves the ticket. Next: secrets and integrations (rotate signing secrets, the orders endpoint, SMTP; encrypted write-only credentials), and a Zendesk destination for escalations.
 
 ### Stage 10b status (the widget)
 

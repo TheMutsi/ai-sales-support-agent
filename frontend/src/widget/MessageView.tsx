@@ -18,6 +18,18 @@ function Part({ part }: { part: MessagePart }) {
 }
 
 export function MessageView({ message }: { message: ChatMessage }) {
+  // A notice ("Mónica joined the chat") is not anyone's speech.
+  if (message.role === "system") return <div className="mew-notice">{message.content}</div>;
+  if (message.role === "human") {
+    return (
+      <div className="mew-message mew-human">
+        <span className="mew-author">{message.author ?? "Agent"}</span>
+        {toParts(message.content).map((part, index) => (
+          <Part key={index} part={part} />
+        ))}
+      </div>
+    );
+  }
   // The assistant writes markdown; what a visitor types is shown as typed.
   if (message.role === "assistant") {
     return (

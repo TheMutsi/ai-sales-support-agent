@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatMessage } from "./types";
+import type { ChatEvent, ChatMessage, Handoff } from "./types";
 
 export interface ChatState {
   messages: ChatMessage[];
@@ -7,9 +7,11 @@ export interface ChatState {
   error: string | null;
   /** The assistant asked the visitor to identify; `methods` are the ways to offer (empty: only the shop's own login). */
   identity: { methods: string[] } | null;
+  /** A person has the conversation: the widget polls for what they write. */
+  handoff: Handoff;
 }
 
-export const initialState: ChatState = { messages: [], streaming: false, error: null, identity: null };
+export const initialState: ChatState = { messages: [], streaming: false, error: null, identity: null, handoff: "none" };
 
 /** Id of the assistant message being written by the current turn. */
 export const STREAMING_ID = "streaming";
@@ -50,6 +52,9 @@ export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
         messages,
         streaming: false,
         identity: event.data.identity_required ? { methods: event.data.identity_methods } : null,
+        // A turn that opened a ticket leaves the conversation waiting for a person (the server
+        // decided that when it saved the reply).
+        handoff: event.data.handoff ?? (event.data.ticket_created ? "waiting" : state.handoff),
       };
     }
   }
