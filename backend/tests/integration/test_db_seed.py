@@ -136,3 +136,54 @@ def test_seed_creates_the_demo_shop_customers_with_one_order_each(db: Session):
     }
     mail1 = db.query(Customer).filter_by(email="mail1@gmail.com").one()
     assert mail1.external_id == mail1.email and mail1.tenant_id is not None
+
+
+def test_resetting_the_demo_shop_restores_its_orders(db: Session):
+    from app.db.models import OrderAdjustment
+    from app.db.seed import reset_demo_shop
+
+    seed(db)
+    mail1 = db.query(Order).join(Customer).filter(Customer.email == "mail1@gmail.com").one()
+    mail2 = db.query(Order).join(Customer).filter(Customer.email == "mail2@gmail.com").one()
+    mail1.status = "cancelled"
+    db.add(OrderAdjustment(order_id=mail2.id, kind="credits", credit_points=2100))
+    db.commit()
+
+    assert reset_demo_shop(db) == 4
+
+    db.expire_all()
+    assert mail1.status == "open"
+    assert db.query(OrderAdjustment).count() == 0
+
+
+def test_resetting_the_demo_shop_leaves_other_tenants_and_other_environments_alone(db: Session, monkeypatch):
+    import pytest
+
+    from app.db import seed as seed_module
+    from app.db.models import Conversation
+    from app.db.seed import reset_demo_shop
+
+    seed(db)
+    other = Tenant(name="Other shop", api_key="pk_other_shop")
+    db.add(other)
+    db.flush()
+    stranger = Customer(name="Real person", email="mail1@gmail.com", tenant_id=other.id, external_id="x")
+    db.add(stranger)
+    db.flush()
+    conversation = Conversation(
+        tenant_id=other.id, customer_id=stranger.id, identity_level="store_login",
+        created_at=__import__("datetime").datetime(2026, 10, 1), last_activity_at=__import__("datetime").datetime(2026, 10, 1),
+        pending_return_order_id="A" * 20, pending_return_stage="offer",
+    )
+    db.add(conversation)
+    db.commit()
+
+    reset_demo_shop(db)
+
+    db.expire_all()
+    assert conversation.pending_return_order_id == "A" * 20  # not the demo shop's
+
+    production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
+    monkeypatch.setattr(seed_module, "get_settings", lambda: production)
+    with pytest.raises(RuntimeError, match="local"):
+        reset_demo_shop(db)

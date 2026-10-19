@@ -118,3 +118,41 @@ def test_an_order_that_was_really_read_is_not_taken_for_an_unbacked_lookup():
 
     assert guardrail_node(state) == {}
 
+
+
+def _result(outcome):
+    from app.schemas.orders import ReturnResult
+
+    return ReturnResult(outcome=outcome)
+
+
+def test_only_what_the_return_step_did_this_turn_backs_a_claim():
+    from app.agent.nodes.guardrail import _confirmed_return_actions
+    from app.schemas.orders import ReturnOutcome
+
+    done = _confirmed_return_actions({"return_result": _result(ReturnOutcome.KEPT_WITH_REFUND)})
+    cancelled = _confirmed_return_actions({"return_result": _result(ReturnOutcome.CANCELLED)})
+    offered = _confirmed_return_actions({"return_result": _result(ReturnOutcome.OFFER)})
+
+    assert (done["refund_recorded"], done["points_credited"], done["order_cancelled"]) == (True, False, False)
+    assert cancelled["order_cancelled"] and not cancelled["refund_recorded"]
+    assert offered["offering"] and not any(offered[k] for k in ("refund_recorded", "points_credited", "order_cancelled"))
+
+
+def test_old_refunds_and_cancellations_back_a_reply_only_in_a_status_answer():
+    from datetime import UTC, datetime
+
+    from app.agent.nodes.guardrail import _confirmed_return_actions
+    from app.schemas.orders import OrderDetails, RetentionChoice, RetentionReceipt
+
+    kept = OrderDetails(
+        order_id="A" * 20, customer_email="a@b.test", plan_slug="starter", amount_cents=6999,
+        currency="usd", status="cancelled", created_at=datetime(2026, 10, 1, tzinfo=UTC),
+        retention=RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.REFUND, refund_cents=1400),
+    )
+
+    status_answer = _confirmed_return_actions({"intent": "order_status", "customer_orders": [kept]})
+    elsewhere = _confirmed_return_actions({"intent": "billing_question", "customer_orders": [kept]})
+
+    assert status_answer["refund_recorded"] and status_answer["order_cancelled"]
+    assert not elsewhere["refund_recorded"] and not elsewhere["order_cancelled"]

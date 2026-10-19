@@ -13,7 +13,16 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import LOCAL_ENVIRONMENTS, get_settings
-from app.db.models import Customer, Order, Plan, Subscription, Tenant, TenantSecret
+from app.db.models import (
+    Conversation,
+    Customer,
+    Order,
+    OrderAdjustment,
+    Plan,
+    Subscription,
+    Tenant,
+    TenantSecret,
+)
 from app.db.session import SessionLocal
 
 SEED_DIR = Path(__file__).resolve().parents[2] / "data" / "seed"
@@ -197,7 +206,45 @@ def _ensure_orders(db: Session, plans_by_slug: dict[str, Plan], tenant_id) -> No
         )
 
 
+def reset_demo_shop(db: Session) -> int:
+    """Puts the demo customers' orders back as seeded (status, amount, no retention taken) and
+    clears their conversations' pending returns, so the example page can be tried again."""
+    if get_settings().app_env not in LOCAL_ENVIRONMENTS:
+        raise RuntimeError("the demo shop exists only in local environments")
+    tenant = db.query(Tenant).filter_by(api_key=DEV_TENANT_API_KEY).one_or_none()
+    if tenant is None:
+        return 0
+    emails = [entry["email"] for entry in DEMO_SHOP]
+    wanted = {_order_id(entry["email"]): entry for entry in DEMO_SHOP}
+    orders = (
+        db.query(Order)
+        .join(Customer, Order.customer_id == Customer.id)
+        .filter(Order.order_id.in_(wanted), Customer.tenant_id == tenant.id)
+        .all()
+    )
+    for order in orders:
+        db.query(OrderAdjustment).filter_by(order_id=order.id).delete()
+        order.status = wanted[order.order_id]["status"]
+        order.amount_cents = wanted[order.order_id]["amount_cents"]
+    customer_ids = [
+        c.id
+        for c in db.query(Customer).filter(Customer.email.in_(emails), Customer.tenant_id == tenant.id)
+    ]
+    db.query(Conversation).filter(Conversation.customer_id.in_(customer_ids)).update(
+        {"pending_return_order_id": None, "pending_return_stage": None}
+    )
+    db.commit()
+    return len(orders)
+
+
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Load the seed data.")
+    parser.add_argument("--reset-demo", action="store_true", help="put the demo shop's orders back")
+    arguments = parser.parse_args()
     with SessionLocal() as session:
         seed(session)
+        if arguments.reset_demo:
+            print(f"Demo orders reset: {reset_demo_shop(session)}.")
         print("Seed complete.")
