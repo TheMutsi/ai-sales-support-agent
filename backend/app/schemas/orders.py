@@ -24,6 +24,11 @@ class OrderStatus(StrEnum):
     PAID = "paid"
     PENDING = "pending"
     REFUNDED = "refunded"
+    # An order not shipped yet, which the customer can still reject.
+    OPEN = "open"
+    # On its way: it cannot be rejected, only returned once it arrives.
+    IN_DELIVERY = "in_delivery"
+    CANCELLED = "cancelled"
 
 
 class OrderDetails(BaseModel):

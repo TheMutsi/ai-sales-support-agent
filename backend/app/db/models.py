@@ -312,7 +312,7 @@ class Order(Base):
     plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id"))
     amount_cents: Mapped[int]
     currency: Mapped[str] = mapped_column(String(3), default="usd")
-    status: Mapped[str] = mapped_column(default="paid")  # paid | pending | refunded
+    status: Mapped[str] = mapped_column(default="paid")  # app.schemas.orders.OrderStatus
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     customer: Mapped["Customer"] = relationship()

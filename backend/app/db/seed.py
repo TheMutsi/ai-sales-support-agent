@@ -25,7 +25,11 @@ DEV_TENANT_API_KEY = "pk_dev_mewflow_local"
 DEV_TENANT_SECRET = "dev-only-tenant-secret-never-use-in-production"
 # Where the example page runs when served locally (`python -m http.server 8080`). A page
 # opened as a file has the origin "null", which is never allowed.
-DEV_TENANT_ORIGINS = ["http://localhost:8080", "http://127.0.0.1:8080"]
+DEV_TENANT_ORIGINS = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:8081",  # a second local server for the example page
+]
 DEV_TENANT_KID = "dev-1"
 
 
@@ -108,7 +112,56 @@ def seed(db: Session) -> None:
 
     db.flush()
     _ensure_orders(db, plans_by_slug, tenant_id)
+    if tenant:
+        _ensure_demo_shop(db, plans_by_slug["starter"], tenant_id, now)
     db.commit()
+
+
+# The example page's login buttons: one customer per case, each with one order. Amounts are
+# what was charged (cents), which is not always a plan's list price.
+DEMO_SHOP = [
+    {"email": "mail1@gmail.com", "status": "open", "amount_cents": 2999},
+    {"email": "mail2@gmail.com", "status": "open", "amount_cents": 6999},
+    {"email": "mail3@gmail.com", "status": "in_delivery", "amount_cents": 6999},
+    {"email": "mail4@gmail.com", "status": "in_delivery", "amount_cents": 2999},
+]
+
+
+def _ensure_demo_shop(db: Session, plan: Plan, tenant_id, now: datetime) -> None:
+    """Demo customers and their orders for the example page. Idempotent; local environments only
+    (the caller has a dev tenant only there)."""
+    have = {
+        c.email: c
+        for c in db.query(Customer).filter(
+            (Customer.tenant_id == tenant_id) | (Customer.tenant_id.is_(None))
+        )
+    }
+    for number, entry in enumerate(DEMO_SHOP, start=1):
+        customer = have.get(entry["email"])
+        if customer is not None and customer.tenant_id is None:
+            customer.tenant_id, customer.external_id = tenant_id, customer.email
+        if customer is None:
+            customer = Customer(
+                name=f"Demo User {number}", email=entry["email"], company="Demo shop",
+                status="active", tenant_id=tenant_id, external_id=entry["email"],
+            )
+            db.add(customer)
+            db.flush()
+            db.add(
+                Subscription(
+                    customer_id=customer.id, plan_id=plan.id, status="active",
+                    current_period_end=now + timedelta(days=20),
+                )
+            )
+        order_id = _order_id(customer.email)
+        if db.query(Order).filter_by(order_id=order_id).one_or_none() is None:
+            db.add(
+                Order(
+                    order_id=order_id, customer_id=customer.id, plan_id=plan.id,
+                    amount_cents=entry["amount_cents"], status=entry["status"],
+                    created_at=now - timedelta(days=2),
+                )
+            )
 
 
 def _order_id(email: str) -> str:
