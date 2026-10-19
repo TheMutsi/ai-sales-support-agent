@@ -46,6 +46,7 @@ class MessageView(BaseModel):
     role: str
     kind: str
     content: str
+    author_name: str | None = None
     created_at: datetime
 
 
@@ -61,6 +62,8 @@ class ConversationDetail(BaseModel):
     id: uuid.UUID
     identity_level: str
     linked_via: str | None
+    handoff_status: str
+    handoff_agent_name: str | None
     customer: CustomerView | None
     created_at: datetime
     last_activity_at: datetime
@@ -68,7 +71,7 @@ class ConversationDetail(BaseModel):
     identification: list[IdentificationView]
 
 
-def _customer(customer: Customer | None) -> CustomerView | None:
+def customer_view(customer: Customer | None) -> CustomerView | None:
     return CustomerView(name=customer.name, email_masked=mask_email(customer.email)) if customer else None
 
 
@@ -97,7 +100,7 @@ def list_conversations(
         ConversationSummary(
             id=conversation.id,
             identity_level=conversation.identity_level,
-            customer=_customer(customer),
+            customer=customer_view(customer),
             created_at=conversation.created_at,
             last_activity_at=conversation.last_activity_at,
             message_count=conversation.last_seq,
@@ -134,7 +137,9 @@ def read_conversation(
         id=conversation.id,
         identity_level=conversation.identity_level,
         linked_via=conversation.linked_via,
-        customer=_customer(customer),
+        handoff_status=conversation.handoff_status,
+        handoff_agent_name=conversation.handoff_agent_name,
+        customer=customer_view(customer),
         created_at=conversation.created_at,
         last_activity_at=conversation.last_activity_at,
         messages=[MessageView.model_validate(m, from_attributes=True) for m in messages],

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,7 @@ from app.admin.session import (
 )
 from app.api.admin_conversations import router as conversations_router
 from app.api.admin_deps import error, require_permission, require_tenant_permission
+from app.api.admin_escalations import router as escalations_router
 from app.auth.scopes import scope_override_problems
 from app.core.config import get_settings
 from app.core.origins import normalize_origin
@@ -53,11 +54,14 @@ def placeholder_login_options(db: Annotated[Session, Depends(get_db)]) -> list[T
 class AdminLoginRequest(BaseModel):
     role: Role
     tenant_id: uuid.UUID | None = None  # required for every role but the operator
+    # What a visitor sees when this person joins a chat; the role's name if left out.
+    name: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class AdminLoginResponse(BaseModel):
     token: str
     role: Role
+    name: str
     tenant_id: uuid.UUID | None
     expires_at: datetime
     permissions: list[Permission]
@@ -73,14 +77,17 @@ def placeholder_login(
         if request.tenant_id is None or db.get(Tenant, request.tenant_id) is None:
             raise error(422, "tenant_required")
         tenant_id = request.tenant_id
+    name = (request.name or request.role.value.capitalize()).strip()
     token, expires_at = issue_admin_token(
         role=request.role,
         tenant_id=tenant_id,
+        name=name,
         signing_key=get_settings().session_signing_key,
         ttl=_ADMIN_SESSION_TTL,
     )
     return AdminLoginResponse(
         token=token,
+        name=name,
         role=request.role,
         tenant_id=tenant_id,
         expires_at=expires_at,
@@ -177,4 +184,4 @@ def update_config(
 
 # Mounted one by one (not nested with `include_router`) so the route-coverage test can read each
 # route's dependencies; see tests/unit/test_admin_routes.py.
-ADMIN_ROUTERS = [router, conversations_router]
+ADMIN_ROUTERS = [router, conversations_router, escalations_router]
