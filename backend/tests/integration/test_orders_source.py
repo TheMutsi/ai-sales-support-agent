@@ -80,3 +80,24 @@ def test_statuses_follow_the_customer_s_situation(db: Session):
     assert by_email["helena.ostrowski@ridgeportlegal.com"] == "pending"  # past_due
     assert by_email["tom.baxter@baxterandco.com"] == "refunded"  # canceled
     assert by_email["priya.anand@bluecrestlogistics.com"] == "paid"
+
+
+def test_a_customers_orders_are_listed_for_that_customer_only(db: Session):
+    mail3 = db.query(Customer).filter_by(email="mail3@gmail.com").one()
+    source = SimulatedOrderSource(SessionLocal)
+
+    orders = asyncio.run(source.list_orders(tenant_id=mail3.tenant_id, customer_id=mail3.id))
+
+    assert [(o.customer_email, o.status, o.amount_cents) for o in orders] == [
+        ("mail3@gmail.com", OrderStatus.IN_DELIVERY, 6999)
+    ]
+
+
+def test_another_tenants_id_lists_nothing_for_a_customer(db: Session):
+    mail1 = db.query(Customer).filter_by(email="mail1@gmail.com").one()
+
+    orders = asyncio.run(
+        SimulatedOrderSource(SessionLocal).list_orders(tenant_id=uuid.uuid4(), customer_id=mail1.id)
+    )
+
+    assert orders == []

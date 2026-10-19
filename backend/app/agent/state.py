@@ -51,6 +51,8 @@ class AgentState(TypedDict):
     customer_context: CustomerContext | None
     plan_catalog: list[PlanSummary] | None
     order_details: OrderDetails | None
+    # All of a verified customer's own orders (newest first), when the session names none.
+    customer_orders: list[OrderDetails] | None
 
     eligibility_result: EligibilityResult | None
     upsell_decision: UpsellDecision | None

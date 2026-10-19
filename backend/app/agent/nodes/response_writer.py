@@ -5,7 +5,7 @@ from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
 from app.agent.state import AgentState
 from app.core.llm import get_chat_model
 from app.schemas.agent import Intent
-from app.schemas.orders import OrderDetails
+from app.schemas.orders import OrderDetails, OrderStatus
 from app.schemas.tools import PlanSummary
 
 # The intents where response_writer binds the knowledge-base tool. Billing is
@@ -59,6 +59,9 @@ def _build_context_blob(state: AgentState) -> str:
 
     if order := state.get("order_details"):
         sections.append(f"Order:\n{_format_order(order)}")
+    elif (orders := state.get("customer_orders")) is not None:
+        listing = "\n".join(_format_order(o) for o in orders) or "This customer has no orders."
+        sections.append(f"The customer's orders:\n{listing}")
     elif state.get("intent") == Intent.ORDER_STATUS:
         sections.append("Order:\nThere is no order with that number for this customer.")
 
@@ -88,11 +91,21 @@ def _format_plan_catalog(plans: list[PlanSummary]) -> str:
     )
 
 
+_STATUS_TEXT = {
+    OrderStatus.OPEN: "open (not shipped yet)",
+    OrderStatus.IN_DELIVERY: "in delivery (on its way)",
+}
+
+
+def _status_text(status: OrderStatus) -> str:
+    return _STATUS_TEXT.get(status, status.value)
+
+
 def _format_order(order: OrderDetails) -> str:
     """The amount in dollars, like the plan catalog: converting cents is not left to the model."""
     return (
         f"- Order {order.order_id}: plan {order.plan_slug}, "
-        f"${order.amount_cents / 100:,.2f} {order.currency}, status {order.status}, "
+        f"${order.amount_cents / 100:,.2f} {order.currency}, status {_status_text(order.status)}, "
         f"placed {order.created_at:%Y-%m-%d}"
     )
 

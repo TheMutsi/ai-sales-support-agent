@@ -17,6 +17,7 @@ class Node(StrEnum):
     BUSINESS_RULES = "business_rules"
     GET_PLAN_CATALOG = "get_plan_catalog"
     GET_ORDER_STATUS = "get_order_status"
+    GET_CUSTOMER_ORDERS = "get_customer_orders"
     KNOWLEDGE_TOOL = "knowledge_tool"
     HUMAN_ESCALATION = "human_escalation"
     REQUEST_IDENTITY = "request_identity"
