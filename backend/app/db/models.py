@@ -175,6 +175,8 @@ class Message(Base):
     role: Mapped[str]  # user | assistant | human (a person from the back office) | system
     # The name a person's message is shown under; null for the assistant and the visitor.
     author_name: Mapped[str | None]
+    # Cards shown with a reply (see `app.schemas.cards`), stored so a reload shows them again.
+    cards: Mapped[list | None] = mapped_column(JSON)
     # text | identity_request | system. Anything but text is a form the widget shows (and an audit
     # record), not conversation: it is kept out of the history the model receives.
     kind: Mapped[str] = mapped_column(server_default="text", default="text")

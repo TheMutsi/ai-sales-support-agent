@@ -17,9 +17,10 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.agent import Intent
+from app.schemas.cards import Card
 from app.schemas.rag import SourceReference
 from app.schemas.tools import CheckoutSession
 
@@ -35,7 +36,13 @@ class StoredMessage(BaseModel):
     kind: Literal["text", "identity_request", "system"]
     content: str
     author_name: str | None = None  # a person's message is shown under this name
+    cards: list[Card] = Field(default_factory=list)
     created_at: datetime
+
+    @field_validator("cards", mode="before")
+    @classmethod
+    def _no_cards_is_an_empty_list(cls, value: object) -> object:
+        return [] if value is None else value  # the column is null for most messages
 
 
 class MessageList(BaseModel):
@@ -93,3 +100,5 @@ class ChatTurnSummary(BaseModel):
     # login can unlock it. The turn resumes when the visitor sends the message again.
     identity_required: bool = False
     identity_methods: list[str] = Field(default_factory=list)
+    # Cards to show with the reply (offers to pick, orders as products), built from state.
+    cards: list[Card] = Field(default_factory=list)

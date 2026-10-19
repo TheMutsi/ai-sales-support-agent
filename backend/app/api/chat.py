@@ -43,11 +43,13 @@ from starlette.background import BackgroundTask
 
 from app.agent.graph import graph as agent_graph
 from app.agent.names import Node
+from app.agent.nodes.guardrail import FALLBACK_MESSAGE
 from app.api.deps import require_session
 from app.api.origins import origin_guard_for_session
 from app.api.rate_limit import limit_by_conversation
 from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
+from app.cards import cards_for
 from app.chat.turns import (
     KEEP,
     HandoffStatus,
@@ -138,7 +140,15 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
         ticket_id=ticket_receipt.ticket_id if ticket_receipt else None,
         identity_required=final_state.get("identity_required", False),
         identity_methods=final_state.get("identity_methods", []),
+        cards=_cards(final_state),
     )
+
+
+def _cards(final_state: dict) -> list:
+    """The cards of this turn's reply, except when the guardrail replaced the reply."""
+    if final_state["messages"][-1].content == FALLBACK_MESSAGE:
+        return []
+    return cards_for(final_state)
 
 
 def _build_trace_metadata(session: SessionClaims, conversation_id: uuid.UUID) -> dict:
@@ -165,6 +175,7 @@ class TurnStore(Protocol):
         kind: MessageKind = MessageKind.TEXT,
         escalation_ticket_id: uuid.UUID | None = None,
         pending_return: PendingReturn | None | Keep = KEEP,
+        cards: list | None = None,
     ) -> None: ...
 
     async def abandon(self) -> None: ...
@@ -196,6 +207,7 @@ class _DbTurnStore:
         kind: MessageKind = MessageKind.TEXT,
         escalation_ticket_id: uuid.UUID | None = None,
         pending_return: PendingReturn | None | Keep = KEEP,
+        cards: list | None = None,
     ) -> None:
         def save() -> None:
             with SessionLocal() as db:
@@ -209,6 +221,7 @@ class _DbTurnStore:
                         kind=kind,
                         escalation_ticket_id=escalation_ticket_id,
                         pending_return=pending_return,
+                        cards=cards,
                     )
                 except TurnSuperseded:
                     logger.warning("late reply dropped (conversation %s)", self._conversation_id)
@@ -355,6 +368,7 @@ async def _stream_turn(
                 escalation_ticket_id=receipt.ticket_id if receipt else None,
                 # Absent means "this run did not touch it", never "clear it".
                 pending_return=final_state.get("pending_return", KEEP),
+                cards=_cards(final_state),
             )
         )
     except Exception:

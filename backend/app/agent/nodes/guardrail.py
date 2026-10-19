@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Deliberately promises nothing: with no ticket, saying a human will follow
 # up would be the same kind of unbacked claim the output checks exist to block.
-_FALLBACK_MESSAGE = (
+FALLBACK_MESSAGE = (
     "I can't confirm that information right now. If you'd like, ask to talk to "
     "a person and I'll connect you with our support team."
 )
@@ -39,7 +39,7 @@ _FALLBACK_WITH_TICKET_MESSAGE = (
 def _fallback_message(state: AgentState) -> str:
     if ticket_receipt := state.get("ticket_receipt"):
         return _FALLBACK_WITH_TICKET_MESSAGE.format(ticket_id=ticket_receipt.ticket_id)
-    return _FALLBACK_MESSAGE
+    return FALLBACK_MESSAGE
 
 
 def _confirmed_return_actions(state: AgentState) -> dict[str, bool]:
