@@ -28,6 +28,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import aclosing, nullcontext
@@ -52,6 +53,7 @@ from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
 from app.cards import cards_for
 from app.chat.actions import latest_cards, offered_card
+from app.chat.return_events import build_return_event
 from app.chat.turns import (
     KEEP,
     HandoffStatus,
@@ -180,6 +182,7 @@ class TurnStore(Protocol):
         escalation_ticket_id: uuid.UUID | None = None,
         pending_return: PendingReturn | None | Keep = KEEP,
         cards: list[Card] | None = None,
+        return_event: dict | None = None,
     ) -> None: ...
 
     async def abandon(self) -> None: ...
@@ -212,6 +215,7 @@ class _DbTurnStore:
         escalation_ticket_id: uuid.UUID | None = None,
         pending_return: PendingReturn | None | Keep = KEEP,
         cards: list[Card] | None = None,
+        return_event: dict | None = None,
     ) -> None:
         def save() -> None:
             with SessionLocal() as db:
@@ -226,6 +230,7 @@ class _DbTurnStore:
                         escalation_ticket_id=escalation_ticket_id,
                         pending_return=pending_return,
                         cards=cards,
+                        return_event=return_event,
                     )
                 except TurnSuperseded:
                     logger.warning("late reply dropped (conversation %s)", self._conversation_id)
@@ -308,6 +313,7 @@ async def _stream_turn(
 
     streamed_text = ""
     final_state: dict | None = None
+    started = time.monotonic()
 
     # The exception is caught outside the span so Langfuse still records the
     # span as failed, while the client gets an explicit `error` event instead
@@ -344,6 +350,17 @@ async def _stream_turn(
                     and node is None
                 ):
                     final_state = event["data"]["output"]
+            if tracing_enabled and final_state is not None:
+                # What this turn was, to filter and compare in Langfuse (the same facts, in SQL, are
+                # in `return_events`).
+                result = final_state.get("return_result")
+                span.update(
+                    metadata={
+                        "input_type": "action" if turn.click is not None else "text",
+                        "action": turn.click.value if turn.click is not None else None,
+                        "return_outcome": result.outcome.value if result is not None else None,
+                    }
+                )
         if final_state is None:
             raise RuntimeError("the graph ended without a final state")
     except Exception:
@@ -373,6 +390,17 @@ async def _stream_turn(
                 # Absent means "this run did not touch it", never "clear it".
                 pending_return=final_state.get("pending_return", KEEP),
                 cards=cards_for(final_state),
+                return_event=build_return_event(
+                    final_state,
+                    turn=turn,
+                    tenant_id=session.tenant_id,
+                    conversation_id=conversation_id,
+                    customer_id=session.customer_id,
+                    identity_level=session.level.value,
+                    model=get_chat_model_name(),
+                    app_version=settings.app_version,
+                    duration_ms=round((time.monotonic() - started) * 1000),
+                ),
             )
         )
     except Exception:

@@ -114,7 +114,7 @@ class _Store:
         self.abandoned = 0
         self._fail_finish = fail_finish
 
-    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT, escalation_ticket_id=None, pending_return=None, cards=None) -> None:
+    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT, escalation_ticket_id=None, pending_return=None, cards=None, return_event=None) -> None:
         if self._fail_finish:
             raise RuntimeError("db down")
         self.finished.append(content)
@@ -265,7 +265,10 @@ async def test_tags_intent_on_the_span_and_attaches_the_callback_when_tracing_is
     await _collect(chat_module.stream_chat_turn(graph, session, request, _Store()))
 
     assert graph.received_config == {"callbacks": ["fake-handler"]}
-    assert fake_client.span.update_calls == [{"metadata": {"intent": "pricing_question"}}]
+    assert fake_client.span.update_calls == [
+        {"metadata": {"intent": "pricing_question"}},
+        {"metadata": {"input_type": "text", "action": None, "return_outcome": None}},
+    ]
     span_metadata = fake_client.start_as_current_observation_kwargs["metadata"]
     assert span_metadata["customer_id"] == str(session.customer_id)
     assert span_metadata["tenant_id"] == str(session.tenant_id)
