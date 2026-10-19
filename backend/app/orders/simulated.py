@@ -21,6 +21,13 @@ from app.schemas.orders import (
     is_valid_order_id,
 )
 
+_KIND = {
+    RetentionChoice.REFUND: "refund_to_card",
+    RetentionChoice.CREDITS: "credits",
+    RetentionChoice.NEXT_ORDER_FREE: "next_order_free",
+}
+_CHOICE = {kind: choice for choice, kind in _KIND.items()}
+
 
 class SimulatedOrderSource:
     def __init__(self, session_factory: Callable[[], Session]) -> None:
@@ -91,13 +98,24 @@ class SimulatedOrderSource:
             offer = retention_offer(order.amount_cents)
             if offer is None:
                 return None
-            refund = choice is RetentionChoice.REFUND
+            receipt = RetentionReceipt(
+                order_id=order.order_id,
+                choice=choice,
+                refund_cents=offer.refund_cents if choice is RetentionChoice.REFUND else None,
+                credit_points=offer.credit_points if choice is RetentionChoice.CREDITS else None,
+                coupon_code=(
+                    f"FREE-{order.order_id[:6].upper()}"
+                    if choice is RetentionChoice.NEXT_ORDER_FREE
+                    else None
+                ),
+            )
             db.add(
                 OrderAdjustment(
                     order_id=order.id,
-                    kind="refund_to_card" if refund else "credits",
-                    refund_cents=offer.refund_cents if refund else None,
-                    credit_points=None if refund else offer.credit_points,
+                    kind=_KIND[choice],
+                    refund_cents=receipt.refund_cents,
+                    credit_points=receipt.credit_points,
+                    coupon_code=receipt.coupon_code,
                 )
             )
             try:
@@ -105,12 +123,7 @@ class SimulatedOrderSource:
             except IntegrityError:
                 db.rollback()
                 return None
-            return RetentionReceipt(
-                order_id=order.order_id,
-                choice=choice,
-                refund_cents=offer.refund_cents if refund else None,
-                credit_points=None if refund else offer.credit_points,
-            )
+            return receipt
 
     @staticmethod
     def _owned_order(db: Session, tenant_id, customer_id, order_id: str) -> Order | None:
@@ -147,12 +160,12 @@ def _details(order: Order) -> OrderDetails:
     kept = order.adjustment
     receipt = None
     if kept is not None:
-        refund = kept.kind == "refund_to_card"
         receipt = RetentionReceipt(
             order_id=order.order_id,
-            choice=RetentionChoice.REFUND if refund else RetentionChoice.CREDITS,
+            choice=_CHOICE[kept.kind],
             refund_cents=kept.refund_cents,
             credit_points=kept.credit_points,
+            coupon_code=kept.coupon_code,
         )
     return OrderDetails(
         order_id=order.order_id,

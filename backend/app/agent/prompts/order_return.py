@@ -16,6 +16,7 @@ Answer with:
     ("yes, cancel it", "no thanks, I just want to cancel", "return it").
   - refund: they take the offer of part of the price back on their card.
   - credits: they take the offer of points.
+  - free_next: they take the offer of their next order free.
   - keep: they changed their mind and want to keep the order as it is, without the offer
     ("never mind", "forget it", "leave it").
   - unclear: none of the above, or you cannot tell.
@@ -26,7 +27,7 @@ NO_PENDING_SITUATION = "The customer has just asked to reject or return an order
 
 OFFER_SITUATION = (
     "The customer was offered to keep order {order_id} and get either part of the price back "
-    "on their card (refund) or points (credits), or to reject it anyway. Their latest message "
+    "on their card (refund), points (credits) or their next order free (free_next), or to reject it anyway. Their latest message "
     "answers that offer."
 )
 

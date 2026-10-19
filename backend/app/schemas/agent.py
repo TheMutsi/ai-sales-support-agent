@@ -71,6 +71,7 @@ class ReturnChoice(StrEnum):
     REJECT = "reject"  # wants to reject, cancel or return it (or confirms they do)
     REFUND = "refund"  # takes the offer of part of the price back to the card
     CREDITS = "credits"  # takes the offer of points
+    FREE_NEXT = "free_next"  # takes the offer of their next order free
     KEEP = "keep"  # changed their mind: keeps the order as it is, without the offer
     UNCLEAR = "unclear"
 

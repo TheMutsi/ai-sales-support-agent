@@ -31,12 +31,13 @@ def test_an_offer_shows_the_order_and_one_card_per_choice_with_the_numbers_from_
         _result(ReturnOutcome.OFFER, order=_order(), offer=RetentionOffer(refund_cents=1400, credit_points=2100))
     )
 
-    assert [c.type for c in cards] == ["product", "action", "action", "action"]
-    product, refund, points, reject = cards
+    assert [c.type for c in cards] == ["product", "action", "action", "action", "action"]
+    product, refund, points, free, reject = cards
     assert (product.name, product.price, product.badge) == ("Pro plan", "$69.99", "Open")
     assert (refund.title, refund.badge) == ("$14.00 back to your card", "20% back")
     assert refund.message == "I'll take the $14.00 refund to my card"
     assert (points.title, points.message) == ("2,100 points", "I'll take the 2,100 points")
+    assert (free.title, free.badge, free.message) == ("Your next order, free", "Free", "I'll take the next order free")
     assert reject.id == "offer-reject"
 
 
@@ -95,3 +96,14 @@ def test_a_card_type_that_no_longer_exists_does_not_break_reading_old_messages()
 
 def test_an_offer_without_its_order_shows_nothing():
     assert cards_for(_result(ReturnOutcome.OFFER, offer=RetentionOffer(refund_cents=1, credit_points=1))) == []
+
+
+def test_taking_the_free_next_order_shows_the_coupon_that_was_recorded():
+    from app.schemas.orders import RetentionChoice, RetentionReceipt
+
+    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.NEXT_ORDER_FREE, coupon_code="FREE-AAAAAA")
+
+    cards = cards_for(_result(ReturnOutcome.KEPT_WITH_FREE_ORDER, order=_order(), receipt=receipt))
+
+    assert [(c.type, c.code) for c in cards] == [("coupon", "FREE-AAAAAA")]
+    assert cards_for(_result(ReturnOutcome.KEPT_WITH_FREE_ORDER, order=_order())) == []  # no code, no coupon

@@ -45,7 +45,7 @@ class StoredMessage(BaseModel):
         if value is None:
             return []  # the column is null for most messages
         # A card type that no longer exists must not break the whole message list.
-        known = {"action", "product"}
+        known = {"action", "product", "coupon"}
         return [c for c in value if not isinstance(c, dict) or c.get("type") in known]
 
 

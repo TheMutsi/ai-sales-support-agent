@@ -495,4 +495,11 @@ describe("cards", () => {
     act(() => container.querySelector<HTMLButtonElement>(".mew-lightbox-close")!.click());
     expect(document.activeElement).toBe(thumb);
   });
+
+  it("shows a coupon with its code", async () => {
+    const { Cards } = await import("./Cards");
+    mount(<Cards cards={[{ type: "coupon", id: "c", code: "FREE-ABC123", title: "Your next order is free", subtitle: "Use this code at checkout" }]} active onPick={() => {}} onZoom={() => {}} />);
+    expect(container.querySelector(".mew-coupon strong")?.textContent).toBe("Your next order is free");
+    expect(container.querySelector(".mew-code")?.textContent).toBe("FREE-ABC123");
+  });
 });

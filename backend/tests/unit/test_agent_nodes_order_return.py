@@ -56,11 +56,11 @@ class FakeShop:
         offer = retention_offer(order.amount_cents)
         if offer is None or order.retention:
             return None
-        refund = choice is RetentionChoice.REFUND
         receipt = RetentionReceipt(
             order_id=order_id, choice=choice,
-            refund_cents=offer.refund_cents if refund else None,
-            credit_points=None if refund else offer.credit_points,
+            refund_cents=offer.refund_cents if choice is RetentionChoice.REFUND else None,
+            credit_points=offer.credit_points if choice is RetentionChoice.CREDITS else None,
+            coupon_code="FREE-AAAAAA" if choice is RetentionChoice.NEXT_ORDER_FREE else None,
         )
         self.orders[order_id] = order.model_copy(update={"retention": receipt})
         return receipt
@@ -156,6 +156,7 @@ async def test_the_69_99_order_in_delivery_gets_the_offer_too(setup):
     [
         (ReturnChoice.REFUND, ReturnOutcome.KEPT_WITH_REFUND, 1400, None),
         (ReturnChoice.CREDITS, ReturnOutcome.KEPT_WITH_CREDITS, None, 2100),
+        (ReturnChoice.FREE_NEXT, ReturnOutcome.KEPT_WITH_FREE_ORDER, None, None),
     ],
 )
 async def test_taking_the_offer_keeps_the_order_and_records_what_was_chosen(

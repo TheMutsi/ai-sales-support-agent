@@ -266,3 +266,16 @@ def test_every_other_outcome_tells_the_writer_what_to_say_and_that_nothing_extra
     }
     for outcome, text in expected.items():
         assert text in response_writer_module._build_context_blob(_returning(outcome))
+
+
+def test_the_offer_lists_the_free_next_order_and_taking_it_gives_the_coupon():
+    from app.schemas.orders import RetentionChoice, RetentionOffer, RetentionReceipt, ReturnOutcome
+
+    offer = response_writer_module._build_context_blob(
+        _returning(ReturnOutcome.OFFER, offer=RetentionOffer(refund_cents=1400, credit_points=2100))
+    )
+    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.NEXT_ORDER_FREE, coupon_code="FREE-AAAAAA")
+    kept = response_writer_module._build_context_blob(_returning(ReturnOutcome.KEPT_WITH_FREE_ORDER, receipt=receipt))
+
+    assert "(3) their next order free" in offer
+    assert "their next order free (coupon FREE-AAAAAA)" in kept and "ALREADY BEEN DONE" in kept

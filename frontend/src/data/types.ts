@@ -18,7 +18,8 @@ export interface CardImage {
 /** Things a reply can show next to its text (see `app/schemas/cards.py`). */
 export type Card =
   | { type: "action"; id: string; title: string; subtitle?: string | null; badge?: string | null; message: string }
-  | { type: "product"; id: string; name: string; subtitle?: string | null; price?: string | null; badge?: string | null; image: CardImage };
+  | { type: "product"; id: string; name: string; subtitle?: string | null; price?: string | null; badge?: string | null; image: CardImage }
+  | { type: "coupon"; id: string; code: string; title: string; subtitle?: string | null };
 
 export interface ChatMessage {
   id: string;
