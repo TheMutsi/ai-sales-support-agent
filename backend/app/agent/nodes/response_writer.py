@@ -140,7 +140,7 @@ def _format_return(result: ReturnResult) -> str:
         case ReturnOutcome.NOTHING_TO_RETURN:
             return (
                 "The customer has no order that can be rejected or returned (an order that "
-                "was kept with an offer, cancelled, paid or delivered cannot). Nothing was changed. Say so, "
+                "was kept with an offer, is closed, paid or delivered cannot). Nothing was changed. Say so, "
                 "do not ask for an order number, and offer to bring in a person if they need more."
             )
         case ReturnOutcome.CHOOSE_ORDER:

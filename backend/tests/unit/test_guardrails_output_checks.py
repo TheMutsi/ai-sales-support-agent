@@ -398,3 +398,25 @@ def test_a_refund_recorded_by_the_return_step_may_be_stated_and_otherwise_still_
 
     assert check_unconfirmed_refund_claim(_ctx(), said).code == "unconfirmed_refund_claim"
     assert check_unconfirmed_refund_claim(_ctx(refund_recorded=True), said) is None
+
+
+def test_an_offer_may_say_a_refund_will_be_given_but_not_that_it_was():
+    from app.guardrails.output_checks import check_unconfirmed_refund_claim
+
+    offering = _ctx(offering=True)
+
+    assert check_unconfirmed_refund_claim(offering, "If you choose the refund, $14.00 will be refunded to your card.") is None
+    assert check_unconfirmed_refund_claim(offering, "Your refund has been processed.").code == "unconfirmed_refund_claim"
+    assert check_unconfirmed_refund_claim(_ctx(), "The refund will be refunded to your card.").code == "unconfirmed_refund_claim"
+
+
+def test_describing_a_cancelled_order_in_general_is_not_a_claim_about_this_one():
+    from app.guardrails.output_checks import check_unbacked_order_action_claim
+
+    context = _ctx()
+
+    assert check_unbacked_order_action_claim(context, "An order that was cancelled can't be returned.") is None
+    assert check_unbacked_order_action_claim(context, "Your order has not shipped; it will be cancelled if you confirm.") is None
+    assert check_unbacked_order_action_claim(context, "Hi, cancelled orders are not refunded.") is None
+    assert check_unbacked_order_action_claim(context, "Your order is cancelled.").code == "unbacked_order_action_claim"
+    assert check_unbacked_order_action_claim(context, "Tu pedido ha sido cancelado.").code == "unbacked_order_action_claim"

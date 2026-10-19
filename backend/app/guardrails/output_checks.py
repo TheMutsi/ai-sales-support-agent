@@ -18,6 +18,14 @@ _REFUND_CONFIRMATION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Past-tense claims only, for a reply that is presenting an offer ("will be refunded" is the offer).
+_REFUND_DONE_PATTERN = re.compile(
+    r"(reembolso|refund).{0,40}(has been|have been|was|ha sido|fue) "
+    r"(approved|processed|issued|refunded|aprobad|procesad|emitid)|"
+    r"\b(i|we)('ve| have) (refunded|processed|issued)",
+    re.IGNORECASE,
+)
+
 _CHECKOUT_LINK_PATTERN = re.compile(r"https?://\S*checkout\S*", re.IGNORECASE)
 
 _BILLING_SPECULATION_PATTERN = re.compile(
@@ -84,7 +92,8 @@ def check_unconfirmed_refund_claim(
     merely unverified, and gets blocked rather than just flagged."""
     if context.refund_recorded:  # the return flow recorded one this turn, or the order says so
         return None
-    if _REFUND_CONFIRMATION_PATTERN.search(response_text):
+    pattern = _REFUND_DONE_PATTERN if context.offering else _REFUND_CONFIRMATION_PATTERN
+    if pattern.search(response_text):
         return GuardrailViolation(
             code="unconfirmed_refund_claim",
             severity=GuardrailSeverity.BLOCK,
@@ -94,9 +103,9 @@ def check_unconfirmed_refund_claim(
 
 
 _ORDER_CANCELLED_CLAIM_PATTERN = re.compile(
-    r"(order|pedido)\b.{0,60}\b(has been|have been|was|is now|ha sido|fue|qued[oó]) "
-    r"(cancel+ed|cancelad[oa])|(i('ve| have)?|we('ve| have)?) cancel+ed|"
-    r"(he|hemos) cancelado",
+    r"\b(your|the|su|tu)\s+(order|pedido)\b[^.!?\n]{0,40}\b(has been|have been|was|is now|is|"
+    r"ha sido|fue|qued[oó]|est[aá]) (cancel+ed|cancelad[oa])|"
+    r"\b(i|we)('ve| have) cancel+ed\b|\b(he|hemos) cancelado\b",
     re.IGNORECASE,
 )
 

@@ -252,3 +252,17 @@ def test_an_order_kept_with_the_offer_says_so_in_the_listing():
     blob = response_writer_module._build_context_blob({"intent": "order_status", "customer_orders": [order]})
 
     assert "kept by the customer with a refund of $14.00 to their card" in blob
+
+
+def test_every_other_outcome_tells_the_writer_what_to_say_and_that_nothing_extra_was_done():
+    from app.schemas.orders import ReturnOutcome
+
+    expected = {
+        ReturnOutcome.NOTHING_TO_RETURN: "do not ask for an order number",
+        ReturnOutcome.RETURN_LATER: "once it arrives",
+        ReturnOutcome.KEPT_AS_IS: "Nothing was changed",
+        ReturnOutcome.NOT_AVAILABLE: "nothing was changed",
+        ReturnOutcome.CHOOSE_ORDER: "Ask which of these orders",
+    }
+    for outcome, text in expected.items():
+        assert text in response_writer_module._build_context_blob(_returning(outcome))

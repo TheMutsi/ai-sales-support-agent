@@ -154,3 +154,36 @@ def test_resetting_the_demo_shop_restores_its_orders(db: Session):
     db.expire_all()
     assert mail1.status == "open"
     assert db.query(OrderAdjustment).count() == 0
+
+
+def test_resetting_the_demo_shop_leaves_other_tenants_and_other_environments_alone(db: Session, monkeypatch):
+    import pytest
+
+    from app.db import seed as seed_module
+    from app.db.models import Conversation
+    from app.db.seed import reset_demo_shop
+
+    seed(db)
+    other = Tenant(name="Other shop", api_key="pk_other_shop")
+    db.add(other)
+    db.flush()
+    stranger = Customer(name="Real person", email="mail1@gmail.com", tenant_id=other.id, external_id="x")
+    db.add(stranger)
+    db.flush()
+    conversation = Conversation(
+        tenant_id=other.id, customer_id=stranger.id, identity_level="store_login",
+        created_at=__import__("datetime").datetime(2026, 10, 1), last_activity_at=__import__("datetime").datetime(2026, 10, 1),
+        pending_return_order_id="A" * 20, pending_return_stage="offer",
+    )
+    db.add(conversation)
+    db.commit()
+
+    reset_demo_shop(db)
+
+    db.expire_all()
+    assert conversation.pending_return_order_id == "A" * 20  # not the demo shop's
+
+    production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
+    monkeypatch.setattr(seed_module, "get_settings", lambda: production)
+    with pytest.raises(RuntimeError, match="local"):
+        reset_demo_shop(db)
