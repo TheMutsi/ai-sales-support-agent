@@ -48,6 +48,10 @@ EXPECTED = {
     ("PATCH", "/admin/tenants/{tenant_id}/config"): Permission.CONFIG_WRITE,
     ("GET", "/admin/tenants/{tenant_id}/conversations"): Permission.CONVERSATIONS_READ,
     ("GET", "/admin/tenants/{tenant_id}/conversations/{conversation_id}"): Permission.CONVERSATIONS_READ,
+    ("GET", "/admin/tenants/{tenant_id}/escalations"): Permission.ESCALATIONS_READ,
+    ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/claim"): Permission.ESCALATIONS_REPLY,
+    ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/messages"): Permission.ESCALATIONS_REPLY,
+    ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/close"): Permission.ESCALATIONS_REPLY,
 }
 
 

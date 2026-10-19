@@ -54,21 +54,21 @@ def test_only_the_operator_crosses_tenants():
 def test_admin_token_round_trip():
     tenant = uuid.uuid4()
     token, _ = issue_admin_token(
-        role=Role.AGENT, tenant_id=tenant, signing_key=KEY, ttl=timedelta(hours=1)
+        role=Role.AGENT, tenant_id=tenant, name="Test", signing_key=KEY, ttl=timedelta(hours=1)
     )
     session = verify_admin_token(token, KEY)
-    assert (session.role, session.tenant_id) == (Role.AGENT, tenant)
+    assert (session.role, session.tenant_id, session.name) == (Role.AGENT, tenant, "Test")
 
 
 def test_expired_and_forged_admin_tokens_are_refused():
     expired, _ = issue_admin_token(
-        role=Role.ADMIN, tenant_id=None, signing_key=KEY, ttl=timedelta(seconds=-5)
+        role=Role.ADMIN, tenant_id=None, name="Test", signing_key=KEY, ttl=timedelta(seconds=-5)
     )
     with pytest.raises(AdminSessionError) as expired_error:
         verify_admin_token(expired, KEY)
     assert expired_error.value.code == "session_expired"
     valid, _ = issue_admin_token(
-        role=Role.ADMIN, tenant_id=None, signing_key=KEY, ttl=timedelta(hours=1)
+        role=Role.ADMIN, tenant_id=None, name="Test", signing_key=KEY, ttl=timedelta(hours=1)
     )
     with pytest.raises(AdminSessionError):
         verify_admin_token(valid, "z" * 40)
@@ -84,7 +84,7 @@ def test_a_chat_session_is_not_an_admin_session_and_the_other_way_round():
         ttl=timedelta(hours=1),
     )
     admin_token, _ = issue_admin_token(
-        role=Role.OPERATOR, tenant_id=None, signing_key=KEY, ttl=timedelta(hours=1)
+        role=Role.OPERATOR, tenant_id=None, name="Test", signing_key=KEY, ttl=timedelta(hours=1)
     )
     with pytest.raises(AdminSessionError):
         verify_admin_token(chat_token, KEY)

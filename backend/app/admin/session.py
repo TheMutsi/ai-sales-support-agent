@@ -28,16 +28,18 @@ class AdminSessionError(Exception):
 class AdminSession:
     role: Role
     tenant_id: uuid.UUID | None
+    name: str  # what a visitor sees when this person joins a chat
 
 
 def issue_admin_token(
-    *, role: Role, tenant_id: uuid.UUID | None, signing_key: str, ttl: timedelta
+    *, role: Role, tenant_id: uuid.UUID | None, signing_key: str, ttl: timedelta, name: str
 ) -> tuple[str, datetime]:
     now = datetime.now(UTC)
     expires_at = now + ttl
     claims = {
         "kind": "admin",
         "role": role.value,
+        "name": name,
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
@@ -49,12 +51,13 @@ def issue_admin_token(
 def verify_admin_token(token: str, signing_key: str) -> AdminSession:
     try:
         claims = jwt.decode(
-            token, signing_key, algorithms=["HS256"], options={"require": ["exp", "kind", "role"]}
+            token, signing_key, algorithms=["HS256"], options={"require": ["exp", "kind", "role", "name"]}
         )
         if claims["kind"] != "admin":
             raise ValueError("not an admin session")
         return AdminSession(
             role=Role(claims["role"]),
+            name=str(claims["name"]),
             tenant_id=uuid.UUID(claims["ten"]) if "ten" in claims else None,
         )
     except jwt.ExpiredSignatureError:
