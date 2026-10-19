@@ -361,3 +361,40 @@ def test_ordinary_replies_that_mention_orders_in_passing_are_left_alone():
     ):
         assert check_unbacked_order_lookup(_NO_ORDER, reply) is None, reply
 
+
+
+
+def _ctx(**kw):
+    from app.schemas.guardrails import OutputCheckContext
+
+    return OutputCheckContext(**kw)
+
+
+def test_saying_an_order_was_cancelled_needs_the_return_step_to_have_done_it():
+    from app.guardrails.output_checks import check_unbacked_order_action_claim
+
+    said = "Done, your order has been cancelled."
+
+    assert check_unbacked_order_action_claim(_ctx(), said).code == "unbacked_order_action_claim"
+    assert check_unbacked_order_action_claim(_ctx(order_cancelled=True), said) is None
+    assert check_unbacked_order_action_claim(_ctx(), "I can cancel it if you confirm.") is None
+
+
+def test_saying_points_were_added_needs_them_to_have_been_recorded():
+    from app.guardrails.output_checks import check_unbacked_order_action_claim
+
+    said = "2,100 points have been added to your account."
+
+    assert check_unbacked_order_action_claim(_ctx(), said).code == "unbacked_order_action_claim"
+    assert check_unbacked_order_action_claim(_ctx(points_credited=True), said) is None
+    # Describing the offer is not claiming it happened.
+    assert check_unbacked_order_action_claim(_ctx(), "You could take 2,100 points added to your account.") is None
+
+
+def test_a_refund_recorded_by_the_return_step_may_be_stated_and_otherwise_still_may_not():
+    from app.guardrails.output_checks import check_unconfirmed_refund_claim
+
+    said = "Your refund of $14.00 has been processed."
+
+    assert check_unconfirmed_refund_claim(_ctx(), said).code == "unconfirmed_refund_claim"
+    assert check_unconfirmed_refund_claim(_ctx(refund_recorded=True), said) is None

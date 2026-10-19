@@ -136,3 +136,21 @@ def test_seed_creates_the_demo_shop_customers_with_one_order_each(db: Session):
     }
     mail1 = db.query(Customer).filter_by(email="mail1@gmail.com").one()
     assert mail1.external_id == mail1.email and mail1.tenant_id is not None
+
+
+def test_resetting_the_demo_shop_restores_its_orders(db: Session):
+    from app.db.models import OrderAdjustment
+    from app.db.seed import reset_demo_shop
+
+    seed(db)
+    mail1 = db.query(Order).join(Customer).filter(Customer.email == "mail1@gmail.com").one()
+    mail2 = db.query(Order).join(Customer).filter(Customer.email == "mail2@gmail.com").one()
+    mail1.status = "cancelled"
+    db.add(OrderAdjustment(order_id=mail2.id, kind="credits", credit_points=2100))
+    db.commit()
+
+    assert reset_demo_shop(db) == 4
+
+    db.expire_all()
+    assert mail1.status == "open"
+    assert db.query(OrderAdjustment).count() == 0

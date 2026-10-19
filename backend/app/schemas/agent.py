@@ -23,6 +23,7 @@ class Intent(StrEnum):
     REFUND_REQUEST = "refund_request"
     HUMAN_ESCALATION = "human_escalation"
     ORDER_STATUS = "order_status"
+    ORDER_RETURN = "order_return"
     SMALL_TALK = "small_talk"
     UNSUPPORTED = "unsupported"
 
@@ -62,3 +63,24 @@ class TicketDraft(BaseModel):
 
     subject: str
     description: str
+
+
+class ReturnChoice(StrEnum):
+    """What a customer's message means for an order they want to reject or return."""
+
+    REJECT = "reject"  # wants to reject, cancel or return it (or confirms they do)
+    REFUND = "refund"  # takes the offer of part of the price back to the card
+    CREDITS = "credits"  # takes the offer of points
+    KEEP = "keep"  # changed their mind: keeps the order as it is, without the offer
+    UNCLEAR = "unclear"
+
+
+class ReturnReading(BaseModel):
+    """What `order_return` asks the LLM to read from the conversation: only which order the
+    customer means and which of these they said. Everything that follows is decided by rules."""
+
+    order_id: str | None = Field(
+        default=None,
+        description="The order id the customer means, copied from the list, or null if unsure.",
+    )
+    choice: ReturnChoice

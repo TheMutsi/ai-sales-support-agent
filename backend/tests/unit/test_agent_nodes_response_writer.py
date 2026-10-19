@@ -186,3 +186,69 @@ def test_does_not_retry_when_a_search_is_not_required(monkeypatch, intent, tool_
     _run_writer(monkeypatch, model, intent, tool_call_rounds)
 
     assert len(model.prompts) == 1
+
+
+def _returning(outcome, order_status="open", cents=6999, **extra) -> dict:
+    from datetime import UTC, datetime
+
+    from app.schemas.orders import OrderDetails, ReturnResult
+
+    order = OrderDetails(
+        order_id="A" * 20, customer_email="mail2@gmail.com", plan_slug="starter", amount_cents=cents,
+        currency="usd", status=order_status, created_at=datetime(2026, 10, 1, tzinfo=UTC),
+    )
+    return {"return_result": ReturnResult(outcome=outcome, order=order, **extra)}
+
+
+def test_the_writer_is_given_the_offer_with_its_numbers_worked_out_and_told_nothing_was_done():
+    from app.schemas.orders import RetentionOffer, ReturnOutcome
+
+    blob = response_writer_module._build_context_blob(
+        _returning(ReturnOutcome.OFFER, offer=RetentionOffer(refund_cents=1400, credit_points=2100))
+    )
+
+    assert "$14.00 back to their card" in blob and "2,100 points" in blob
+    assert "Nothing has been done yet" in blob and "cancelled" not in blob.replace("cannot", "")
+
+
+def test_an_offer_for_an_order_on_its_way_says_it_cannot_be_rejected_now():
+    from app.schemas.orders import RetentionOffer, ReturnOutcome
+
+    blob = response_writer_module._build_context_blob(
+        _returning(
+            ReturnOutcome.OFFER, order_status="in_delivery",
+            offer=RetentionOffer(refund_cents=1400, credit_points=2100),
+        )
+    )
+
+    assert "cannot be rejected now" in blob and "once it arrives" in blob
+
+
+def test_what_was_done_is_stated_as_done_and_what_was_not_is_not():
+    from app.schemas.orders import RetentionChoice, RetentionReceipt, ReturnOutcome
+
+    receipt = RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.CREDITS, credit_points=2100)
+
+    kept = response_writer_module._build_context_blob(_returning(ReturnOutcome.KEPT_WITH_CREDITS, receipt=receipt))
+    cancelled = response_writer_module._build_context_blob(_returning(ReturnOutcome.CANCELLED, cents=2999))
+    confirm = response_writer_module._build_context_blob(_returning(ReturnOutcome.CONFIRM_CANCEL, cents=2999))
+
+    assert "2,100 points added to their account" in kept and "ALREADY BEEN DONE" in kept
+    assert "HAS BEEN cancelled" in cancelled
+    assert "Nothing has been done yet" in confirm and "HAS BEEN" not in confirm
+
+
+def test_an_order_kept_with_the_offer_says_so_in_the_listing():
+    from datetime import UTC, datetime
+
+    from app.schemas.orders import OrderDetails, RetentionChoice, RetentionReceipt
+
+    order = OrderDetails(
+        order_id="A" * 20, customer_email="a@b.test", plan_slug="starter", amount_cents=6999,
+        currency="usd", status="open", created_at=datetime(2026, 10, 1, tzinfo=UTC),
+        retention=RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.REFUND, refund_cents=1400),
+    )
+
+    blob = response_writer_module._build_context_blob({"intent": "order_status", "customer_orders": [order]})
+
+    assert "kept by the customer with a refund of $14.00 to their card" in blob

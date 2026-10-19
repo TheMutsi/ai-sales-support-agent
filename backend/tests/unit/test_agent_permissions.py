@@ -50,4 +50,5 @@ def test_the_shops_own_login_is_never_offered_in_the_chat():
 
 def test_asking_about_an_order_needs_the_scope_to_read_one():
     assert REQUIRED_SCOPE[Intent.ORDER_STATUS] == Scope.ORDER_READ
+    assert REQUIRED_SCOPE[Intent.ORDER_RETURN] == Scope.REFUND_REQUEST
 

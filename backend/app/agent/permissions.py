@@ -21,6 +21,8 @@ REQUIRED_SCOPE: dict[Intent, Scope] = {
     Intent.REFUND_REQUEST: Scope.REFUND_REQUEST,
     Intent.HUMAN_ESCALATION: Scope.TICKET_CREATE,
     Intent.ORDER_STATUS: Scope.ORDER_READ,
+    # Rejecting an order changes what the customer owns: only a verified customer may.
+    Intent.ORDER_RETURN: Scope.REFUND_REQUEST,
 }
 
 # The ways the widget can identify someone in the chat. `store_login` is not one: it

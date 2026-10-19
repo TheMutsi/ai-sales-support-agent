@@ -5,7 +5,14 @@ from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
 from app.agent.state import AgentState
 from app.core.llm import get_chat_model
 from app.schemas.agent import Intent
-from app.schemas.orders import OrderDetails, OrderStatus
+from app.schemas.orders import (
+    OrderDetails,
+    OrderStatus,
+    RetentionChoice,
+    RetentionReceipt,
+    ReturnOutcome,
+    ReturnResult,
+)
 from app.schemas.tools import PlanSummary
 
 # The intents where response_writer binds the knowledge-base tool. Billing is
@@ -59,6 +66,8 @@ def _build_context_blob(state: AgentState) -> str:
 
     if order := state.get("order_details"):
         sections.append(f"Order:\n{_format_order(order)}")
+    elif return_result := state.get("return_result"):
+        sections.append(f"Order return:\n{_format_return(return_result)}")
     elif (orders := state.get("customer_orders")) is not None:
         listing = "\n".join(_format_order(o) for o in orders) or "This customer has no orders."
         sections.append(f"The customer's orders:\n{listing}")
@@ -103,11 +112,89 @@ def _status_text(status: OrderStatus) -> str:
 
 def _format_order(order: OrderDetails) -> str:
     """The amount in dollars, like the plan catalog: converting cents is not left to the model."""
-    return (
+    line = (
         f"- Order {order.order_id}: plan {order.plan_slug}, "
         f"${order.amount_cents / 100:,.2f} {order.currency}, status {_status_text(order.status)}, "
         f"placed {order.created_at:%Y-%m-%d}"
     )
+    if (kept := order.retention) is not None:
+        line += f"; kept by the customer with {_retention_text(kept)}"
+    return line
+
+
+def _retention_text(receipt: RetentionReceipt) -> str:
+    if receipt.choice is RetentionChoice.REFUND:
+        return f"a refund of ${(receipt.refund_cents or 0) / 100:,.2f} to their card"
+    return f"{receipt.credit_points or 0:,} points added to their account"
+
+
+def _format_return(result: ReturnResult) -> str:
+    """What the return step did, in words the writer repeats. Amounts are worked out here."""
+    order = result.order
+    what = (
+        f"order {order.order_id} (${order.amount_cents / 100:,.2f}, status {_status_text(order.status)})"
+        if order
+        else "the order"
+    )
+    match result.outcome:
+        case ReturnOutcome.NOTHING_TO_RETURN:
+            return (
+                "The customer has no order that can be rejected or returned (an order that "
+                "was kept with an offer, cancelled, paid or delivered cannot). Nothing was changed. Say so, "
+                "do not ask for an order number, and offer to bring in a person if they need more."
+            )
+        case ReturnOutcome.CHOOSE_ORDER:
+            return (
+                "Ask which of these orders the customer wants to reject or return. Nothing "
+                f"was changed.\n{chr(10).join(_format_order(o) for o in result.candidates)}"
+            )
+        case ReturnOutcome.OFFER:
+            offer = result.offer
+            assert order is not None and offer is not None
+            on_its_way = (
+                " It is on its way, so it cannot be rejected now: if they decline the offer, "
+                "they can return it once it arrives."
+                if order.status is OrderStatus.IN_DELIVERY
+                else " If they decline the offer they can still reject it."
+            )
+            return (
+                f"The customer wants to reject {what}. Before that, offer them to keep it "
+                f"for one of two things: (1) ${offer.refund_cents / 100:,.2f} back to their "
+                f"card, or (2) {offer.credit_points:,} points in their account.{on_its_way} "
+                "Nothing has been done yet: ask which they prefer, and say nothing else about "
+                "charges or payments."
+            )
+        case ReturnOutcome.CONFIRM_CANCEL:
+            return (
+                f"{what} has not shipped, so it can be cancelled. Nothing has been done yet. Only "
+                "ask the customer to confirm that they want to cancel it (for example \"Do you "
+                "want me to cancel it?\"). Do not say it will be cancelled, and say nothing "
+                "about charges, payments or refunds."
+            )
+        case ReturnOutcome.RETURN_LATER:
+            return (
+                f"{what} is on its way, so it cannot be rejected now. The customer can return it "
+                "once it arrives. Nothing was changed. Tell them only that, and ask whether they need "
+                "anything else: do not offer refunds, points or any other option, and do not ask "
+                "whether they want to return it now."
+            )
+        case ReturnOutcome.CANCELLED:
+            return f"{what} HAS BEEN cancelled: tell them so in the past tense."
+        case ReturnOutcome.KEPT_WITH_REFUND | ReturnOutcome.KEPT_WITH_CREDITS:
+            assert result.receipt is not None
+            return (
+                f"The customer kept {what} and took {_retention_text(result.receipt)}. That has "
+                "ALREADY BEEN DONE: tell them so in the past tense (for example \"I've added "
+                "2,100 points to your account\" or \"I've refunded $14.00 to your card\"). The "
+                "order stays with them: it is not cancelled and does not need to be returned."
+            )
+        case ReturnOutcome.KEPT_AS_IS:
+            return f"The customer keeps {what} as it is. Nothing was changed."
+        case ReturnOutcome.NOT_AVAILABLE:
+            return (
+                f"{what} can no longer be changed this way, so nothing was changed. Say so, "
+                "and offer to bring in a person if they need more."
+            )
 
 
 def response_writer_node(state: AgentState) -> dict:

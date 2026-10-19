@@ -35,6 +35,10 @@ class OutputCheckContext(BaseModel):
     tool_call_rounds: int = 0
     # An order was really read this turn (the order_status step found one).
     order_found: bool = False
+    # What the return flow really did this turn: only these let a reply say it happened.
+    order_cancelled: bool = False
+    refund_recorded: bool = False
+    points_credited: bool = False
     # Instructions that must never appear verbatim in a reply.
     protected_prompt: str = ""
 
