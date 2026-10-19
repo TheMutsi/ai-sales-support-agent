@@ -27,6 +27,7 @@ If the graph run fails, the stream ends with an `error` event (and no
 import asyncio
 import json
 import logging
+import re
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import aclosing, nullcontext
@@ -371,7 +372,10 @@ async def _stream_turn(
         await _abandon_quietly(store, conversation_id)
 
     if not streamed_text:
-        yield _format_sse("message", {"text": final_text})
+        # A reply no model wrote (a fixed question, a refusal) is still shown as it is typed,
+        # word by word, like one the model streams; the reply was stored before this.
+        async for chunk in _typed(final_text):
+            yield _format_sse("delta", {"text": chunk})
     elif final_text != streamed_text:
         yield _format_sse("correction", {"text": final_text})
 
@@ -404,6 +408,18 @@ def _scope_overrides(session: SessionClaims) -> dict | None:
     that made it and within the cache's TTL on the others."""
     tenant = tenant_configs.get(session.tenant_id)
     return tenant.scope_overrides if tenant is not None else None
+
+
+# How long between the words of a reply nobody generated; about the pace of a fast typist.
+_TYPING_DELAY_SECONDS = 0.03
+
+
+async def _typed(text: str) -> AsyncIterator[str]:
+    """`text` a word at a time, with a short pause between words."""
+    for index, word in enumerate(re.findall(r"\S+\s*|\s+", text)):
+        if index:
+            await asyncio.sleep(_TYPING_DELAY_SECONDS)
+        yield word
 
 
 async def _replay(
