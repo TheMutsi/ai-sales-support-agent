@@ -63,6 +63,11 @@ class TurnSuperseded(Exception):
     """The turn lost the conversation to a newer one and must not write its reply."""
 
 
+# A return the customer does not answer within this long is dropped, so a later "yes" about
+# something else can never complete it.
+PENDING_RETURN_TTL = timedelta(minutes=15)
+
+
 class Keep:
     """Marks "leave it as it is" where None already means "clear"."""
 
@@ -203,7 +208,12 @@ def begin_turn(
     history = _history_before(db, conversation_id, history_seq, history_limit)
     db.commit()
     pending = None
-    if conversation.pending_return_order_id and conversation.pending_return_stage:
+    if (
+        conversation.pending_return_order_id
+        and conversation.pending_return_stage
+        and conversation.pending_return_at is not None
+        and now - conversation.pending_return_at <= PENDING_RETURN_TTL
+    ):
         pending = PendingReturn(
             order_id=conversation.pending_return_order_id,
             stage=ReturnStage(conversation.pending_return_stage),
@@ -244,8 +254,15 @@ def finish_turn(
         conversation.handoff_ticket_id = escalation_ticket_id
         _append(db, conversation, "system", ESCALATION_NOTICE, now, kind=MessageKind.SYSTEM)
     if not isinstance(pending_return, Keep):
-        conversation.pending_return_order_id = pending_return.order_id if pending_return else None
-        conversation.pending_return_stage = pending_return.stage.value if pending_return else None
+        order_id = pending_return.order_id if pending_return else None
+        stage = pending_return.stage.value if pending_return else None
+        if (order_id, stage) != (
+            conversation.pending_return_order_id,
+            conversation.pending_return_stage,
+        ):
+            # Timed from when it began (or moved on), not from every turn that carries it along.
+            conversation.pending_return_at = now if pending_return else None
+        conversation.pending_return_order_id, conversation.pending_return_stage = order_id, stage
     conversation.turn_started_at = conversation.turn_id = None
     db.commit()
 

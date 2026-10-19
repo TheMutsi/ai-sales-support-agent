@@ -308,3 +308,37 @@ def test_a_pending_return_is_kept_between_turns_and_cleared_when_asked(db, conve
         db, conversation_id=conversation.id, turn=third, content="Done", now=NOW, pending_return=None
     )
     assert _begin(db, conversation, "thanks", now=NOW + timedelta(seconds=15)).pending_return is None
+
+
+def test_a_pending_return_is_dropped_when_it_is_not_answered_in_time(db, conversation):
+    from app.chat.turns import PENDING_RETURN_TTL
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.CONFIRM)
+    first = _begin(db, conversation, "cancel my order")
+    finish_turn(
+        db, conversation_id=conversation.id, turn=first, content="Confirm?", now=NOW, pending_return=pending
+    )
+
+    soon = _begin(db, conversation, "yes", now=NOW + PENDING_RETURN_TTL)
+    finish_turn(db, conversation_id=conversation.id, turn=soon, content="ok", now=NOW + PENDING_RETURN_TTL)
+    late = _begin(db, conversation, "yes", now=NOW + PENDING_RETURN_TTL + timedelta(seconds=1))
+
+    assert soon.pending_return == pending  # still within the time
+    assert late.pending_return is None  # a later "yes" cannot complete it
+
+
+def test_carrying_a_pending_return_along_does_not_restart_its_time(db, conversation):
+    from app.chat.turns import PENDING_RETURN_TTL
+    from app.schemas.orders import PendingReturn, ReturnStage
+
+    pending = PendingReturn(order_id="A" * 20, stage=ReturnStage.OFFER)
+    first = _begin(db, conversation, "reject my order")
+    finish_turn(db, conversation_id=conversation.id, turn=first, content="Offer", now=NOW, pending_return=pending)
+    other = NOW + PENDING_RETURN_TTL / 2
+    second = _begin(db, conversation, "what plans are there?", now=other)
+    finish_turn(db, conversation_id=conversation.id, turn=second, content="Plans", now=other, pending_return=pending)
+
+    late = _begin(db, conversation, "yes", now=NOW + PENDING_RETURN_TTL + timedelta(seconds=1))
+
+    assert late.pending_return is None

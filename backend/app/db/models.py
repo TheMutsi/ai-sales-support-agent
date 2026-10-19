@@ -146,6 +146,7 @@ class Conversation(Base):
     # and whether they were offered to keep it or asked to confirm cancelling it.
     pending_return_order_id: Mapped[str | None]
     pending_return_stage: Mapped[str | None]
+    pending_return_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     handoff_agent_name: Mapped[str | None]  # the name the visitor sees, while `active`
     handoff_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     handoff_ticket_id: Mapped[uuid.UUID | None] = mapped_column(
