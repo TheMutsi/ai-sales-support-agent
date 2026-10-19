@@ -31,6 +31,7 @@ def upgrade() -> None:
     sa.Column('from_address', sa.String(), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
+    sa.CheckConstraint("security in ('starttls', 'ssl', 'none')", name='ck_tenant_smtp_security'),
     sa.PrimaryKeyConstraint('tenant_id')
     )
     # ### end Alembic commands ###

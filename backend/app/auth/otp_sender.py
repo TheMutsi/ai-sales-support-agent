@@ -17,6 +17,7 @@ from app.db.models import Tenant, TenantSmtp
 logger = logging.getLogger(__name__)
 
 _SMTP_TIMEOUT_SECONDS = 10
+SMTP_SECURITY = ("starttls", "ssl", "none")
 
 
 class OtpSender(Protocol):
@@ -52,6 +53,14 @@ class SmtpOtpSender:
         message["To"] = email
         message["Subject"] = "Your verification code"
         message.set_content(f"Your verification code is {code}. It expires in a few minutes.")
+        if config.security not in SMTP_SECURITY:
+            raise ValueError(f"unknown smtp security {config.security!r}")
+        # Credentials over a connection nobody encrypts would be readable on the way: refuse.
+        has_credentials = bool(config.username or config.password_encrypted)
+        if config.security == "none" and has_credentials:
+            raise ValueError("smtp credentials need starttls or ssl")
+        if bool(config.username) != bool(config.password_encrypted):
+            raise ValueError("smtp username and password must be set together")
         password = decrypt_secret(config.password_encrypted) if config.password_encrypted else None
         context = ssl.create_default_context()
         if config.security == "ssl":

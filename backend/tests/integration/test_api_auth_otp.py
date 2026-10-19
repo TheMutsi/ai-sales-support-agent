@@ -198,3 +198,14 @@ def test_a_tenant_with_a_mail_server_sends_through_it_and_keeps_the_password_enc
     with SessionLocal() as db:
         stored = db.execute(text("select password_encrypted from tenant_smtp")).scalar_one()
     assert "s3cret" not in stored
+
+
+def test_the_database_refuses_an_unknown_smtp_security_value(shop):
+    from sqlalchemy.exc import IntegrityError
+
+    from app.db.models import TenantSmtp
+
+    with SessionLocal() as db:
+        db.add(TenantSmtp(tenant_id=shop["tenant"].id, host="h", port=25, security="tls", from_address="a@b.test"))
+        with pytest.raises(IntegrityError):
+            db.commit()

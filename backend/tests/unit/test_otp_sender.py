@@ -100,3 +100,27 @@ def test_outside_local_environments_a_tenant_without_a_mail_server_cannot_send()
     assert isinstance(sender, NoOtpProvider)
     with pytest.raises(RuntimeError, match="email provider"):
         sender.send(email="a@b.test", code="1")
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"security": "STARTTLS"},  # a typo must not fall back to a plain connection
+        {"security": "tls"},
+        {"security": "none"},  # credentials over an unencrypted connection
+        {"username": None},  # half configured: a password without a user
+        {"password_encrypted": None},  # a user without a password
+    ],
+)
+def test_a_misconfigured_row_fails_before_connecting(overrides):
+    with pytest.raises(ValueError, match="smtp"):
+        SmtpOtpSender(_config(**overrides)).send(email="a@b.test", code="1")
+    assert FakeSmtp.instances == []
+
+
+def test_no_encryption_is_allowed_only_without_credentials():
+    SmtpOtpSender(_config(security="none", username=None, password_encrypted=None)).send(
+        email="a@b.test", code="1"
+    )
+
+    assert [call[0] for call in FakeSmtp.instances[0].calls] == ["send"]
