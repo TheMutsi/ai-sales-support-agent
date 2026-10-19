@@ -108,7 +108,11 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
           <>
             <div className="detail-head">
               <h3>{who(detail)}</h3>
-              <span className={`chip ${detail.handoff_status}`}>{waiting ? "Waiting" : active ? `With ${detail.handoff_agent_name ?? "an agent"}` : detail.handoff_status}</span>
+              {(waiting || active) && (
+                <span className={`chip ${detail.handoff_status}`}>
+                  {waiting ? "Waiting" : `With ${detail.handoff_agent_name ?? "an agent"}`}
+                </span>
+              )}
             </div>
             {detail.messages.map((message) => (
               <p key={message.seq} className={`message ${message.role}`}>
