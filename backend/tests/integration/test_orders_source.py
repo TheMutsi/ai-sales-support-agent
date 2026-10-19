@@ -87,6 +87,13 @@ def test_a_customers_orders_are_listed_for_that_customer_only(db: Session):
     source = SimulatedOrderSource(SessionLocal)
 
     orders = asyncio.run(source.list_orders(tenant_id=mail3.tenant_id, customer_id=mail3.id))
+    others = asyncio.run(
+        source.list_orders(
+            tenant_id=mail3.tenant_id,
+            customer_id=db.query(Customer).filter_by(email="mail4@gmail.com").one().id,
+        )
+    )
+    assert [o.customer_email for o in others] == ["mail4@gmail.com"]
 
     assert [(o.customer_email, o.status, o.amount_cents) for o in orders] == [
         ("mail3@gmail.com", OrderStatus.IN_DELIVERY, 6999)
