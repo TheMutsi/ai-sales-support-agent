@@ -20,7 +20,7 @@ from enum import StrEnum
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Conversation, Message
+from app.db.models import Conversation, Message, ReturnEvent
 from app.schemas.cards import Card, CardAction
 from app.schemas.orders import PendingReturn, ReturnStage
 
@@ -246,6 +246,7 @@ def finish_turn(
     escalation_ticket_id: uuid.UUID | None = None,
     pending_return: PendingReturn | None | Keep = KEEP,
     cards: list[Card] | None = None,
+    return_event: dict | None = None,
 ) -> None:
     """Saves the reply. If the turn opened a ticket, the conversation now waits for a person:
     from here on the assistant stops answering it (see `begin_turn`). `pending_return` replaces
@@ -256,6 +257,8 @@ def finish_turn(
         raise TurnSuperseded
     reply_to = turn.user_seq if kind is MessageKind.TEXT else None
     _append(db, conversation, "assistant", content, now, reply_to_seq=reply_to, kind=kind, cards=cards)
+    if return_event is not None:
+        db.add(ReturnEvent(**return_event))  # with the reply, in one transaction
     if escalation_ticket_id is not None and conversation.handoff_status == HandoffStatus.NONE:
         conversation.handoff_status = HandoffStatus.WAITING
         conversation.handoff_requested_at = now

@@ -249,6 +249,54 @@ class IdentificationEvent(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)
 
 
+class ReturnEvent(Base):
+    """One turn of a customer rejecting or returning an order, for analysis: where they were, what
+    they did (a button or words, and what was decided from it), what the step answered and what it
+    offered or gave. One row per turn that went through `order_return`, written in the same
+    transaction as the reply, so the two cannot disagree.
+
+    A funnel is these rows grouped by (conversation, order) in time order; a customer who just
+    leaves has no row for it, so abandoning is "the last row is not final". It holds no free text
+    (what they wrote is in `messages`, found by `user_seq` while that message is kept), so it can
+    outlive the messages and their retention."""
+
+    __tablename__ = "return_events"
+    __table_args__ = (
+        Index("ix_return_events_tenant_created", "tenant_id", "created_at"),
+        Index("ix_return_events_conversation_order", "conversation_id", "order_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id", ondelete="SET NULL"))
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL")
+    )
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id", ondelete="SET NULL"))
+    identity_level: Mapped[str]
+    user_seq: Mapped[int]  # the visitor's message of this turn
+    # How it was read: `action` is a button (rules), `text` is words (the model reads them).
+    input_type: Mapped[str]
+    action: Mapped[str | None]  # the button, for `action`
+    action_order_id: Mapped[str | None]  # the order a "choose this one" button named
+    reading: Mapped[str | None]  # the decision taken: reject | refund | credits | keep | unclear
+    stage_before: Mapped[str | None]  # the step the customer was in (null: just asked)
+    stage_after: Mapped[str | None]  # the step they are in now (null: finished)
+    outcome: Mapped[str]  # a `ReturnOutcome`
+    order_id: Mapped[str | None]  # null while they have not picked one
+    order_status: Mapped[str | None]
+    order_amount_cents: Mapped[int | None]
+    candidates: Mapped[int]  # orders shown to choose from (0 when none were)
+    offer_refund_cents: Mapped[int | None]  # what the step offered
+    offer_credit_cents: Mapped[int | None]
+    taken_refund_cents: Mapped[int | None]  # what was recorded when they took it
+    taken_credit_cents: Mapped[int | None]
+    gift: Mapped[str | None]
+    model: Mapped[str]  # what would have read a written message (kept for a click too)
+    app_version: Mapped[str]
+    duration_ms: Mapped[int]  # from receiving the message to having the reply
+
+
 class RateLimitCounter(Base):
     """How many requests a key (an address, a conversation) made in one fixed time
     window. In Postgres rather than memory so every server instance shares the count."""

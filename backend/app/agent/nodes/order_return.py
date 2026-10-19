@@ -218,13 +218,14 @@ async def _continue(
     return pending, again
 
 
-def _answer(pending: PendingReturn | None, result: ReturnResult) -> dict:
+def _answer(pending: PendingReturn | None, result: ReturnResult, reading: ReturnReading | None = None) -> dict:
     """The state update, with the reply: no model words what this step says."""
     return {
         "pending_return": pending,
         "return_result": result,
         "messages": [AIMessage(content=reply_for(result))],
         "intent": Intent.ORDER_RETURN,  # a click skips the classifier; the summary still says what it was
+        "return_reading": reading.choice if reading else None,  # for the record of this turn
     }
 
 
@@ -246,12 +247,12 @@ async def order_return_node(state: AgentState) -> dict:
         )
         named = by_id.get(reading.order_id) if reading.order_id else None
         if named is not None and named.order_id != order.order_id and _actionable(named):
-            return _answer(*_start(named))  # they named another order: that one is meant
+            return _answer(*_start(named), reading=reading)  # they named another order: that one is meant
         if reading.choice is ReturnChoice.KEEP:
-            return _answer(None, ReturnResult(outcome=ReturnOutcome.KEPT_AS_IS, order=order))
+            return _answer(None, ReturnResult(outcome=ReturnOutcome.KEPT_AS_IS, order=order), reading)
         if reading.choice is ReturnChoice.REJECT:
-            return _answer(*_start(order))
-        return _answer(*_check(order))  # not understood: ask again, same place
+            return _answer(*_start(order), reading=reading)
+        return _answer(*_check(order), reading=reading)  # not understood: ask again, same place
 
     if pending is not None and pending.order_id in by_id:
         order = by_id[pending.order_id]
@@ -261,7 +262,7 @@ async def order_return_node(state: AgentState) -> dict:
         }.get(pending.stage, CONFIRM_SITUATION).format(order_id=order.order_id)
         reading = await _reading(state, [order], situation, pending.stage)
         new_pending, result = await _continue(source, ids, order, pending, reading.choice)
-        return _answer(new_pending, result)
+        return _answer(new_pending, result, reading)
 
     candidates = [o for o in orders if _actionable(o)]
     if not candidates:
@@ -273,8 +274,8 @@ async def order_return_node(state: AgentState) -> dict:
         order = by_id.get(reading.order_id) if reading.order_id else None
     if order is None:
         result = ReturnResult(outcome=ReturnOutcome.CHOOSE_ORDER, candidates=candidates)
-        return _answer(None, result)
+        return _answer(None, result, reading)
     # Only when the customer named it is it taken as meant; a single order is still asked about.
     if reading is None:
         return _answer(*_check(order))
-    return _answer(*_start(order))
+    return _answer(*_start(order), reading=reading)

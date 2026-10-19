@@ -115,3 +115,23 @@ def test_retrying_a_stored_click_replays_its_reply_instead_of_saying_it_was_not_
     retry = _open_turn(claims, request)  # the latest reply no longer holds the button
 
     assert retry.action is TurnAction.REPLAY and retry.reply == "Your order stays."
+
+
+def test_the_event_of_a_return_turn_is_saved_with_the_reply_and_only_then(setup):
+    from app.db.models import ReturnEvent
+
+    claims, conversation_id = setup
+    _offer(conversation_id, KEEP)
+    turn = _open_turn(claims, _click("keep_order"))
+    event = {
+        "tenant_id": claims.tenant_id, "conversation_id": conversation_id, "customer_id": None,
+        "identity_level": "anonymous", "user_seq": turn.user_seq, "input_type": "action",
+        "action": "keep_order", "outcome": "kept_as_is", "candidates": 0, "model": "m",
+        "app_version": "v", "duration_ms": 5,
+    }
+    with SessionLocal() as db:
+        assert db.query(ReturnEvent).count() == 0  # the click alone records nothing
+        finish_turn(db, conversation_id=conversation_id, turn=turn, content="Your order stays.", now=NOW, return_event=event)
+        saved = db.query(ReturnEvent).one()
+        assert (saved.action, saved.outcome, saved.user_seq) == ("keep_order", "kept_as_is", turn.user_seq)
+        assert saved.created_at is not None and saved.stage_before is None

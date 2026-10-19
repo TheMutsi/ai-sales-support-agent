@@ -23,7 +23,7 @@ from typing import Annotated, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
-from app.schemas.agent import Intent
+from app.schemas.agent import Intent, ReturnChoice
 from app.schemas.business import EligibilityResult, UpsellDecision
 from app.schemas.cards import CardAction
 from app.schemas.orders import OrderDetails, PendingReturn, ReturnResult
@@ -62,6 +62,8 @@ class AgentState(TypedDict):
     action: CardAction | None
     action_order_id: str | None
     return_result: ReturnResult | None
+    # What the customer's message was read as this turn (a click or the model), for the record.
+    return_reading: ReturnChoice | None
 
     eligibility_result: EligibilityResult | None
     upsell_decision: UpsellDecision | None
