@@ -339,6 +339,7 @@ class OrderAdjustment(Base):
     refund_cents: Mapped[int | None]
     credit_points: Mapped[int | None]
     coupon_code: Mapped[str | None]
+    gift: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

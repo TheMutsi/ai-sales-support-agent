@@ -83,8 +83,9 @@ async def test_it_refuses_to_run_without_an_order_in_the_session(orders):
 def test_the_writer_is_given_the_order_as_text_with_the_amount_already_in_dollars():
     blob = _build_context_blob({"order_details": _order()})
 
-    assert "Order:" in blob and ORDER_ID in blob
-    assert "$99.00" in blob and "paid" in blob and "pro" in blob and "2026-09-17" in blob
+    assert "Order:" in blob
+    assert ORDER_ID not in blob  # an order is never shown by its number
+    assert "$99.00" in blob and "paid" in blob and "Pro" in blob and "2026-09-17" in blob
     assert "99.0" not in blob.replace("$99.00", "")  # no raw cents for the model to convert
 
 

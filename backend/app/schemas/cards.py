@@ -51,4 +51,12 @@ class CouponCard(BaseModel):
     subtitle: str | None = None
 
 
-Card = Annotated[ActionCard | ProductCard | CouponCard, Field(discriminator="type")]
+class DividerCard(BaseModel):
+    """A mark between groups of cards (a "+" between a gift and the choices that come with it)."""
+
+    type: Literal["divider"] = "divider"
+    id: str
+    label: str = ""
+
+
+Card = Annotated[ActionCard | ProductCard | CouponCard | DividerCard, Field(discriminator="type")]

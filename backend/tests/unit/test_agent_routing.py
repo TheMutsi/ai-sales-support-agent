@@ -309,8 +309,8 @@ def test_a_pending_return_does_not_widen_who_may_act():
     assert route_after_intent(no_customer) == "response_writer"
 
 
-def test_the_return_step_goes_on_to_the_writer_in_the_compiled_graph():
+def test_the_return_step_writes_its_own_reply_and_ends_the_turn_in_the_compiled_graph():
     from app.agent.graph import build_graph
 
     edges = {(e.source, e.target) for e in build_graph().get_graph().edges}
-    assert ("order_return", "response_writer") in edges
+    assert ("order_return", "__end__") in edges and ("order_return", "response_writer") not in edges

@@ -38,6 +38,7 @@ class OrderSource(Protocol):
         customer_id: uuid.UUID,
         order_id: str,
         choice: RetentionChoice,
+        with_gift: bool = False,
     ) -> RetentionReceipt | None:
         """Records that the customer kept the order for the refund or the points the rules give
         for its amount (computed here from the order itself, never taken from the caller). At

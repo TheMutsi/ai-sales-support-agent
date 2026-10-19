@@ -59,7 +59,8 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_edge(Node.GET_PLAN_CATALOG, Node.RESPONSE_WRITER)
     builder.add_edge(Node.GET_ORDER_STATUS, Node.RESPONSE_WRITER)
     builder.add_edge(Node.GET_CUSTOMER_ORDERS, Node.RESPONSE_WRITER)
-    builder.add_edge(Node.ORDER_RETURN, Node.RESPONSE_WRITER)
+    # The step writes its own reply (fixed text), so no model words it and nothing is checked after.
+    builder.add_edge(Node.ORDER_RETURN, END)
     builder.add_edge(Node.HUMAN_ESCALATION, Node.RESPONSE_WRITER)
     builder.add_conditional_edges(Node.RESPONSE_WRITER, route_after_response_writer)
     builder.add_edge(Node.KNOWLEDGE_TOOL, Node.RESPONSE_WRITER)

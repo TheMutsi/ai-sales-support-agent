@@ -32,6 +32,12 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
             </span>
             <ChevronRight />
           </button>
+        ) : card.type === "divider" ? (
+          <div key={card.id} className="mew-divider" role="separator">
+            <span />
+            {card.label && <b>{card.label}</b>}
+            <span />
+          </div>
         ) : card.type === "coupon" ? (
           <div key={card.id} className="mew-card mew-coupon">
             <span className="mew-card-text">

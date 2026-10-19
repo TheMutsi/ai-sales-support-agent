@@ -9,6 +9,7 @@ _TILES = {
     "starter": ("#f8a899", "#d9625a"),
     "pro": ("#8f2a2e", "#c4655f"),
     "enterprise": ("#2b2d42", "#6a6f9c"),
+    "gift": ("#f2b45a", "#d9803a"),
 }
 
 

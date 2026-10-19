@@ -502,4 +502,12 @@ describe("cards", () => {
     expect(container.querySelector(".mew-coupon strong")?.textContent).toBe("Your next order is free");
     expect(container.querySelector(".mew-code")?.textContent).toBe("FREE-ABC123");
   });
+
+  it("draws a divider between a gift and the choices that come with it", async () => {
+    const { Cards } = await import("./Cards");
+    mount(<Cards cards={[product, { type: "divider", id: "d", label: "+" }, action]} active onPick={() => {}} onZoom={() => {}} />);
+    const order = Array.from(container.querySelector(".mew-cards")!.children).map((el) => el.className.split(" ").pop());
+    expect(order).toEqual(["mew-product", "mew-divider", "mew-action"]);
+    expect(container.querySelector(".mew-divider b")?.textContent).toBe("+");
+  });
 });
