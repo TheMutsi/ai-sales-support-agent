@@ -45,7 +45,9 @@ export function App() {
   return (
     <div className="shell">
       <header>
-        <strong>MewFlow back office</strong>
+        <span className="brand">
+          <span className="brand-mark" aria-hidden>M</span>MewFlow back office
+        </span>
         <label>
           Tenant{" "}
           <select
@@ -60,8 +62,10 @@ export function App() {
             ))}
           </select>
         </label>
-        <span className="role">{session.role}</span>
-        <button onClick={leave}>Leave</button>
+        <span className="spacer" />
+        <span className="who">{session.name}</span>
+        <span className="role-badge">{session.role}</span>
+        <button className="ghost" onClick={leave}>Leave</button>
       </header>
       <nav>
         <button className={page === "config" ? "tab active" : "tab"} onClick={() => setPage("config")}>

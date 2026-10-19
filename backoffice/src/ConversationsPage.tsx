@@ -74,7 +74,10 @@ export function ConversationsPage({ session, tenantId, onExpired }: Props) {
       <div className="detail">
         {selected ? (
           <>
-            <h3>{who(selected)}</h3>
+            <div className="detail-head">
+              <h3>{who(selected)}</h3>
+              <span className="chip">{selected.identity_level}</span>
+            </div>
             {selected.identification.length > 0 && (
               <ol className="timeline">
                 {selected.identification.map((event) => (

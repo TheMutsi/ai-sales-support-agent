@@ -46,9 +46,12 @@ export function ConfigPage({ session, tenantId, onExpired }: Props) {
   return (
     <section>
       <h2>{config.name}: configuration</h2>
+      <div className="card">
       <h3>Allowed origins</h3>
       <p className="hint">The pages the widget may run on, one per line (https://shop.example).</p>
       <textarea rows={5} value={origins} onChange={(e) => setOrigins(e.target.value)} disabled={!canWrite} />
+      </div>
+      <div className="card">
       <h3>What each identity level may do</h3>
       <p className="hint">Unchecked "customise" keeps the defaults.</p>
       {LEVELS.map((level) => (
@@ -68,8 +71,9 @@ export function ConfigPage({ session, tenantId, onExpired }: Props) {
               {level}: customise
             </label>
           </legend>
-          {level in custom &&
-            SCOPES.map((scope) => (
+          {level in custom && (
+            <div className="scopes">
+            {SCOPES.map((scope) => (
               <label key={scope} className="scope">
                 <input
                   type="checkbox"
@@ -79,13 +83,18 @@ export function ConfigPage({ session, tenantId, onExpired }: Props) {
                 {scope}
               </label>
             ))}
+            </div>
+          )}
         </fieldset>
       ))}
-      {message && <p role="status">{message}</p>}
-      <button onClick={save} disabled={!canWrite}>
-        Save
-      </button>
-      {!canWrite && <span className="hint"> Your role cannot change the configuration.</span>}
+      </div>
+      <div className="actions">
+        <button className="primary" onClick={save} disabled={!canWrite}>
+          Save
+        </button>
+        {message && <p role="status" className="saved">{message}</p>}
+        {!canWrite && <span className="hint">Your role cannot change the configuration.</span>}
+      </div>
     </section>
   );
 }

@@ -25,8 +25,12 @@ export function LoginPage({ onEnter }: { onEnter: (session: AdminSession) => voi
       .catch(() => setError("Could not enter."));
 
   return (
+    <div className="login-wrap">
     <div className="login">
-      <h1>MewFlow back office</h1>
+      <span className="brand">
+        <span className="brand-mark" aria-hidden>M</span>MewFlow
+      </span>
+      <h1>Back office</h1>
       <p className="pending">
         <strong>Login pending.</strong> There is no authentication yet: pick a role to try the back
         office. This page exists only in local environments.
@@ -56,9 +60,10 @@ export function LoginPage({ onEnter }: { onEnter: (session: AdminSession) => voi
         </label>
       )}
       {error && <p className="error">{error}</p>}
-      <button onClick={enter} disabled={role !== "operator" && !tenantId}>
+      <button className="primary" onClick={enter} disabled={role !== "operator" && !tenantId}>
         Enter
       </button>
+    </div>
     </div>
   );
 }
