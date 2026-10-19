@@ -41,7 +41,12 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
   );
 
   const refresh = useCallback(() => {
-    listEscalations(session.token, tenantId).then(setItems).catch(fail);
+    listEscalations(session.token, tenantId)
+      .then((loaded) => {
+        setItems(loaded);
+        setError(null);
+      })
+      .catch(fail);
     if (!selected) return;
     const mine = ++latest.current;
     readConversation(session.token, tenantId, selected)
@@ -66,6 +71,8 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
 
   const open = (id: string) => {
     setDetail(null);
+    setText("");
+    setNotes("");
     setSelected(id);
   };
 

@@ -214,7 +214,7 @@ describe("while a person has the conversation", () => {
     expect(api.messages).toHaveBeenCalledTimes(1);
     expect(api.startConversation).not.toHaveBeenCalled();
     expect(api.login).not.toHaveBeenCalled();
-    expect(chat.getState().error).toBeNull();
+    expect(chat.getState().error).toBe("Your session expired. Send a message to continue.");
   });
 
   it("lets only the newest poll change the screen", async () => {

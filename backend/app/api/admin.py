@@ -77,7 +77,7 @@ def placeholder_login(
         if request.tenant_id is None or db.get(Tenant, request.tenant_id) is None:
             raise error(422, "tenant_required")
         tenant_id = request.tenant_id
-    name = (request.name or request.role.value.capitalize()).strip()
+    name = (request.name or "").strip() or request.role.value.capitalize()
     token, expires_at = issue_admin_token(
         role=request.role,
         tenant_id=tenant_id,
