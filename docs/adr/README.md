@@ -30,6 +30,7 @@ links back to it.
 | [0015](0015-embeddable-widget-in-an-iframe.md) | The widget is one script that renders into an iframe, with its state outside React | Accepted |
 | [0016](0016-back-office-with-roles-and-a-config-cache.md) | The back office has roles from the start, a placeholder login, and a cache for tenant configuration | Proposed |
 | [0017](0017-human-handoff-in-the-same-conversation.md) | An escalation hands the same conversation to a person, who chats one to one | Accepted |
+| [0018](0018-rejecting-an-order-is-decided-by-rules-the-model-only-reads.md) | Rejecting an order is decided by rules; the model only reads what the customer means | Accepted |
 
 For the system and agent-graph diagrams, see [`docs/architecture.md`](../architecture.md).
 

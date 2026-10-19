@@ -231,7 +231,7 @@ def reset_demo_shop(db: Session) -> int:
         for c in db.query(Customer).filter(Customer.email.in_(emails), Customer.tenant_id == tenant.id)
     ]
     db.query(Conversation).filter(Conversation.customer_id.in_(customer_ids)).update(
-        {"pending_return_order_id": None, "pending_return_stage": None}
+        {"pending_return_order_id": None, "pending_return_stage": None, "pending_return_at": None}
     )
     db.commit()
     return len(orders)

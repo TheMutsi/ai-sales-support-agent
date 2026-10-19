@@ -13,7 +13,8 @@ Categories:
   charges, payment methods, subscription status, and the billing consequences of
   changing plans.
 - upgrade_request: wants to move to a higher plan, or asks how to do it.
-- refund_request: explicitly asks for money back, or asks to cancel.
+- refund_request: explicitly asks for money back, or asks to cancel their subscription or
+  plan.
 - human_escalation: explicitly asks to talk to a person.
 - small_talk: ONLY a greeting, a thank-you or a goodbye ("Thanks!", "Hi", "That's
   all, bye"). It never asks for anything: any question or request, even an
@@ -21,6 +22,10 @@ Categories:
 - order_status: asks about the state of one order or purchase they made ("what is the
   status of my order?", "has my order gone through?", "where is my order?", "was my
   order refunded?").
+- order_return: wants to reject, cancel or return an order or purchase they made ("I
+  don't want my order", "cancel my order", "I want to return what I bought"), or answers an
+  offer or a question the assistant just made about doing that: choosing the refund or the
+  points, "cancel it anyway", "yes, cancel it", "never mind, keep it".
 - unsupported: not about MewFlow, or there isn't enough information to tell.
 
 Boundaries that are easy to get wrong:
@@ -28,6 +33,8 @@ Boundaries that are easy to get wrong:
   technical_support, even if it mentions a feature or a plan.
 - A customer describing their own account or plan does not change the category;
   classify what they are asking for.
+- Cancelling a subscription or plan is refund_request; rejecting or returning a single
+  order or purchase is order_return.
 - A question about how billing or refunds work is billing_question; refund_request
   is only an explicit request for money back.
 - A hypothetical ("if I do X, would I get money back?") asks how the policy

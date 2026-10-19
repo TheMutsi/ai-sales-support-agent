@@ -43,6 +43,7 @@ class EvalScenario(StrEnum):
     ANONYMOUS_VISITOR = "anonymous_visitor"
     # Asking about an order: what the agent may read, say and refuse for someone who proved one.
     ORDER_STATUS = "order_status"
+    ORDER_RETURN = "order_return"
 
 
 class EvalIdentity(StrEnum):

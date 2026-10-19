@@ -24,6 +24,11 @@ _SAFETY_CONFIDENCE_THRESHOLD = 0.95
 # instead of relying only on LangGraph's generic recursion limit.
 _MAX_TOOL_CALL_ROUNDS = 2
 
+# What the classifier may call a bare answer to an offer or a question about a return ("yes",
+# "the first one"). Anything else, a cancelled subscription or a request for a person included,
+# goes its own way and must not complete a return.
+_RETURN_FOLLOW_UPS = frozenset({Intent.ORDER_RETURN, Intent.SMALL_TALK})
+
 
 def route_after_input_guardrail(state: AgentState) -> Literal["__end__", Node.INTENT_ROUTER]:
     return END if state["input_blocked"] else Node.INTENT_ROUTER
@@ -36,6 +41,7 @@ def route_after_intent(
     Node.GET_PLAN_CATALOG,
     Node.GET_ORDER_STATUS,
     Node.GET_CUSTOMER_ORDERS,
+    Node.ORDER_RETURN,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -61,6 +67,7 @@ def route_after_safety_judge(
     Node.GET_PLAN_CATALOG,
     Node.GET_ORDER_STATUS,
     Node.GET_CUSTOMER_ORDERS,
+    Node.ORDER_RETURN,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -76,6 +83,7 @@ def _dispatch_by_intent(
     Node.GET_PLAN_CATALOG,
     Node.GET_ORDER_STATUS,
     Node.GET_CUSTOMER_ORDERS,
+    Node.ORDER_RETURN,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -83,11 +91,24 @@ def _dispatch_by_intent(
     # A missing list means "no scopes", never "all of them": forgetting to set it must
     # lock the visitor out, not open the account.
     scopes = set(state.get("scopes") or [])
+    # Someone in the middle of a return answers the assistant's offer or question: a bare "yes"
+    # is filed as small talk, so while one is pending (it lapses after a few minutes, see
+    # `PENDING_RETURN_TTL`) that continues it. A different request goes its own way.
+    if (
+        state.get("pending_return") is not None
+        and state.get("customer_id")
+        and Scope.REFUND_REQUEST in scopes
+        and state["intent"] in _RETURN_FOLLOW_UPS
+    ):
+        return Node.ORDER_RETURN
     if state["intent"] == Intent.UNSUPPORTED:
         # A ticket needs a customer. Without one the message is simply answered.
         return Node.HUMAN_ESCALATION if Scope.TICKET_CREATE in scopes else Node.RESPONSE_WRITER
     if REQUIRED_SCOPE[state["intent"]] not in scopes:
         return Node.REQUEST_IDENTITY
+    if state["intent"] == Intent.ORDER_RETURN:
+        # Rejecting an order acts on a customer's own orders, so a session without one cannot.
+        return Node.ORDER_RETURN if state.get("customer_id") else Node.REQUEST_IDENTITY
     if state["intent"] == Intent.ORDER_STATUS:
         # A session that proved one order reads that order, whatever the message says. A verified
         # customer's session names none, so all of their own orders are read (a customer proved
