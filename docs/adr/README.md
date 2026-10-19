@@ -31,6 +31,8 @@ links back to it.
 | [0016](0016-back-office-with-roles-and-a-config-cache.md) | The back office has roles from the start, a placeholder login, and a cache for tenant configuration | Proposed |
 | [0017](0017-human-handoff-in-the-same-conversation.md) | An escalation hands the same conversation to a person, who chats one to one | Accepted |
 | [0018](0018-rejecting-an-order-is-decided-by-rules-the-model-only-reads.md) | Rejecting an order is decided by rules; the model only reads what the customer means | Accepted |
+| [0019](0019-buttons-are-typed-actions-decided-by-rules.md) | A button is a typed action decided by rules; only written text goes to the model | Accepted |
+| [0020](0020-return-events-for-outcome-analysis.md) | Every turn of a return is recorded in its own table, apart from the messages | Accepted |
 
 For the system and agent-graph diagrams, see [`docs/architecture.md`](../architecture.md).
 

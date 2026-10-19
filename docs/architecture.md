@@ -38,7 +38,8 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  start([START]) --> ig[input_guardrail<br/><i>regex</i>]
+  start([START]) -- "written text" --> ig[input_guardrail<br/><i>regex</i>]
+  start -- "button click from a<br/>verified customer" --> orr
   ig -- injection matched --> stop([END])
   ig --> ir[intent_router<br/><i>LLM: intent + safety_confidence</i>]
   ir -- "safety_confidence < 0.95<br/>or intent = unsupported" --> sj[safety_judge<br/><i>LLM</i>]
@@ -51,9 +52,9 @@ flowchart TD
   dispatch -- pricing --> pc[get_plan_catalog<br/><i>prices from plans table</i>]
   dispatch -- "order status, with an order<br/>in the session" --> os[get_order_status<br/><i>the shop's orders, async</i>]
   dispatch -- "order status, customer with<br/>no order in the session" --> co[get_customer_orders<br/><i>their own orders</i>]
-  dispatch -- "order_return, or a follow-up<br/>to a pending return" --> orr[order_return<br/><i>rules + one model reading</i>]
+  dispatch -- "order_return, or a follow-up<br/>to a pending return" --> orr[order_return<br/><i>rules; a model reads only typed words</i>]
   co --> rw
-  orr --> rw
+  orr -- "fixed reply, no model" --> stop
   dispatch -- "upgrade / billing / refund" --> cc[get_customer_context]
   dispatch -- "human_escalation / unsupported<br/>(unsupported without ticket:create<br/>goes to response_writer)" --> he
   cc -- upgrade --> br[business_rules<br/><i>eligibility</i>]
@@ -85,6 +86,12 @@ Reading it:
 - **Knowledge-base search is the only action the model chooses**, on the
   KB-answerable intents (billing included), at most two rounds per turn
   ([ADR-0006](adr/0006-llm-driven-knowledge-base-search.md)).
+- **A button is not read by a model.** A click is a typed action (`input.type = "action"`), checked
+  against the cards the last reply offered and applied by `order_return` from a table of the
+  actions valid in each stage; it skips the input filter and the classifier
+  ([ADR-0019](adr/0019-buttons-are-typed-actions-decided-by-rules.md)). Each turn of a return is
+  recorded in `return_events` for outcome analysis
+  ([ADR-0020](adr/0020-return-events-for-outcome-analysis.md)).
 - **Every answer passes `guardrail`**, which replaces claims that state proves false
   ([ADR-0008](adr/0008-deterministic-output-guardrails.md)).
 
