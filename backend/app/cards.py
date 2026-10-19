@@ -81,8 +81,8 @@ def _return_cards(result: ReturnResult) -> list[Card]:
 
 
 def cards_for(final_state: dict) -> list[Card]:
-    """Cards for the reply this state produced. None for a reply the guardrail replaced, whose
-    text no longer matches what the step meant to say."""
+    """Cards for the reply this state produced. They come from what the steps did, so they stand
+    even if a guardrail rewrote the text around them."""
     if final_state.get("return_result") is not None:
         return _return_cards(final_state["return_result"])
     if final_state.get("customer_orders"):

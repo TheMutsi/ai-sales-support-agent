@@ -78,3 +78,20 @@ def test_a_plan_picture_is_drawn_for_known_plans_only():
     assert known.status_code == 200 and known.headers["content-type"] == "image/svg+xml"
     assert "Pro" in known.text and "<script" not in known.text
     assert unknown.status_code == 404
+
+
+def test_a_card_type_that_no_longer_exists_does_not_break_reading_old_messages():
+    from app.schemas.chat import StoredMessage
+
+    message = StoredMessage.model_validate(
+        {
+            "seq": 1, "role": "assistant", "kind": "text", "content": "x", "created_at": "2026-10-19T00:00:00Z",
+            "cards": [{"type": "carousel", "id": "old"}, {"type": "action", "id": "a", "title": "t", "message": "m"}],
+        }
+    )
+
+    assert [c.id for c in message.cards] == ["a"]
+
+
+def test_an_offer_without_its_order_shows_nothing():
+    assert cards_for(_result(ReturnOutcome.OFFER, offer=RetentionOffer(refund_cents=1, credit_points=1))) == []

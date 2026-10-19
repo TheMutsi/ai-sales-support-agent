@@ -84,6 +84,7 @@ class TurnStart:
     user_text: str = ""
     history: list[Message] = field(default_factory=list)  # oldest first, excludes the new message
     reply: str | None = None
+    reply_cards: list | None = None  # the stored cards of that reply, as saved
     handoff: HandoffStatus = HandoffStatus.NONE  # set with `HANDOFF`
     pending_return: PendingReturn | None = None  # the customer's unfinished return, with `RUN`
 
@@ -186,7 +187,7 @@ def begin_turn(
         )
         if reply is not None:
             db.commit()  # nothing changed; ends the transaction and frees the lock
-            return TurnStart(TurnAction.REPLAY, reply=reply.content)
+            return TurnStart(TurnAction.REPLAY, reply=reply.content, reply_cards=reply.cards)
         if conversation.handoff_status != HandoffStatus.NONE:
             db.commit()
             return TurnStart(TurnAction.HANDOFF, handoff=HandoffStatus(conversation.handoff_status))

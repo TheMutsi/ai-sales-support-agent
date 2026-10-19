@@ -42,7 +42,11 @@ class StoredMessage(BaseModel):
     @field_validator("cards", mode="before")
     @classmethod
     def _no_cards_is_an_empty_list(cls, value: object) -> object:
-        return [] if value is None else value  # the column is null for most messages
+        if value is None:
+            return []  # the column is null for most messages
+        # A card type that no longer exists must not break the whole message list.
+        known = {"action", "product"}
+        return [c for c in value if not isinstance(c, dict) or c.get("type") in known]
 
 
 class MessageList(BaseModel):
