@@ -5,7 +5,7 @@ shows (an offer the rules made, an order that was read), so the model cannot inv
 leave out a number. The text of the reply and the cards come from the same state.
 """
 
-from app.schemas.cards import ActionCard, Card, CardImage, ProductCard
+from app.schemas.cards import ActionCard, Card, CardImage, CouponCard, ProductCard
 from app.schemas.orders import OrderDetails, OrderStatus, ReturnOutcome, ReturnResult
 
 _STATUS_BADGE = {
@@ -55,11 +55,27 @@ def _return_cards(result: ReturnResult) -> list[Card]:
                     message=f"I'll take the {offer.credit_points:,} points",
                 ),
                 ActionCard(
+                    id="offer-free",
+                    title="Your next order, free",
+                    subtitle="Keep your order and your next one is on us",
+                    badge="Free",
+                    message="I'll take the next order free",
+                ),
+                ActionCard(
                     id="offer-reject",
                     title="No thanks",
                     subtitle="Reject the order anyway",
                     message="No thanks, I want to reject it anyway",
                 ),
+            ]
+        case ReturnOutcome.KEPT_WITH_FREE_ORDER if result.receipt and result.receipt.coupon_code:
+            return [
+                CouponCard(
+                    id=f"coupon-{result.receipt.coupon_code}",
+                    code=result.receipt.coupon_code,
+                    title="Your next order is free",
+                    subtitle="Use this code at checkout",
+                )
             ]
         case ReturnOutcome.CONFIRM_CANCEL if order is not None:
             return [

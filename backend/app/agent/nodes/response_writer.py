@@ -125,6 +125,8 @@ def _format_order(order: OrderDetails) -> str:
 def _retention_text(receipt: RetentionReceipt) -> str:
     if receipt.choice is RetentionChoice.REFUND:
         return f"a refund of ${(receipt.refund_cents or 0) / 100:,.2f} to their card"
+    if receipt.choice is RetentionChoice.NEXT_ORDER_FREE:
+        return f"their next order free (coupon {receipt.coupon_code})"
     return f"{receipt.credit_points or 0:,} points added to their account"
 
 
@@ -160,7 +162,8 @@ def _format_return(result: ReturnResult) -> str:
             return (
                 f"The customer wants to reject {what}. Before that, offer them to keep it "
                 f"for one of two things: (1) ${offer.refund_cents / 100:,.2f} back to their "
-                f"card, or (2) {offer.credit_points:,} points in their account.{on_its_way} "
+                f"card, (2) {offer.credit_points:,} points in their account, or (3) their next "
+                f"order free.{on_its_way} "
                 "Nothing has been done yet: ask which they prefer, and say nothing else about "
                 "charges or payments."
             )
@@ -180,12 +183,17 @@ def _format_return(result: ReturnResult) -> str:
             )
         case ReturnOutcome.CANCELLED:
             return f"{what} HAS BEEN cancelled: tell them so in the past tense."
-        case ReturnOutcome.KEPT_WITH_REFUND | ReturnOutcome.KEPT_WITH_CREDITS:
+        case (
+            ReturnOutcome.KEPT_WITH_REFUND
+            | ReturnOutcome.KEPT_WITH_CREDITS
+            | ReturnOutcome.KEPT_WITH_FREE_ORDER
+        ):
             assert result.receipt is not None
             return (
                 f"The customer kept {what} and took {_retention_text(result.receipt)}. That has "
                 "ALREADY BEEN DONE: tell them so in the past tense (for example \"I've added "
-                "2,100 points to your account\" or \"I've refunded $14.00 to your card\"). The "
+                "2,100 points to your account\", \"I've refunded $14.00 to your card\" or \"Your next "
+                "order is free, use the coupon code\"). The "
                 "order stays with them: it is not cancelled and does not need to be returned."
             )
         case ReturnOutcome.KEPT_AS_IS:

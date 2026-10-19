@@ -41,4 +41,14 @@ class ProductCard(BaseModel):
     image: CardImage
 
 
-Card = Annotated[ActionCard | ProductCard, Field(discriminator="type")]
+class CouponCard(BaseModel):
+    """A code the visitor was given."""
+
+    type: Literal["coupon"] = "coupon"
+    id: str
+    code: str
+    title: str
+    subtitle: str | None = None
+
+
+Card = Annotated[ActionCard | ProductCard | CouponCard, Field(discriminator="type")]

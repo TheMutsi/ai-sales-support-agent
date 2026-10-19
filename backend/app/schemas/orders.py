@@ -52,6 +52,7 @@ class RetentionChoice(StrEnum):
 
     REFUND = "refund"  # part of the price back to the card
     CREDITS = "credits"  # a larger part as points to spend in the shop
+    NEXT_ORDER_FREE = "next_order_free"  # their next order costs nothing (a coupon code)
 
 
 class RetentionOffer(BaseModel):
@@ -89,6 +90,7 @@ class ReturnOutcome(StrEnum):
     CANCELLED = "cancelled"
     KEPT_WITH_REFUND = "kept_with_refund"
     KEPT_WITH_CREDITS = "kept_with_credits"
+    KEPT_WITH_FREE_ORDER = "kept_with_free_order"
     KEPT_AS_IS = "kept_as_is"
     NOT_AVAILABLE = "not_available"  # the order changed under us: nothing was done
 
@@ -100,6 +102,7 @@ class RetentionReceipt(BaseModel):
     choice: RetentionChoice
     refund_cents: int | None = None
     credit_points: int | None = None
+    coupon_code: str | None = None  # for a free next order
 
 
 class ReturnResult(BaseModel):

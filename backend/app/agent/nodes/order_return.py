@@ -34,6 +34,13 @@ from app.schemas.orders import (
     ReturnStage,
 )
 
+# What each way of taking the offer records and what it is called afterwards.
+_TAKEN = {
+    ReturnChoice.REFUND: (RetentionChoice.REFUND, ReturnOutcome.KEPT_WITH_REFUND),
+    ReturnChoice.CREDITS: (RetentionChoice.CREDITS, ReturnOutcome.KEPT_WITH_CREDITS),
+    ReturnChoice.FREE_NEXT: (RetentionChoice.NEXT_ORDER_FREE, ReturnOutcome.KEPT_WITH_FREE_ORDER),
+}
+
 
 def _actionable(order: OrderDetails) -> bool:
     options = return_options(order)
@@ -97,20 +104,13 @@ async def _continue(
     if choice is ReturnChoice.REJECT:
         return None, await _cancel_or_explain(source, ids, order)
     offered = pending.stage is ReturnStage.OFFER
-    if offered and choice in (ReturnChoice.REFUND, ReturnChoice.CREDITS):
-        retention_choice = (
-            RetentionChoice.REFUND if choice is ReturnChoice.REFUND else RetentionChoice.CREDITS
-        )
+    if offered and choice in _TAKEN:
+        retention_choice, outcome = _TAKEN[choice]
         receipt = await source.keep_order_with_retention(
             order_id=order.order_id, choice=retention_choice, **ids
         )
         if receipt is None:
             return None, ReturnResult(outcome=ReturnOutcome.NOT_AVAILABLE, order=order)
-        outcome = (
-            ReturnOutcome.KEPT_WITH_REFUND
-            if choice is ReturnChoice.REFUND
-            else ReturnOutcome.KEPT_WITH_CREDITS
-        )
         return None, ReturnResult(outcome=outcome, order=order, receipt=receipt)
     # Not understood (or an offer answer to a plain confirmation): ask again, same place.
     again = ReturnResult(
