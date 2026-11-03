@@ -152,6 +152,10 @@ class Conversation(Base):
     handoff_ticket_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tickets.id", ondelete="SET NULL")
     )
+    # Public hints about the conversation (`device: iphone`, a `landing-sale` tag), set by the
+    # widget or the shop's page; see `app.chat.context`. Never a reason to allow anything.
+    properties: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, server_default="{}")
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
 
 
 class Message(Base):

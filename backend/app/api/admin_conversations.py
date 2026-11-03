@@ -39,6 +39,7 @@ class ConversationSummary(BaseModel):
     last_activity_at: datetime
     message_count: int
     first_message: str | None
+    tags: list[str]
 
 
 class MessageView(BaseModel):
@@ -64,6 +65,9 @@ class ConversationDetail(BaseModel):
     linked_via: str | None
     handoff_status: str
     handoff_agent_name: str | None
+    # The public hints the visitor's page set (see `app.chat.context`): not verified facts.
+    properties: dict[str, str]
+    tags: list[str]
     customer: CustomerView | None
     created_at: datetime
     last_activity_at: datetime
@@ -105,6 +109,7 @@ def list_conversations(
             last_activity_at=conversation.last_activity_at,
             message_count=conversation.last_seq,
             first_message=first[:_PREVIEW_CHARS] if first else None,
+            tags=conversation.tags,
         )
         for conversation, customer, first in db.execute(query)
     ]
@@ -139,6 +144,8 @@ def read_conversation(
         linked_via=conversation.linked_via,
         handoff_status=conversation.handoff_status,
         handoff_agent_name=conversation.handoff_agent_name,
+        properties=conversation.properties,
+        tags=conversation.tags,
         customer=customer_view(customer),
         created_at=conversation.created_at,
         last_activity_at=conversation.last_activity_at,

@@ -90,6 +90,9 @@ class TurnStart:
     # Set when the turn answers a button click: the rules decide it and no model reads it.
     click: CardAction | None = None
     click_order_id: str | None = None
+    # The conversation's public hints (see `app.chat.context`), read when the turn starts.
+    properties: dict[str, str] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
 
 
 ESCALATION_NOTICE = (
@@ -232,6 +235,8 @@ def begin_turn(
         user_text=user_text,
         history=history,
         pending_return=pending,
+        properties=dict(conversation.properties),
+        tags=list(conversation.tags),
     )
 
 

@@ -135,3 +135,16 @@ class ChatTurnSummary(BaseModel):
     identity_methods: list[str] = Field(default_factory=list)
     # Cards to show with the reply (offers to pick, orders as products), built from state.
     cards: list[Card] = Field(default_factory=list)
+
+
+class ContextUpdate(BaseModel):
+    """Changes to a conversation's properties and tags. A property set to `null` is removed."""
+
+    properties: dict[str, str | None] = Field(default_factory=dict, max_length=20)
+    add_tags: list[str] = Field(default_factory=list, max_length=20)
+    remove_tags: list[str] = Field(default_factory=list, max_length=20)
+
+
+class ConversationContext(BaseModel):
+    properties: dict[str, str]
+    tags: list[str]

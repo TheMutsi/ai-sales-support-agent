@@ -53,6 +53,7 @@ from app.auth.scopes import scopes_for
 from app.auth.session import SessionClaims
 from app.cards import cards_for
 from app.chat.actions import latest_cards, offered_card
+from app.chat.context import ContextError, update_context
 from app.chat.return_events import build_return_event
 from app.chat.turns import (
     KEEP,
@@ -80,6 +81,8 @@ from app.schemas.chat import (
     ActionInput,
     ChatRequest,
     ChatTurnSummary,
+    ContextUpdate,
+    ConversationContext,
     MessageList,
     StoredMessage,
 )
@@ -108,6 +111,8 @@ def _build_initial_state(
         "customer_id": str(session.customer_id) if session.customer_id else None,
         "tenant_id": str(session.tenant_id),
         "order_id": session.order_id,
+        "conversation_properties": turn.properties,
+        "conversation_tags": turn.tags,
         "pending_return": turn.pending_return,
         "action": turn.click,
         "action_order_id": turn.click_order_id,
@@ -157,7 +162,12 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
     )
 
 
-def _build_trace_metadata(session: SessionClaims, conversation_id: uuid.UUID) -> dict:
+def _build_trace_metadata(
+    session: SessionClaims,
+    conversation_id: uuid.UUID,
+    properties: dict[str, str] | None = None,
+    tags: list[str] | None = None,
+) -> dict:
     settings = get_settings()
     return {
         "customer_id": str(session.customer_id) if session.customer_id else None,
@@ -170,7 +180,8 @@ def _build_trace_metadata(session: SessionClaims, conversation_id: uuid.UUID) ->
         # Special keys Langfuse's LangChain integration maps onto the trace's
         # own session/tags fields instead of generic metadata.
         "langfuse_session_id": str(conversation_id),
-        "langfuse_tags": ["chat_endpoint"],
+        "langfuse_tags": ["chat_endpoint", *(f"tag:{t}" for t in tags or [])],
+        **{f"property_{key}": value for key, value in (properties or {}).items()},
     }
 
 
@@ -304,7 +315,9 @@ async def _stream_turn(
         get_client().start_as_current_observation(
             as_type="span",
             name="chat_turn",
-            metadata=_build_trace_metadata(session, conversation_id),
+            metadata=_build_trace_metadata(
+                session, conversation_id, turn.properties, turn.tags
+            ),
         )
         if tracing_enabled
         else nullcontext()
@@ -378,7 +391,9 @@ async def _stream_turn(
 
     final_text = final_state["messages"][-1].content
     state.settled = True  # from here the store decides the outcome, not the `finally`
-    kind = MessageKind.IDENTITY_REQUEST if final_state.get("identity_required") else MessageKind.TEXT
+    kind = (
+        MessageKind.IDENTITY_REQUEST if final_state.get("identity_required") else MessageKind.TEXT
+    )
     try:
         # Shielded, so a disconnect can't interrupt saving the reply halfway.
         receipt = final_state.get("ticket_receipt")
@@ -511,7 +526,10 @@ async def _handed_off(conversation_id: uuid.UUID, handoff: HandoffStatus) -> Asy
 
 @router.post(
     "/chat",
-    dependencies=[origin_guard_for_session, limit_by_conversation("chat", limit=30, window_seconds=600)],
+    dependencies=[
+        origin_guard_for_session,
+        limit_by_conversation("chat", limit=30, window_seconds=600),
+    ],
 )
 async def chat(
     request: ChatRequest, session: Annotated[SessionClaims, Depends(require_session)]
@@ -521,7 +539,10 @@ async def chat(
 
 @router.post(
     "/chat/resume",
-    dependencies=[origin_guard_for_session, limit_by_conversation("chat", limit=30, window_seconds=600)],
+    dependencies=[
+        origin_guard_for_session,
+        limit_by_conversation("chat", limit=30, window_seconds=600),
+    ],
 )
 async def resume(
     session: Annotated[SessionClaims, Depends(require_session)],
@@ -582,6 +603,28 @@ async def _run_turn(session: SessionClaims, request: ChatRequest) -> StreamingRe
         # generator's cleanup never runs; this frees the turn then, and does nothing else.
         background = BackgroundTask(_abandon_if_unsettled, state, store, session.conversation_id)
     return StreamingResponse(stream, media_type="text/event-stream", background=background)
+
+
+@router.post("/conversations/{conversation_id}/context", dependencies=[origin_guard_for_session])
+async def update_conversation_context(
+    conversation_id: uuid.UUID,
+    update: ContextUpdate,
+    session: Annotated[SessionClaims, Depends(require_session)],
+) -> ConversationContext:
+    """Adds or removes properties and tags on the session's own conversation (see
+    `app.chat.context`). Public hints, so any visitor may set them."""
+    if conversation_id != session.conversation_id:
+        raise HTTPException(status_code=404, detail={"code": "conversation_not_found"})
+
+    def write() -> tuple[dict[str, str], list[str]]:
+        with SessionLocal() as db:
+            return update_context(db, conversation_id=conversation_id, **update.model_dump())
+
+    try:
+        properties, tags = await run_in_threadpool(write)
+    except ContextError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code}) from None
+    return ConversationContext(properties=properties, tags=tags)
 
 
 @router.get("/conversations/{conversation_id}/messages", dependencies=[origin_guard_for_session])
