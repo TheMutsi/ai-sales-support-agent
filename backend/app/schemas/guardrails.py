@@ -42,6 +42,8 @@ class OutputCheckContext(BaseModel):
     # The reply is presenting an offer or asking for a confirmation: only claims that it is
     # already done are false then, "will be refunded" is the offer itself.
     offering: bool = False
+    # UUIDs the reply may legitimately show (the ticket id the customer is told).
+    allowed_uuids: list[str] = []
     # Instructions that must never appear verbatim in a reply.
     protected_prompt: str = ""
 

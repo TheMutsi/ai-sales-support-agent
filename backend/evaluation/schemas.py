@@ -44,6 +44,8 @@ class EvalScenario(StrEnum):
     # Asking about an order: what the agent may read, say and refuse for someone who proved one.
     ORDER_STATUS = "order_status"
     ORDER_RETURN = "order_return"
+    # Asking the assistant for personal data or internal ids: it must never give them.
+    PRIVACY = "privacy"
 
 
 class EvalIdentity(StrEnum):

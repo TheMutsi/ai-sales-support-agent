@@ -93,6 +93,9 @@ services:
       REDIS_HOST: langfuse-redis
       REDIS_PORT: 6379
       REDIS_AUTH: mewflow-local-redis
+      # Langfuse refuses LLM connections to internal hosts (SSRF guard). Allowing this one lets
+      # the UI's LLM-as-a-judge evaluators call the Ollama running on the developer's machine.
+      LANGFUSE_LLM_CONNECTION_WHITELISTED_HOST: host.docker.internal
 
   langfuse-web:
     image: docker.langfuse.com/langfuse/langfuse:4
