@@ -22,6 +22,7 @@ from app.agent.prompts.order_return import (
     OFFER_SITUATION,
     ORDER_RETURN_READING_PROMPT,
 )
+from app.agent.pushback import last_reply_in
 from app.agent.state import AgentState
 from app.business.returns import return_options
 from app.core.llm import get_chat_model
@@ -100,7 +101,9 @@ _ACTIONS_BY_STAGE: dict[ReturnStage | None, set[CardAction]] = {
 }
 
 
-def _from_action(state: AgentState, orders: list[OrderDetails], stage: ReturnStage | None) -> ReturnReading:
+def _from_action(
+    state: AgentState, orders: list[OrderDetails], stage: ReturnStage | None
+) -> ReturnReading:
     """The reading a click stands for, from rules alone (no model)."""
     action = state["action"]
     if action not in _ACTIONS_BY_STAGE[stage]:
@@ -134,9 +137,7 @@ def _start(order: OrderDetails) -> tuple[PendingReturn | None, ReturnResult]:
     return None, ReturnResult(outcome=ReturnOutcome.RETURN_LATER, order=order)
 
 
-async def _cancel_or_explain(
-    source, ids: dict, order: OrderDetails
-) -> ReturnResult:
+async def _cancel_or_explain(source, ids: dict, order: OrderDetails) -> ReturnResult:
     if return_options(order).can_cancel:
         cancelled = await source.cancel_order(order_id=order.order_id, **ids)
         if cancelled is None:
@@ -152,7 +153,9 @@ def reply_for(result: ReturnResult) -> str:
     gift = " Your free gift is on its way too." if result.receipt and result.receipt.gift else ""
     match result.outcome:
         case ReturnOutcome.OFFER:
-            return "I have your order here. Would you like to keep it and choose one of these instead?"
+            return (
+                "I have your order here. Would you like to keep it and choose one of these instead?"
+            )
         case ReturnOutcome.FINAL_OFFER:
             return "Before you go: keep your order and we'll add a free gift on top of either of these."
         case ReturnOutcome.CONFIRM_ORDER:
@@ -178,6 +181,28 @@ def reply_for(result: ReturnResult) -> str:
         case ReturnOutcome.NOTHING_TO_RETURN:
             return "I couldn't find an order that can be cancelled or returned."
     return ""
+
+
+# Replies that end a return with a "no". The customer pushing back right after one gets a person,
+# not the same question and the same "no" again.
+_DEAD_ENDS = frozenset(
+    reply_for(ReturnResult(outcome=outcome))
+    for outcome in (
+        ReturnOutcome.RETURN_LATER,
+        ReturnOutcome.NOT_AVAILABLE,
+        ReturnOutcome.NOTHING_TO_RETURN,
+    )
+)
+
+
+def _escalate() -> dict:
+    """No reply here: `human_escalation` opens the ticket and the writer tells the customer."""
+    return {
+        "pending_return": None,
+        "return_result": ReturnResult(outcome=ReturnOutcome.ESCALATED),
+        "intent": Intent.HUMAN_ESCALATION,
+        "return_reading": None,
+    }
 
 
 async def _continue(
@@ -218,7 +243,9 @@ async def _continue(
     return pending, again
 
 
-def _answer(pending: PendingReturn | None, result: ReturnResult, reading: ReturnReading | None = None) -> dict:
+def _answer(
+    pending: PendingReturn | None, result: ReturnResult, reading: ReturnReading | None = None
+) -> dict:
     """The state update, with the reply: no model words what this step says."""
     return {
         "pending_return": pending,
@@ -239,6 +266,19 @@ async def order_return_node(state: AgentState) -> dict:
     by_id = {o.order_id: o for o in orders}
     pending = state.get("pending_return")
 
+    # Written, not clicked (an old button is not pushing back), straight after a "no": a person,
+    # unless they now name another order that can still be cancelled (that one is a new request).
+    if (
+        pending is None
+        and state.get("action") is None
+        and last_reply_in(state["messages"], _DEAD_ENDS)
+    ):
+        cancellable = [o for o in orders if return_options(o).can_cancel]
+        if not cancellable:
+            return _escalate()
+        if (await _read(state, cancellable, NO_PENDING_SITUATION)).order_id is None:
+            return _escalate()
+
     if pending is not None and pending.order_id in by_id and pending.stage is ReturnStage.CHECK:
         order = by_id[pending.order_id]
         candidates = [o for o in orders if _actionable(o)] or [order]
@@ -247,9 +287,13 @@ async def order_return_node(state: AgentState) -> dict:
         )
         named = by_id.get(reading.order_id) if reading.order_id else None
         if named is not None and named.order_id != order.order_id and _actionable(named):
-            return _answer(*_start(named), reading=reading)  # they named another order: that one is meant
+            return _answer(
+                *_start(named), reading=reading
+            )  # they named another order: that one is meant
         if reading.choice is ReturnChoice.KEEP:
-            return _answer(None, ReturnResult(outcome=ReturnOutcome.KEPT_AS_IS, order=order), reading)
+            return _answer(
+                None, ReturnResult(outcome=ReturnOutcome.KEPT_AS_IS, order=order), reading
+            )
         if reading.choice is ReturnChoice.REJECT:
             return _answer(*_start(order), reading=reading)
         return _answer(*_check(order), reading=reading)  # not understood: ask again, same place

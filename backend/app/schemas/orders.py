@@ -98,6 +98,7 @@ class ReturnOutcome(StrEnum):
     KEPT_WITH_CREDITS = "kept_with_credits"
     KEPT_AS_IS = "kept_as_is"
     NOT_AVAILABLE = "not_available"  # the order changed under us: nothing was done
+    ESCALATED = "escalated"  # the customer pushed back on a "no": a ticket is opened, no reply here
 
 
 class RetentionReceipt(BaseModel):

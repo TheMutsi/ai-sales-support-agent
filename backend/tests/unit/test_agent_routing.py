@@ -10,15 +10,18 @@ import uuid
 from langchain_core.messages import AIMessage
 from langgraph.graph import END
 
+from app.agent.pushback import CASE_QUESTION
 from app.agent.routing import (
     route_after_customer_context,
     route_after_input_guardrail,
     route_after_intent,
+    route_after_order_return,
     route_after_response_writer,
     route_after_safety_judge,
 )
 from app.auth.scopes import IdentityLevel, scopes_for
 from app.schemas.agent import Intent
+from app.schemas.orders import ReturnOutcome, ReturnResult
 
 _CUSTOMER_SCOPES = sorted(scopes_for(IdentityLevel.STORE_LOGIN))
 _ANONYMOUS_SCOPES = sorted(scopes_for(IdentityLevel.ANONYMOUS))
@@ -104,8 +107,27 @@ def test_small_talk_is_answered_directly_without_opening_a_ticket():
     assert route_after_safety_judge(state) == "response_writer"
 
 
-def test_human_escalation_goes_to_human_escalation():
-    assert route_after_intent(_state(Intent.HUMAN_ESCALATION)) == "human_escalation"
+def test_the_first_request_for_a_person_asks_what_happened():
+    assert route_after_intent(_state(Intent.HUMAN_ESCALATION)) == "ask_case"
+
+
+def test_asking_for_a_person_again_after_that_question_opens_the_ticket():
+    state = {**_state(Intent.HUMAN_ESCALATION), "messages": [AIMessage(content=CASE_QUESTION)]}
+    assert route_after_intent(state) == "human_escalation"
+
+
+def test_an_answer_about_something_else_in_between_does_not_reset_the_question():
+    messages = [AIMessage(content=CASE_QUESTION), AIMessage(content="Here is how billing works.")]
+    state = {**_state(Intent.HUMAN_ESCALATION), "messages": messages}
+    assert route_after_intent(state) == "human_escalation"
+
+
+def test_a_pushed_back_return_goes_to_human_escalation_and_other_outcomes_end():
+    escalated = {"return_result": ReturnResult(outcome=ReturnOutcome.ESCALATED)}
+    answered = {"return_result": ReturnResult(outcome=ReturnOutcome.RETURN_LATER)}
+    assert route_after_order_return(escalated) == "human_escalation"
+    assert route_after_order_return(answered) == END
+    assert route_after_order_return({}) == END
 
 
 def test_unsupported_cleared_by_safety_judge_goes_to_human_escalation():
@@ -165,6 +187,7 @@ def test_compiled_graph_exposes_every_conditional_destination():
     assert ("response_writer", "guardrail") in edges
     assert ("intent_router", "safety_judge") in edges
     assert ("input_guardrail", "__end__") in edges
+    assert ("order_return", "human_escalation") in edges
 
 
 def _anonymous(intent: Intent) -> dict:
@@ -290,10 +313,10 @@ def test_while_a_return_is_pending_a_bare_answer_filed_as_small_talk_continues_i
     assert route_after_intent(_returning(Intent.SMALL_TALK, pending=pending)) == "order_return"
     assert route_after_intent(_returning(Intent.ORDER_RETURN, pending=pending)) == "order_return"
     # Other requests must not complete a return: a subscription cancellation is not an answer,
-    # a request for a person still gets a ticket and "where is my order" still gets its status.
+    # a request for a person still gets its own path and "where is my order" still gets its status.
     assert route_after_intent(_returning(Intent.REFUND_REQUEST, pending=pending)) == "get_customer_context"
     assert route_after_intent(_returning(Intent.ORDER_STATUS, pending=pending)) == "get_customer_orders"
-    assert route_after_intent(_returning(Intent.HUMAN_ESCALATION, pending=pending)) == "human_escalation"
+    assert route_after_intent(_returning(Intent.HUMAN_ESCALATION, pending=pending)) == "ask_case"
     unsupported = {**_returning(Intent.UNSUPPORTED, pending=pending), "input_blocked": False}
     assert route_after_safety_judge(unsupported) == "human_escalation"
     # A different question goes its own way, and the pending return waits.
