@@ -8,6 +8,10 @@ export interface MewConfig {
   sound?: boolean;
 }
 
+/** `Mew('addProperty', key, value)`, `Mew('addTag', tag)`...: public hints about the visitor. */
+export type ContextCommand = "addProperty" | "removeProperty" | "addTag" | "removeTag";
+const CONTEXT_COMMANDS: readonly string[] = ["addProperty", "removeProperty", "addTag", "removeTag"];
+
 type MewCall = (command: string, ...args: unknown[]) => void;
 type QueueingMew = MewCall & { q?: IArguments[] };
 
@@ -23,10 +27,14 @@ export function installGlobal(
   target: Window,
   controller: Controller,
   onConfig: (options: MewConfig) => void = () => {},
+  onContext: (command: ContextCommand, ...args: unknown[]) => void = () => {},
 ): void {
   const queued = ((target as unknown as { Mew?: QueueingMew }).Mew?.q ?? []) as ArrayLike<unknown>[];
-  const mew: MewCall = (command, ...args) =>
-    command === "config" ? onConfig((args[0] ?? {}) as MewConfig) : controller.run(command);
+  const mew: MewCall = (command, ...args) => {
+    if (command === "config") onConfig((args[0] ?? {}) as MewConfig);
+    else if (CONTEXT_COMMANDS.includes(command)) onContext(command as ContextCommand, ...args);
+    else controller.run(command);
+  };
   (target as unknown as { Mew: MewCall }).Mew = mew;
   for (const args of Array.from(queued)) mew(...(Array.from(args) as [string, ...unknown[]]));
 }

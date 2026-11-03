@@ -43,6 +43,13 @@
     <button onclick="Mew('hide')">Hide</button>
     <button onclick="Mew('show')">Show</button>
 
+    <h2>Add a property</h2>
+    <form onsubmit="Mew('addProperty', this.key.value, this.value.value); this.reset(); return false">
+      <input name="key" placeholder="key (device)" required />
+      <input name="value" placeholder="value (iphone)" required />
+      <button>Set</button>
+    </form>
+
     <h2>Log in as a customer</h2>
     <p>Each button signs a token for a demo customer who has one order. <span id="who"></span></p>
     <div id="users" style="display: grid; gap: 0.5rem; max-width: 24rem"></div>

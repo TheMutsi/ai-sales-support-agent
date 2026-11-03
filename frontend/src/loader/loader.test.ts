@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createController } from "./controller";
+import { createController, type Controller } from "./controller";
 import { createFrame, layoutFrame } from "./frame";
 import { installGlobal, readKey } from "./global";
 
@@ -93,5 +93,19 @@ describe("frame", () => {
     layoutFrame(frame, { open: false, visible: false });
     expect(frame.style.display).toBe("none");
     frame.remove();
+  });
+});
+
+describe("Mew('addProperty' | 'addTag', ...)", () => {
+  it("hands page hints to the context handler, including those queued before the script loaded", () => {
+    const win = {
+      Mew: Object.assign(() => {}, { q: [["addTag", "early"]] }),
+    } as unknown as Window;
+    const seen: unknown[][] = [];
+    const controller = { run: vi.fn() } as unknown as Controller;
+    installGlobal(win, controller, () => {}, (...args) => seen.push(args));
+    (win as unknown as { Mew: (...a: unknown[]) => void }).Mew("addProperty", "device", "iphone");
+    expect(seen).toEqual([["addTag", "early"], ["addProperty", "device", "iphone"]]);
+    expect(controller.run).not.toHaveBeenCalled();
   });
 });
