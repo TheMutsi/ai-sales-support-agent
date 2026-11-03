@@ -82,12 +82,15 @@ export interface ConversationSummary {
   last_activity_at: string;
   message_count: number;
   first_message: string | null;
+  tags: string[];
 }
 
 export interface ConversationDetail extends Omit<ConversationSummary, "message_count" | "first_message"> {
   linked_via: string | null;
   handoff_status: string;
   handoff_agent_name: string | null;
+  /** Hints the visitor's page set: not verified facts. */
+  properties: Record<string, string>;
   messages: {
     seq: number;
     role: string;

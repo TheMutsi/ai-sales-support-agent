@@ -211,3 +211,32 @@ legend label { display: inline-flex; align-items: center; gap: 0.45rem; }
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; }
 }
+
+/* Collapsible menu: only icons are left, the labels are hidden */
+.sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.icon-button { padding: 0.25rem 0.55rem; line-height: 1; }
+.shell { transition: grid-template-columns 0.15s; }
+.shell.collapsed { grid-template-columns: 4.5rem minmax(0, 1fr); }
+.shell.collapsed .label { display: none; }
+.shell.collapsed .sidebar { padding-inline: 0.6rem; align-items: center; }
+.shell.collapsed .sidebar-top { flex-direction: column; }
+.shell.collapsed .sidebar nav, .shell.collapsed .nav-item { width: 100%; justify-content: center; }
+.shell.collapsed .user-box { padding: 0.4rem; justify-content: center; }
+
+/* The conversation's menu and its metadata */
+.detail-head .menu { margin-left: auto; position: relative; }
+.menu-list {
+  position: absolute; right: 0; top: calc(100% + 0.3rem); z-index: 2; min-width: 11rem;
+  display: grid; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: var(--shadow); padding: 0.25rem;
+}
+.menu-list button { border: 0; background: none; text-align: left; }
+.menu-list button:hover:not(:disabled) { background: var(--brand-soft); }
+.metadata { padding: 0.75rem 0.9rem; background: var(--surface-2); border-radius: 8px; display: grid; gap: 0.4rem; }
+.metadata h4 { margin: 0.4rem 0 0; font-size: 0.9rem; }
+.metadata dl { margin: 0; display: grid; gap: 0.25rem; }
+.metadata dl div { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 0.75rem; }
+.metadata dt { color: var(--muted); font-size: 0.85rem; }
+.metadata dd { margin: 0; overflow-wrap: anywhere; font-size: 0.9rem; }
+.tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0; }
+.placeholder { padding: 2rem 0; text-align: center; }
