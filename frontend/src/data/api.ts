@@ -100,6 +100,14 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
       return toSession(await response.json());
     },
 
+    /** Sets or removes the conversation's public hints (a `null` property is removed). */
+    async updateContext(
+      session: Session,
+      update: { properties: Record<string, string | null>; add_tags: string[]; remove_tags: string[] },
+    ): Promise<void> {
+      await request(`/conversations/${session.conversationId}/context`, { body: update, token: session.token });
+    },
+
     async messages(session: Session): Promise<{ messages: ChatMessage[]; handoff: Handoff }> {
       const response = await request(`/conversations/${session.conversationId}/messages`, {
         method: "GET",

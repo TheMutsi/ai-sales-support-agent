@@ -1,6 +1,7 @@
 import { ApiError, type Api } from "./api";
 import type { Auth } from "./auth";
 import { applyEvent, initialState, type ChatState } from "./chatState";
+import type { Context } from "./context";
 import type { SessionStore } from "./sessionStore";
 import type { Card, ChatEvent, ChatInput, ChatMessage, Session } from "./types";
 
@@ -8,7 +9,7 @@ import type { Card, ChatEvent, ChatInput, ChatMessage, Session } from "./types";
  * The conversation as the UI sees it: state to subscribe to (`useSyncExternalStore`) and the
  * actions `load`, `send` and `resume`. The history lives on the server; this only mirrors it.
  */
-export function createChat(api: Api, auth: Auth, store: SessionStore) {
+export function createChat(api: Api, auth: Auth, store: SessionStore, context?: Context) {
   let state: ChatState = initialState;
   let newest = 0; // the latest background poll
   const listeners = new Set<() => void>();
@@ -33,6 +34,7 @@ export function createChat(api: Api, auth: Auth, store: SessionStore) {
       // The turn is only opened once the first event arrives, so a rejected session throws before
       // any text is shown and the retry in `withSession` is safe.
       await withSession(async (session) => {
+        await context?.sync(session);
         for await (const event of open(session)) update(applyEvent(state, event));
       });
     } catch (error) {

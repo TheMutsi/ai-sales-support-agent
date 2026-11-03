@@ -20,6 +20,8 @@ loaded; the real script replays the queue in order.
 |---|---|
 | `Mew('open')` / `Mew('close')` | Expand or collapse the chat panel |
 | `Mew('show')` / `Mew('hide')` | Show or remove the launcher (hide also closes the panel) |
+| `Mew('addProperty', key, value)` / `Mew('removeProperty', key)` | Public hints about the visitor, e.g. `Mew('addProperty', 'device', 'iphone')`. Keys: lowercase letters, digits, `_`; values up to 100 characters; at most 20 |
+| `Mew('addTag', tag)` / `Mew('removeTag', tag)` | Labels on the conversation, e.g. `Mew('addTag', 'landing-sale')`; at most 20 |
 | `Mew('config', { getToken, sound })` | `getToken`: see below. `sound: false` turns off the new-message ping |
 
 Without `getToken` the visitor is anonymous: they can ask knowledge-base questions, and

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createApi } from "./data/api";
 import { createAuth } from "./data/auth";
 import { createChat } from "./data/chat";
+import { createContext } from "./data/context";
 import { createIdentity } from "./data/identity";
 import { createSessionStore } from "./data/sessionStore";
 import { createController } from "./loader/controller";
@@ -24,16 +25,22 @@ function boot() {
   const api = createApi(import.meta.env.VITE_API_URL ?? "http://localhost:8000", apiKey);
   const store = createSessionStore(apiKey);
   const auth = createAuth(api, store);
-  const chat = createChat(api, auth, store);
+  const context = createContext(api, auth);
+  const chat = createChat(api, auth, store, context);
   const identity = createIdentity(api, auth, chat);
   // Another tab changed the conversation (a message, a login): show the stored state.
   store.subscribe(() => void chat.load());
   const settings = { sound: true };
-  installGlobal(window, controller, ({ getToken, sound }) => {
-    if (sound !== undefined) settings.sound = sound;
-    auth.setGetToken(getToken ?? null);
-    if (getToken) void auth.identify().then(() => chat.load());
-  });
+  installGlobal(
+    window,
+    controller,
+    ({ getToken, sound }) => {
+      if (sound !== undefined) settings.sound = sound;
+      auth.setGetToken(getToken ?? null);
+      if (getToken) void auth.identify().then(() => chat.load());
+    },
+    context.command,
+  );
 
   const frame = createFrame(document);
   controller.subscribe(() => layoutFrame(frame, controller.getState()));
