@@ -73,6 +73,7 @@ def _output_check_context(state: AgentState) -> OutputCheckContext:
         tool_call_rounds=state.get("tool_call_rounds", 0),
         order_found=state.get("order_details") is not None or bool(state.get("customer_orders")),
         **_confirmed_return_actions(state),
+        allowed_uuids=[str(receipt.ticket_id)] if (receipt := state.get("ticket_receipt")) else [],
         protected_prompt=RESPONSE_WRITER_SYSTEM_PROMPT,
     )
 

@@ -347,7 +347,54 @@ def check_unbacked_order_lookup(
     return None
 
 
+_UUID_PATTERN = re.compile(
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.IGNORECASE
+)
+_EMAIL_PATTERN = re.compile(r"[\w.+-]+@([\w-]+\.)+[a-z]{2,}", re.IGNORECASE)
+# The company's own contact addresses come from the knowledge base and are fine to show.
+_PUBLIC_EMAIL_DOMAIN = "@mewflow.example"
+# Only shapes that cannot be an order id, a price or a date: an international number with a
+# plus sign, a bracketed area code, or three groups of digits.
+_PHONE_PATTERN = re.compile(
+    r"\+\d[\d\s().-]{7,}\d|\(\d{2,4}\)\s?\d[\d\s.-]{5,}\d|\b\d{3}[\s.-]\d{3,4}[\s.-]\d{4}\b"
+)
+_GOVERNMENT_ID_PATTERN = re.compile(
+    r"\b\d{3}-\d{2}-\d{4}\b|\b(?:ssn|ssi|dni|nif|nie|passport|pasaporte)\b\W{0,5}[A-Z0-9-]{6,}",
+    re.IGNORECASE,
+)
+
+
+def check_sensitive_data_exposure(
+    context: OutputCheckContext, response_text: str
+) -> GuardrailViolation | None:
+    """Personal data and internal ids never go out in a reply, logged in or not: an internal
+    UUID (a customer id, anything but the ticket id the customer was told), an email address
+    other than the company's, a phone number or a government id. The prompt asks the model
+    not to and the context no longer carries them, this catches the model producing them
+    anyway (from the conversation, or from its own training). An order number is not matched:
+    it is the one identifier a signed-in customer is meant to receive."""
+    allowed = {u.lower() for u in context.allowed_uuids}
+    leaked_uuid = any(m.lower() not in allowed for m in _UUID_PATTERN.findall(response_text))
+    leaked_email = any(
+        not m.group(0).lower().endswith(_PUBLIC_EMAIL_DOMAIN)
+        for m in _EMAIL_PATTERN.finditer(response_text)
+    )
+    if (
+        leaked_uuid
+        or leaked_email
+        or _PHONE_PATTERN.search(response_text)
+        or _GOVERNMENT_ID_PATTERN.search(response_text)
+    ):
+        return GuardrailViolation(
+            code="sensitive_data_exposure",
+            severity=GuardrailSeverity.BLOCK,
+            message="Response contains an internal id or personal data.",
+        )
+    return None
+
+
 _ALL_CHECKS = (
+    check_sensitive_data_exposure,
     check_unconfirmed_refund_claim,
     check_checkout_without_eligibility,
     check_fabricated_ticket_claim,

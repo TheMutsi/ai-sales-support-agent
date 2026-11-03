@@ -7,7 +7,7 @@
 > full run has been made on the new one (only the `order-*` and `return-*` cases, once each). The
 > intent and escalation metrics are not comparable across this change.
 
-Two fixed datasets, a dev set (`dataset.jsonl`, 82 cases at the time of writing) and a 16-case held-out set
+Two fixed datasets, a dev set (`dataset.jsonl`, 94 cases at the time of writing) and a 16-case held-out set
 (`heldout.jsonl`), run against the **real, running `/api/chat` endpoint** and
 scored by small single-purpose evaluators. Same datasets, same script, same metrics
 on every run.

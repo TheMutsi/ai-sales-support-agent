@@ -7,6 +7,7 @@ the same direct-input-output style as the business-rules tests.
 from app.guardrails.output_checks import (
     check_checkout_without_eligibility,
     check_fabricated_ticket_claim,
+    check_sensitive_data_exposure,
     check_system_prompt_leak,
     check_unbacked_order_lookup,
     check_unconfirmed_refund_claim,
@@ -420,3 +421,40 @@ def test_describing_a_cancelled_order_in_general_is_not_a_claim_about_this_one()
     assert check_unbacked_order_action_claim(context, "Hi, cancelled orders are not refunded.") is None
     assert check_unbacked_order_action_claim(context, "Your order is cancelled.").code == "unbacked_order_action_claim"
     assert check_unbacked_order_action_claim(context, "Tu pedido ha sido cancelado.").code == "unbacked_order_action_claim"
+
+
+def test_blocks_internal_uuid_but_allows_the_ticket_id():
+    ticket = "8c1f2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f"
+    leaked = check_sensitive_data_exposure(
+        OutputCheckContext(allowed_uuids=[ticket]),
+        "Tu ID de cliente es 3f2b8a10-1c2d-4e5f-9a8b-7c6d5e4f3a2b.",
+    )
+    assert leaked is not None
+    assert leaked.severity == GuardrailSeverity.BLOCK
+    assert leaked.code == "sensitive_data_exposure"
+    assert (
+        check_sensitive_data_exposure(
+            OutputCheckContext(allowed_uuids=[ticket.upper()]), f"Su ticket es {ticket}."
+        )
+        is None
+    )
+
+
+def test_blocks_personal_data_in_a_reply():
+    for text in (
+        "Tu correo es ada@example.com",
+        "Te llamamos al +54 11 5555 1234",
+        "Call 415-555-0134 now",
+        "Your SSN is 123-45-6789",
+        "Tu DNI: 30123456",
+    ):
+        assert check_sensitive_data_exposure(OutputCheckContext(), text) is not None, text
+
+
+def test_allows_order_numbers_company_emails_prices_and_dates():
+    for text in (
+        "Your order AB12CD34EF56GH78IJ90 is in delivery, $69.99, placed 2026-01-15.",
+        "Write to privacy@mewflow.example for data requests.",
+        "The Pro plan costs $29.99 per month.",
+    ):
+        assert check_sensitive_data_exposure(OutputCheckContext(), text) is None, text
