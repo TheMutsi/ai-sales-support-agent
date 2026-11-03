@@ -436,7 +436,7 @@ def _after_no(order_state=None) -> dict:
 
 @pytest.mark.asyncio
 async def test_pushing_back_on_a_no_hands_the_customer_to_a_person_without_asking_again(setup):
-    shop, reader = setup(SHIPPED30, SHIPPED70)
+    shop, _ = setup(SHIPPED30, SHIPPED70, reading=ReturnReading(choice=ReturnChoice.REJECT, order_id=None))
 
     update = await order_return_node(_after_no())
 
@@ -444,7 +444,7 @@ async def test_pushing_back_on_a_no_hands_the_customer_to_a_person_without_askin
     assert update["intent"] is Intent.HUMAN_ESCALATION  # the ticket is written as a request for a person
     assert update["pending_return"] is None
     assert "messages" not in update  # the writer words the reply, after the ticket exists
-    assert shop.calls == [] and reader.asked == 0  # nothing cancellable, so no model either
+    assert shop.calls == []
 
 
 @pytest.mark.asyncio
@@ -455,6 +455,17 @@ async def test_after_a_no_naming_another_order_that_can_be_cancelled_is_a_new_re
 
     assert update["return_result"].outcome is ReturnOutcome.CONFIRM_CANCEL
     assert update["return_result"].order.order_id == OPEN_30
+
+
+@pytest.mark.asyncio
+async def test_after_a_no_naming_another_order_in_delivery_gets_its_own_answer_with_one_model_call(setup):
+    _, reader = setup(SHIPPED30, SHIPPED70, reading=ReturnReading(choice=ReturnChoice.REJECT, order_id=SHIPPED_70))
+
+    update = await order_return_node(_after_no())
+
+    assert update["return_result"].outcome is not ReturnOutcome.ESCALATED
+    assert update["return_result"].order.order_id == SHIPPED_70
+    assert reader.asked == 1  # the reading is reused, not repeated
 
 
 @pytest.mark.asyncio

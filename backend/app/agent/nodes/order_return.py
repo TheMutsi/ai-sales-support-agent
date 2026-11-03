@@ -267,16 +267,18 @@ async def order_return_node(state: AgentState) -> dict:
     pending = state.get("pending_return")
 
     # Written, not clicked (an old button is not pushing back), straight after a "no": a person,
-    # unless they now name another order that can still be cancelled (that one is a new request).
+    # unless they now name an order (that one is a new request, handled below with this reading).
+    after_no = None
     if (
         pending is None
         and state.get("action") is None
         and last_reply_in(state["messages"], _DEAD_ENDS)
     ):
-        cancellable = [o for o in orders if return_options(o).can_cancel]
-        if not cancellable:
+        actionable = [o for o in orders if _actionable(o)]
+        if not actionable:
             return _escalate()
-        if (await _read(state, cancellable, NO_PENDING_SITUATION)).order_id is None:
+        after_no = await _read(state, actionable, NO_PENDING_SITUATION)
+        if after_no.order_id is None:
             return _escalate()
 
     if pending is not None and pending.order_id in by_id and pending.stage is ReturnStage.CHECK:
@@ -312,9 +314,10 @@ async def order_return_node(state: AgentState) -> dict:
     if not candidates:
         return _answer(None, ReturnResult(outcome=ReturnOutcome.NOTHING_TO_RETURN))
     order = candidates[0] if len(candidates) == 1 else None
-    reading = None
-    if order is None:
+    reading = after_no
+    if order is None and reading is None:
         reading = await _reading(state, candidates, NO_PENDING_SITUATION, None)
+    if order is None:
         order = by_id.get(reading.order_id) if reading.order_id else None
     if order is None:
         result = ReturnResult(outcome=ReturnOutcome.CHOOSE_ORDER, candidates=candidates)

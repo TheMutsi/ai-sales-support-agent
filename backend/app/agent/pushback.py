@@ -22,10 +22,16 @@ CASE_QUESTION = (
 )
 
 
+# How far back the question still counts: a request for a person hours later, about something else,
+# starts again with the question.
+_RECENT_MESSAGES = 8
+
+
 def asked_for_case(messages: Sequence[BaseMessage]) -> bool:
-    """Whether the assistant already asked what happened, so a second request for a person is
+    """Whether the assistant recently asked what happened, so a second request for a person is
     taken as insisting."""
-    return any(isinstance(m, AIMessage) and m.content == CASE_QUESTION for m in messages)
+    recent = messages[-_RECENT_MESSAGES:]
+    return any(isinstance(m, AIMessage) and m.content == CASE_QUESTION for m in recent)
 
 
 def last_reply_in(messages: Sequence[BaseMessage], replies: frozenset[str]) -> bool:
@@ -33,5 +39,5 @@ def last_reply_in(messages: Sequence[BaseMessage], replies: frozenset[str]) -> b
     it pushes back on it (anything in between, an answer about something else, ends the streak)."""
     for message in reversed(messages):
         if isinstance(message, AIMessage):
-            return message.content in replies
+            return isinstance(message.content, str) and message.content in replies
     return False
