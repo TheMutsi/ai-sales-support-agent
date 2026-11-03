@@ -20,6 +20,7 @@ class Node(StrEnum):
     GET_CUSTOMER_ORDERS = "get_customer_orders"
     ORDER_RETURN = "order_return"
     KNOWLEDGE_TOOL = "knowledge_tool"
+    ASK_CASE = "ask_case"
     HUMAN_ESCALATION = "human_escalation"
     REQUEST_IDENTITY = "request_identity"
     RESPONSE_WRITER = "response_writer"

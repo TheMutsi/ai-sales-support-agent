@@ -4,9 +4,11 @@ from langgraph.graph import END
 
 from app.agent.names import Node
 from app.agent.permissions import REQUIRED_SCOPE
+from app.agent.pushback import asked_for_case
 from app.agent.state import AgentState
 from app.auth.scopes import Scope
 from app.schemas.agent import Intent
+from app.schemas.orders import ReturnOutcome
 
 # Below this, intent_router's own safety_confidence (scored in the same call
 # as intent, so it's free) isn't enough on its own — route to safety_judge
@@ -35,7 +37,11 @@ def route_start(state: AgentState) -> Literal[Node.INPUT_GUARDRAIL, Node.ORDER_R
     model, because there is no free text to read. Buttons only exist for a verified customer's
     returns, so a click without that scope is not trusted: it takes the ordinary path."""
     scopes = set(state.get("scopes") or [])
-    if state.get("action") is not None and state.get("customer_id") and Scope.REFUND_REQUEST in scopes:
+    if (
+        state.get("action") is not None
+        and state.get("customer_id")
+        and Scope.REFUND_REQUEST in scopes
+    ):
         return Node.ORDER_RETURN
     return Node.INPUT_GUARDRAIL
 
@@ -52,6 +58,7 @@ def route_after_intent(
     Node.GET_ORDER_STATUS,
     Node.GET_CUSTOMER_ORDERS,
     Node.ORDER_RETURN,
+    Node.ASK_CASE,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -78,6 +85,7 @@ def route_after_safety_judge(
     Node.GET_ORDER_STATUS,
     Node.GET_CUSTOMER_ORDERS,
     Node.ORDER_RETURN,
+    Node.ASK_CASE,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -94,6 +102,7 @@ def _dispatch_by_intent(
     Node.GET_ORDER_STATUS,
     Node.GET_CUSTOMER_ORDERS,
     Node.ORDER_RETURN,
+    Node.ASK_CASE,
     Node.RESPONSE_WRITER,
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
@@ -116,6 +125,11 @@ def _dispatch_by_intent(
         return Node.HUMAN_ESCALATION if Scope.TICKET_CREATE in scopes else Node.RESPONSE_WRITER
     if REQUIRED_SCOPE[state["intent"]] not in scopes:
         return Node.REQUEST_IDENTITY
+    if state["intent"] == Intent.HUMAN_ESCALATION and not asked_for_case(
+        state.get("messages") or []
+    ):
+        # The first request for a person gets one question about the case; asking again opens the ticket.
+        return Node.ASK_CASE
     if state["intent"] == Intent.ORDER_RETURN:
         # Rejecting an order acts on a customer's own orders, so a session without one cannot.
         return Node.ORDER_RETURN if state.get("customer_id") else Node.REQUEST_IDENTITY
@@ -142,6 +156,13 @@ def _dispatch_by_intent(
         # needs a short reply, not a ticket.
         return Node.RESPONSE_WRITER
     return Node.HUMAN_ESCALATION  # human_escalation
+
+
+def route_after_order_return(state: AgentState) -> Literal[Node.HUMAN_ESCALATION, "__end__"]:
+    """A customer who pushed back on a "no" is handed to a person; every other outcome has already
+    written its own reply."""
+    result = state.get("return_result")
+    return Node.HUMAN_ESCALATION if result and result.outcome is ReturnOutcome.ESCALATED else END
 
 
 def route_after_response_writer(

@@ -2,6 +2,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Checkpointer
 
 from app.agent.names import Node
+from app.agent.nodes.ask_case import ask_case_node
 from app.agent.nodes.business_rules import business_rules_node
 from app.agent.nodes.customer_context import get_customer_context_node
 from app.agent.nodes.guardrail import guardrail_node
@@ -19,6 +20,7 @@ from app.agent.routing import (
     route_after_customer_context,
     route_after_input_guardrail,
     route_after_intent,
+    route_after_order_return,
     route_after_response_writer,
     route_after_safety_judge,
     route_start,
@@ -46,6 +48,7 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_node(Node.GET_CUSTOMER_ORDERS, get_customer_orders_node)
     builder.add_node(Node.ORDER_RETURN, order_return_node)
     builder.add_node(Node.KNOWLEDGE_TOOL, knowledge_tool_node)
+    builder.add_node(Node.ASK_CASE, ask_case_node)
     builder.add_node(Node.HUMAN_ESCALATION, human_escalation_node)
     builder.add_node(Node.REQUEST_IDENTITY, request_identity_node)
     builder.add_node(Node.RESPONSE_WRITER, response_writer_node)
@@ -61,7 +64,9 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_edge(Node.GET_ORDER_STATUS, Node.RESPONSE_WRITER)
     builder.add_edge(Node.GET_CUSTOMER_ORDERS, Node.RESPONSE_WRITER)
     # The step writes its own reply (fixed text), so no model words it and nothing is checked after.
-    builder.add_edge(Node.ORDER_RETURN, END)
+    # The exception is a customer pushing back on a "no": a ticket is opened and the writer words it.
+    builder.add_conditional_edges(Node.ORDER_RETURN, route_after_order_return)
+    builder.add_edge(Node.ASK_CASE, END)
     builder.add_edge(Node.HUMAN_ESCALATION, Node.RESPONSE_WRITER)
     builder.add_conditional_edges(Node.RESPONSE_WRITER, route_after_response_writer)
     builder.add_edge(Node.KNOWLEDGE_TOOL, Node.RESPONSE_WRITER)

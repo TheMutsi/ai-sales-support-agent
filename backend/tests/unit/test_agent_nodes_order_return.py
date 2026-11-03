@@ -5,11 +5,12 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.nodes import order_return as module
 from app.agent.nodes.order_return import order_return_node, reply_for
 from app.business.returns import retention_offer
-from app.schemas.agent import ReturnChoice, ReturnReading
+from app.schemas.agent import Intent, ReturnChoice, ReturnReading
 from app.schemas.cards import CardAction
 from app.schemas.orders import (
     OrderDetails,
@@ -18,6 +19,7 @@ from app.schemas.orders import (
     RetentionChoice,
     RetentionReceipt,
     ReturnOutcome,
+    ReturnResult,
     ReturnStage,
 )
 
@@ -353,7 +355,7 @@ async def test_the_other_outcomes_have_their_own_fixed_replies(setup):
 
     replies = {outcome: reply_for(ReturnResult(outcome=outcome)) for outcome in ReturnOutcome}
 
-    assert all(replies[o] for o in ReturnOutcome if o not in (ReturnOutcome.KEPT_WITH_REFUND, ReturnOutcome.KEPT_WITH_CREDITS))
+    assert all(replies[o] for o in ReturnOutcome if o not in (ReturnOutcome.KEPT_WITH_REFUND, ReturnOutcome.KEPT_WITH_CREDITS, ReturnOutcome.ESCALATED))  # escalated: the writer words it
     assert "go ahead" in replies[ReturnOutcome.CONFIRM_CANCEL] and "once it arrives" in replies[ReturnOutcome.RETURN_LATER]
 
 
@@ -423,3 +425,73 @@ async def test_choosing_an_order_with_a_click_takes_only_one_of_the_listed_order
     assert chosen["return_result"].order.order_id == OPEN_70
     assert made_up["return_result"].outcome is ReturnOutcome.CHOOSE_ORDER
     assert stray["return_result"].outcome is ReturnOutcome.CHOOSE_ORDER
+
+
+def _after_no(order_state=None) -> dict:
+    """The conversation right after the assistant told the customer an order on its way cannot be
+    cancelled, and the customer writes back."""
+    no = reply_for(ReturnResult(outcome=ReturnOutcome.RETURN_LATER))
+    return {**_state(), "messages": [AIMessage(content=no), HumanMessage(content="Como que no? No la quiero")]}
+
+
+@pytest.mark.asyncio
+async def test_pushing_back_on_a_no_hands_the_customer_to_a_person_without_asking_again(setup):
+    shop, _ = setup(SHIPPED30, SHIPPED70, reading=ReturnReading(choice=ReturnChoice.REJECT, order_id=None))
+
+    update = await order_return_node(_after_no())
+
+    assert update["return_result"].outcome is ReturnOutcome.ESCALATED
+    assert update["intent"] is Intent.HUMAN_ESCALATION  # the ticket is written as a request for a person
+    assert update["pending_return"] is None
+    assert "messages" not in update  # the writer words the reply, after the ticket exists
+    assert shop.calls == []
+
+
+@pytest.mark.asyncio
+async def test_after_a_no_naming_another_order_that_can_be_cancelled_is_a_new_request(setup):
+    setup(SHIPPED30, OPEN30, reading=ReturnReading(choice=ReturnChoice.REJECT, order_id=OPEN_30))
+
+    update = await order_return_node(_after_no())
+
+    assert update["return_result"].outcome is ReturnOutcome.CONFIRM_CANCEL
+    assert update["return_result"].order.order_id == OPEN_30
+
+
+@pytest.mark.asyncio
+async def test_after_a_no_naming_another_order_in_delivery_gets_its_own_answer_with_one_model_call(setup):
+    _, reader = setup(SHIPPED30, SHIPPED70, reading=ReturnReading(choice=ReturnChoice.REJECT, order_id=SHIPPED_70))
+
+    update = await order_return_node(_after_no())
+
+    assert update["return_result"].outcome is not ReturnOutcome.ESCALATED
+    assert update["return_result"].order.order_id == SHIPPED_70
+    assert reader.asked == 1  # the reading is reused, not repeated
+
+
+@pytest.mark.asyncio
+async def test_after_a_no_a_cancellable_order_not_named_still_means_a_person(setup):
+    setup(SHIPPED30, OPEN30, reading=ReturnReading(choice=ReturnChoice.REJECT, order_id=None))
+
+    update = await order_return_node(_after_no())
+
+    assert update["return_result"].outcome is ReturnOutcome.ESCALATED
+
+
+@pytest.mark.asyncio
+async def test_an_old_button_after_a_no_is_not_pushing_back(setup):
+    setup(SHIPPED30)
+    state = {**_after_no(), "action": CardAction.CONFIRM_ORDER}
+
+    update = await order_return_node(state)
+
+    assert update["return_result"].outcome is not ReturnOutcome.ESCALATED
+
+
+@pytest.mark.asyncio
+async def test_the_same_words_without_a_no_before_them_start_the_return_as_usual(setup):
+    setup(SHIPPED30)
+    state = {**_state(), "messages": [AIMessage(content="Anything else?"), HumanMessage(content="cancel it")]}
+
+    update = await order_return_node(state)
+
+    assert update["return_result"].outcome is ReturnOutcome.CONFIRM_ORDER

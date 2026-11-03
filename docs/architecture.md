@@ -55,8 +55,11 @@ flowchart TD
   dispatch -- "order_return, or a follow-up<br/>to a pending return" --> orr[order_return<br/><i>rules; a model reads only typed words</i>]
   co --> rw
   orr -- "fixed reply, no model" --> stop
+  orr -- "pushed back on a no" --> he
+  dispatch -- "first request for a person" --> ac[ask_case<br/><i>fixed question, no ticket yet</i>]
+  ac --> stop
   dispatch -- "upgrade / billing / refund" --> cc[get_customer_context]
-  dispatch -- "human_escalation / unsupported<br/>(unsupported without ticket:create<br/>goes to response_writer)" --> he
+  dispatch -- "human_escalation (asked again) / unsupported<br/>(unsupported without ticket:create<br/>goes to response_writer)" --> he
   cc -- upgrade --> br[business_rules<br/><i>eligibility</i>]
   cc -- billing --> rw
   cc -- refund --> he[human_escalation<br/><i>creates ticket</i>]
