@@ -7,7 +7,7 @@ import {
   type ConversationDetail,
   type ConversationSummary,
 } from "./api";
-import { identificationLine, nextCursor, who } from "./conversations";
+import { identificationLine, metadataRows, nextCursor, who } from "./conversations";
 
 interface Props {
   session: AdminSession;
@@ -19,6 +19,8 @@ export function ConversationsPage({ session, tenantId, onExpired }: Props) {
   const [items, setItems] = useState<ConversationSummary[] | null>(null);
   const [selected, setSelected] = useState<ConversationDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(false);
 
   const fail = (failure: unknown) => {
     if (failure instanceof ApiError && failure.status === 401) return onExpired();
@@ -65,6 +67,13 @@ export function ConversationsPage({ session, tenantId, onExpired }: Props) {
                   {item.identity_level}
                 </span>
                 <span>{item.first_message}</span>
+                {item.tags.length > 0 && (
+                  <span className="tags">
+                    {item.tags.map((tag) => (
+                      <span key={tag} className="chip">{tag}</span>
+                    ))}
+                  </span>
+                )}
               </button>
             </li>
           ))}
@@ -77,7 +86,32 @@ export function ConversationsPage({ session, tenantId, onExpired }: Props) {
             <div className="detail-head">
               <h3>{who(selected)}</h3>
               <span className="chip">{selected.identity_level}</span>
+              <div className="menu">
+                <button
+                  className="ghost icon-button"
+                  aria-label="Conversation menu"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((now) => !now)}
+                >
+                  ☰
+                </button>
+                {menuOpen && (
+                  <div className="menu-list" role="menu">
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setShowMetadata((now) => !now);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {showMetadata ? "Hide metadata" : "View metadata"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
+            {showMetadata && <Metadata conversation={selected} />}
             {selected.identification.length > 0 && (
               <ol className="timeline">
                 {selected.identification.map((event) => (
@@ -98,9 +132,49 @@ export function ConversationsPage({ session, tenantId, onExpired }: Props) {
             ))}
           </>
         ) : (
-          <p className="hint">Pick a conversation.</p>
+          <p className="hint placeholder">Select a conversation to see its messages.</p>
         )}
       </div>
     </section>
+  );
+}
+
+function Metadata({ conversation }: { conversation: ConversationDetail }) {
+  const properties = Object.entries(conversation.properties);
+  return (
+    <div className="metadata">
+      <dl>
+        {metadataRows(conversation).map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <h4>Properties</h4>
+      <p className="hint">Set by the visitor's page; not verified.</p>
+      {properties.length === 0 ? (
+        <p className="hint">None.</p>
+      ) : (
+        <dl>
+          {properties.map(([key, value]) => (
+            <div key={key}>
+              <dt>{key}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <h4>Tags</h4>
+      {conversation.tags.length === 0 ? (
+        <p className="hint">None.</p>
+      ) : (
+        <p className="tags">
+          {conversation.tags.map((tag) => (
+            <span key={tag} className="chip">{tag}</span>
+          ))}
+        </p>
+      )}
+    </div>
   );
 }

@@ -10,7 +10,24 @@ export function App() {
   const [session, setSession] = useState<AdminSession | null>(loadSession);
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("backoffice:collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [page, setPage] = useState<"config" | "conversations" | "escalations">("config");
+
+  const toggleSidebar = () =>
+    setCollapsed((now) => {
+      try {
+        localStorage.setItem("backoffice:collapsed", now ? "0" : "1");
+      } catch {
+        /* storage unavailable: it just won't be remembered */
+      }
+      return !now;
+    });
 
   const leave = useCallback(() => {
     saveSession(null);
@@ -49,12 +66,23 @@ export function App() {
   ].filter((item) => item.allowed);
 
   return (
-    <div className="shell">
+    <div className={collapsed ? "shell collapsed" : "shell"}>
       <aside className="sidebar">
-        <span className="brand">
-          <span className="brand-mark" aria-hidden>M</span>MewFlow
-        </span>
-        <label className="tenant-pick">
+        <div className="sidebar-top">
+          <span className="brand">
+            <span className="brand-mark" aria-hidden>M</span>
+            <span className="label">MewFlow</span>
+          </span>
+          <button
+            className="ghost icon-button"
+            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            aria-expanded={!collapsed}
+            onClick={toggleSidebar}
+          >
+            {collapsed ? "»" : "«"}
+          </button>
+        </div>
+        <label className="tenant-pick label">
           Tenant
           <select
             value={tenantId ?? ""}
@@ -74,20 +102,22 @@ export function App() {
               key={item.id}
               className={page === item.id ? "nav-item active" : "nav-item"}
               aria-current={page === item.id ? "page" : undefined}
+              aria-label={item.label}
+              title={item.label}
               onClick={() => setPage(item.id)}
             >
               <span className="nav-icon" aria-hidden>{item.icon}</span>
-              {item.label}
+              <span className="label">{item.label}</span>
             </button>
           ))}
         </nav>
         <div className="user-box">
           <span className="avatar" aria-hidden>{(session.name[0] ?? "?").toUpperCase()}</span>
-          <span className="user-info">
+          <span className="user-info label">
             <span className="who">{session.name}</span>
             <span className="role-badge">{session.role}</span>
           </span>
-          <button className="ghost" onClick={leave}>Leave</button>
+          <button className="ghost label" onClick={leave}>Leave</button>
         </div>
       </aside>
       <main className={page === "config" ? undefined : "wide"}>
