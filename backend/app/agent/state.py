@@ -34,6 +34,10 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
     customer_id: str | None
+    # Hints the visitor's browser sent (`device: iphone`, a tag). Unverified: they change how we
+    # talk or what we offer, never what is allowed (see `app.chat.context`).
+    conversation_properties: dict[str, str]
+    conversation_tags: list[str]
     # Who is asking, as the session proves it: the shop, and (only for an order lookup) the one
     # order they named. Never taken from the message.
     tenant_id: str | None

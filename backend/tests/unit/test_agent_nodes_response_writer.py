@@ -188,24 +188,60 @@ def test_does_not_retry_when_a_search_is_not_required(monkeypatch, intent, tool_
     assert len(model.prompts) == 1
 
 
-
-
-
-
 def test_an_order_kept_with_the_offer_says_so_in_the_listing():
     from datetime import UTC, datetime
 
     from app.schemas.orders import OrderDetails, RetentionChoice, RetentionReceipt
 
     order = OrderDetails(
-        order_id="A" * 20, customer_email="a@b.test", plan_slug="starter", amount_cents=6999,
-        currency="usd", status="open", created_at=datetime(2026, 10, 1, tzinfo=UTC),
-        retention=RetentionReceipt(order_id="A" * 20, choice=RetentionChoice.REFUND, refund_cents=1400),
+        order_id="A" * 20,
+        customer_email="a@b.test",
+        plan_slug="starter",
+        amount_cents=6999,
+        currency="usd",
+        status="open",
+        created_at=datetime(2026, 10, 1, tzinfo=UTC),
+        retention=RetentionReceipt(
+            order_id="A" * 20, choice=RetentionChoice.REFUND, refund_cents=1400
+        ),
     )
 
-    blob = response_writer_module._build_context_blob({"intent": "order_status", "customer_orders": [order]})
+    blob = response_writer_module._build_context_blob(
+        {"intent": "order_status", "customer_orders": [order]}
+    )
 
     assert "kept by the customer with a refund of $14.00 to their card" in blob
 
 
+def test_context_blob_hides_the_internal_customer_id():
+    from app.schemas.tools import CustomerContext
 
+    customer_id = uuid.uuid4()
+    context = CustomerContext(
+        customer_id=customer_id,
+        name="Ada",
+        email="ada@example.com",
+        company=None,
+        status="active",
+        subscription=None,
+    )
+
+    blob = response_writer_module._build_context_blob({"customer_context": context})
+
+    assert "Ada" in blob
+    assert str(customer_id) not in blob
+
+
+def test_context_blob_hides_the_customer_email():
+    from app.schemas.tools import CustomerContext
+
+    context = CustomerContext(
+        customer_id=uuid.uuid4(),
+        name="Ada",
+        email="ada@example.com",
+        company=None,
+        status="active",
+        subscription=None,
+    )
+    blob = response_writer_module._build_context_blob({"customer_context": context})
+    assert "ada@example.com" not in blob

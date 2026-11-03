@@ -99,6 +99,7 @@ def test_the_chat_hands_the_agent_the_tenant_and_the_order_of_the_session():
     from app.api.chat import _build_initial_state
     from app.auth.scopes import IdentityLevel
     from app.auth.session import SessionClaims
+    from app.chat.turns import TurnAction, TurnStart
 
     session = SessionClaims(
         tenant_id=uuid.UUID(TENANT),
@@ -107,7 +108,7 @@ def test_the_chat_hands_the_agent_the_tenant_and_the_order_of_the_session():
         level=IdentityLevel.ORDER_LOOKUP,
         order_id=ORDER_ID,
     )
-    turn = type("Turn", (), {"history": [], "user_text": "where is my order?", "pending_return": None, "click": None, "click_order_id": None})()
+    turn = TurnStart(TurnAction.RUN, user_text="where is my order?")
 
     state = _build_initial_state(turn, session)
 

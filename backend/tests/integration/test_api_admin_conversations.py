@@ -28,6 +28,8 @@ def _conversation(db, tenant, *, minutes_ago, customer=None, texts=()):
         created_at=NOW - timedelta(minutes=minutes_ago + 5),
         last_activity_at=NOW - timedelta(minutes=minutes_ago),
         last_seq=len(texts),
+        properties={"device": "iphone"} if customer else {},
+        tags=["landing-sale"] if customer else [],
     )
     db.add(conversation)
     db.flush()
@@ -135,3 +137,12 @@ def test_an_unknown_conversation_is_not_found(world):
         f"/api/admin/tenants/{world['a']}/conversations/{uuid.uuid4()}", headers=_login("viewer", world["a"])
     )
     assert response.status_code == 404
+
+
+def test_the_hints_the_visitor_set_are_in_the_list_and_the_detail(world):
+    headers = _login("viewer", world["a"])
+    items = client.get(f"/api/admin/tenants/{world['a']}/conversations", headers=headers).json()
+    assert items[0]["tags"] == ["landing-sale"] and items[1]["tags"] == []
+    detail = client.get(f"/api/admin/tenants/{world['a']}/conversations/{world['recent']}", headers=headers).json()
+    assert detail["properties"] == {"device": "iphone"}
+    assert detail["tags"] == ["landing-sale"]

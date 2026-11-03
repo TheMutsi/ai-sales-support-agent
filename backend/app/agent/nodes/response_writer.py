@@ -51,7 +51,10 @@ def _build_context_blob(state: AgentState) -> str:
     sections: list[str] = []
 
     if customer_context := state.get("customer_context"):
-        sections.append(f"Customer account:\n{customer_context.model_dump_json(indent=2)}")
+        # Internal ids and contact details are never shown to a customer, so they are
+        # kept out of the prompt: what the model never sees it cannot repeat.
+        account = customer_context.model_dump_json(indent=2, exclude={"customer_id", "email"})
+        sections.append(f"Customer account:\n{account}")
 
     if eligibility_result := state.get("eligibility_result"):
         sections.append(f"Upgrade eligibility:\n{eligibility_result.model_dump_json(indent=2)}")
@@ -69,6 +72,9 @@ def _build_context_blob(state: AgentState) -> str:
         sections.append(f"The customer's orders:\n{listing}")
     elif state.get("intent") == Intent.ORDER_STATUS:
         sections.append("Order:\nThere is no order with that number for this customer.")
+
+    if hints := _format_hints(state):
+        sections.append(f"What the visitor's browser told us (unverified):\n{hints}")
 
     if checkout_session := state.get("checkout_session"):
         sections.append(f"Checkout created:\n{checkout_session.model_dump_json(indent=2)}")
@@ -94,6 +100,14 @@ def _format_plan_catalog(plans: list[PlanSummary]) -> str:
         f"; features: {', '.join(plan.features)}"
         for plan in plans
     )
+
+
+def _format_hints(state: AgentState) -> str:
+    properties = state.get("conversation_properties") or {}
+    lines = [f"- {key}: {value}" for key, value in properties.items()]
+    if tags := state.get("conversation_tags"):
+        lines.append(f"- tags: {', '.join(tags)}")
+    return "\n".join(lines)
 
 
 _STATUS_TEXT = {
