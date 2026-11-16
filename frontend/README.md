@@ -71,6 +71,8 @@ example/index.html    a fake shop page that embeds the widget
 
 ## Behaviour the code relies on
 
+- **Product cards with two pictures** draw the second behind the first, shifted so about a
+  quarter of it shows, like a stack (`.mew-stack-back`).
 - **Sessions.** One session per shop, in `localStorage` (the iframe shares the page's origin), so
   every tab shares the conversation; a `BroadcastChannel` tells the others when it changes. If
   storage throws (private windows, blocked site data) the widget still works and starts a new
