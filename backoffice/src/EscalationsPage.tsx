@@ -6,13 +6,15 @@ import {
   listEscalations,
   readConversation,
   replyToVisitor,
+  resolveEscalation,
   type AdminSession,
   type ConversationDetail,
+  type EscalationFilters,
   type EscalationItem,
 } from "./api";
 import { messageFor } from "./config";
 import { who } from "./conversations";
-import { speaker, waitingLine } from "./escalations";
+import { reasonLine, speaker, splitList, waitingLine } from "./escalations";
 
 const POLL_MS = 4000; // the visitor's widget polls too; a few seconds is enough for a chat
 
@@ -29,6 +31,9 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
   const [text, setText] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // What was typed, and what was last applied: the list only reloads on "Search", not per key.
+  const [form, setForm] = useState({ q: "", tags: "", properties: "", route: "", status: "open" });
+  const [filters, setFilters] = useState<EscalationFilters>({ status: "open" });
   const latest = useRef(0); // only the newest detail request may update the screen
   const canAct = session.permissions.includes("escalations:reply");
 
@@ -41,7 +46,7 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
   );
 
   const refresh = useCallback(() => {
-    listEscalations(session.token, tenantId)
+    listEscalations(session.token, tenantId, filters)
       .then((loaded) => {
         setItems(loaded);
         setError(null);
@@ -52,7 +57,7 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
     readConversation(session.token, tenantId, selected)
       .then((loaded) => mine === latest.current && setDetail(loaded))
       .catch(fail);
-  }, [session.token, tenantId, selected, fail]);
+  }, [session.token, tenantId, selected, filters, fail]);
 
   useEffect(() => {
     refresh();
@@ -69,6 +74,17 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
       })
       .catch(fail);
 
+  const search = (event: React.FormEvent) => {
+    event.preventDefault();
+    setFilters({
+      status: form.status as EscalationFilters["status"],
+      route: (form.route || undefined) as EscalationFilters["route"],
+      q: form.q,
+      tags: splitList(form.tags),
+      properties: splitList(form.properties),
+    });
+  };
+
   const open = (id: string) => {
     setDetail(null);
     setText("");
@@ -78,25 +94,63 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
 
   if (!items) return <p>{error ?? "Loading…"}</p>;
   const active = detail?.handoff_status === "active";
+  const selectedItem = items.find((item) => item.id === selected);
+  // A conversation with an open escalation and nobody in the chat: a person follows up later.
+  const offlineOpen = detail?.escalation_status === "open" && detail.handoff_status === "none";
   const waiting = detail?.handoff_status === "waiting";
 
   return (
     <section className="conversations agent-view">
       <div className="list">
         <h2>Escalations</h2>
+        <form className="filters" onSubmit={search}>
+          <input
+            value={form.q}
+            onChange={(event) => setForm({ ...form, q: event.target.value })}
+            placeholder="Search a number, customer or message"
+            aria-label="Search"
+          />
+          <input
+            value={form.tags}
+            onChange={(event) => setForm({ ...form, tags: event.target.value })}
+            placeholder="Tags: vip, black-friday"
+            aria-label="Tags"
+          />
+          <input
+            value={form.properties}
+            onChange={(event) => setForm({ ...form, properties: event.target.value })}
+            placeholder="Info: device:iphone"
+            aria-label="Info"
+          />
+          <div className="reply">
+            <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} aria-label="Status">
+              <option value="open">Open</option>
+              <option value="resolved">Resolved</option>
+              <option value="all">All</option>
+            </select>
+            <select value={form.route} onChange={(event) => setForm({ ...form, route: event.target.value })} aria-label="Kind">
+              <option value="">Live and offline</option>
+              <option value="live">Live</option>
+              <option value="offline">Offline</option>
+            </select>
+            <button className="primary" type="submit">Search</button>
+          </div>
+        </form>
         {error && <p className="error">{error}</p>}
-        {items.length === 0 && <p className="hint">Nobody is waiting for a person.</p>}
+        {items.length === 0 && <p className="hint">Nothing matches.</p>}
         <ul>
           {items.map((item) => (
             <li key={item.id}>
               <button
                 className={selected === item.id ? "item active" : "item"}
-                data-state={item.handoff_status}
+                data-state={item.status === "resolved" ? "resolved" : item.handoff_status}
                 onClick={() => open(item.id)}
               >
                 <strong>{who(item)}</strong>
-                <span className="hint">{waitingLine(item)}</span>
-                <span>{item.ticket?.subject}</span>
+                <span className="hint">
+                  {item.reference} · {item.route === "live" ? "Live" : "Offline"} · {waitingLine(item)}
+                </span>
+                {item.tags.length > 0 && <span className="hint">{item.tags.join(", ")}</span>}
                 <span className="hint">{item.last_message}</span>
               </button>
             </li>
@@ -113,7 +167,19 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
                   {waiting ? "Waiting" : `With ${detail.handoff_agent_name ?? "an agent"}`}
                 </span>
               )}
+              {detail.escalation_reference && (
+                <span className="chip">
+                  {detail.escalation_reference} · {detail.escalation_route} · {detail.escalation_status}
+                </span>
+              )}
             </div>
+            {selectedItem && reasonLine(selectedItem.reason) && <p className="hint">{reasonLine(selectedItem.reason)}</p>}
+            {Object.keys(detail.properties).length > 0 && (
+              <p className="hint">
+                {Object.entries(detail.properties).map(([key, value]) => `${key}: ${value}`).join(" · ")}
+              </p>
+            )}
+            {detail.escalation_notes && <p className="hint">Notes: {detail.escalation_notes}</p>}
             {detail.messages.map((message) => (
               <p key={message.seq} className={`message ${message.role}`}>
                 <span className="hint">{speaker(message)}</span>
@@ -148,6 +214,17 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
                   </button>
                 </div>
               </>
+            )}
+            {offlineOpen && canAct && (
+              <div className="reply">
+                <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="What was done (optional)" />
+                <button
+                  className="primary"
+                  onClick={() => act(resolveEscalation(session.token, tenantId, detail.id, notes), () => setNotes(""))}
+                >
+                  Mark as resolved
+                </button>
+              </div>
             )}
             {!canAct && <p className="hint">Your role can read escalations but not answer them.</p>}
           </>

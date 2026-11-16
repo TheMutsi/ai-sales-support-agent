@@ -1,40 +1,53 @@
-from langchain_core.messages import SystemMessage
+import uuid
+from datetime import UTC, datetime
 
 from app.agent.nodes._identity import require_customer_id
-from app.agent.prompts.human_escalation import HUMAN_ESCALATION_SYSTEM_PROMPT
 from app.agent.state import AgentState
-from app.core.llm import get_chat_model
-from app.schemas.agent import Intent, TicketDraft
-from app.schemas.tools import TicketCategory
-from app.tools.tickets import create_support_ticket
+from app.business.escalation import RoutingFacts, decide_route
+from app.chat.presence import count_available
+from app.core.tenant_config import tenant_configs
+from app.db.session import SessionLocal
+from app.schemas.agent import Intent
+from app.schemas.tools import EscalationCategory, EscalationReceipt
+from app.tools.escalation import new_reference
 
 # Deterministic lookup, no LLM call needed since `intent` is already
 # classified by this point in the graph.
-_INTENT_TICKET_CATEGORY = {
-    Intent.REFUND_REQUEST: TicketCategory.REFUND,
-    Intent.TECHNICAL_SUPPORT: TicketCategory.TECHNICAL,
-    Intent.BILLING_QUESTION: TicketCategory.BILLING,
-    Intent.HUMAN_ESCALATION: TicketCategory.ESCALATION,
+_INTENT_CATEGORY = {
+    Intent.REFUND_REQUEST: EscalationCategory.REFUND,
+    Intent.TECHNICAL_SUPPORT: EscalationCategory.TECHNICAL,
+    Intent.BILLING_QUESTION: EscalationCategory.BILLING,
+    Intent.HUMAN_ESCALATION: EscalationCategory.ESCALATION,
 }
 
 
 def human_escalation_node(state: AgentState) -> dict:
-    # First, before the model call: without a customer there is no ticket to write.
-    customer_id = require_customer_id(state)
-    intent = state["intent"]
-    category = _INTENT_TICKET_CATEGORY.get(intent, TicketCategory.OTHER)
-
-    structured_llm = (
-        get_chat_model().with_structured_output(TicketDraft).with_retry(stop_after_attempt=3)
+    """Escalates the conversation to a person, and decides which kind: one who joins the chat now
+    or one who follows up later (`app.business.escalation`). There is no summary to write: whoever
+    takes it reads the conversation, which is short. The follow-up number is kept on the
+    conversation when the turn is saved."""
+    require_customer_id(state)  # without a customer there is nothing to follow up
+    if existing := state.get("open_escalation"):
+        return {"escalation_receipt": existing, "escalated": True}
+    tenant_id = uuid.UUID(state["tenant_id"])
+    config = tenant_configs.get(tenant_id)
+    now = datetime.now(UTC)
+    result = state.get("return_result")
+    order = (result.order if result else None) or state.get("order_details")
+    with SessionLocal() as db:
+        agents = count_available(db, tenant_id=tenant_id, now=now)
+    decision = decide_route(
+        RoutingFacts(
+            now=now,
+            support_hours=config.support_hours if config else None,
+            agents_available=agents,
+            order_status=order.status if order else None,
+        )
     )
-    draft = structured_llm.invoke(
-        [SystemMessage(content=HUMAN_ESCALATION_SYSTEM_PROMPT), *state["messages"]]
+    receipt = EscalationReceipt(
+        reference=new_reference(),
+        route=decision.route,
+        reason=decision.reason,
+        category=_INTENT_CATEGORY.get(state["intent"], EscalationCategory.OTHER),
     )
-
-    ticket = create_support_ticket(
-        customer_id=customer_id,
-        category=category,
-        subject=draft.subject,
-        description=draft.description,
-    )
-    return {"ticket_receipt": ticket, "escalated": True}
+    return {"escalation_receipt": receipt, "escalated": True}

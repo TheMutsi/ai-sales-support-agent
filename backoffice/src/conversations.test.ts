@@ -40,6 +40,7 @@ describe("metadata", () => {
     const detail = {
       id: "c1", identity_level: "store_login", linked_via: "store_login", handoff_status: "active",
       handoff_agent_name: "Sam", properties: {}, tags: [], customer: null,
+      escalation_reference: null, escalation_route: null, escalation_status: null, escalation_notes: null,
       created_at: "2026-01-01T00:00:00", last_activity_at: "2026-01-01T00:01:00", messages: [], identification: [],
     };
     const rows = Object.fromEntries(metadataRows(detail));

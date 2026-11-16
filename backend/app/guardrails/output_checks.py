@@ -36,7 +36,7 @@ _BILLING_SPECULATION_PATTERN = re.compile(
 
 _TICKET_CREATION_CLAIM_PATTERN = re.compile(
     r"(he creado|ha creado|hemos creado|se cre[oó]|creamos|i('ve| have)? created|created a) "
-    r".{0,20}ticket",
+    r".{0,20}(ticket|follow-up number|n[uú]mero de seguimiento)",
     re.IGNORECASE,
 )
 
@@ -44,7 +44,7 @@ _TICKET_CREATION_CLAIM_PATTERN = re.compile(
 # number is #123" or "123 is your ticket number") — when `ticket_receipt`
 # is None there's no real number to cite, so this alone is unconditional.
 _TICKET_NUMBER_CLAIM_PATTERN = re.compile(
-    r"(ticket|caso)\D{0,25}\d{3,}|\d{3,}\D{0,25}(ticket|caso)",
+    r"(ticket|caso)\D{0,25}\d{3,}|\d{3,}\D{0,25}(ticket|caso)|\bMF-[A-Z0-9]{8}\b",
     re.IGNORECASE,
 )
 

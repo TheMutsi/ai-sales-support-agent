@@ -65,6 +65,11 @@ class ConversationDetail(BaseModel):
     linked_via: str | None
     handoff_status: str
     handoff_agent_name: str | None
+    # The escalation to a person this conversation has, if any (see `app.api.admin_escalations`).
+    escalation_reference: str | None
+    escalation_route: str | None
+    escalation_status: str | None
+    escalation_notes: str | None
     # The public hints the visitor's page set (see `app.chat.context`): not verified facts.
     properties: dict[str, str]
     tags: list[str]
@@ -144,6 +149,10 @@ def read_conversation(
         linked_via=conversation.linked_via,
         handoff_status=conversation.handoff_status,
         handoff_agent_name=conversation.handoff_agent_name,
+        escalation_reference=conversation.escalation_reference,
+        escalation_route=conversation.escalation_route,
+        escalation_status=conversation.escalation_status,
+        escalation_notes=conversation.escalation_notes,
         properties=conversation.properties,
         tags=conversation.tags,
         customer=customer_view(customer),

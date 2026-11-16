@@ -55,16 +55,6 @@ class IntentClassification(BaseModel):
         return value
 
 
-class TicketDraft(BaseModel):
-    """What `human_escalation_node` asks the LLM to write for a support ticket.
-    `category` is deliberately not part of this schema — it's derived from the
-    already-classified `Intent` via a fixed mapping, not left to the LLM, since
-    that mapping can't fail the way free-text generation can."""
-
-    subject: str
-    description: str
-
-
 class ReturnChoice(StrEnum):
     """What a customer's message means for an order they want to reject or return."""
 

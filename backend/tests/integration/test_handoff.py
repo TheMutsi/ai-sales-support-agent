@@ -23,9 +23,10 @@ from app.chat.turns import (
     list_messages,
 )
 from app.core.config import get_settings
-from app.db.models import Conversation, Customer, Message, Tenant, Ticket
+from app.db.models import Conversation, Customer, Message, Tenant
 from app.db.session import SessionLocal
 from app.main import app
+from app.schemas.tools import EscalationReceipt
 
 client = TestClient(app)
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
@@ -44,19 +45,24 @@ def shop(tenant_wipe):
             db, tenant_id=tenant.id, customer_id=customer.id, level=IdentityLevel.STORE_LOGIN,
             conversation_id=None, now=NOW,
         )
-        ticket = Ticket(customer_id=customer.id, category="escalation", subject="s", description="d")
-        db.add(ticket)
         db.commit()
-        yield {"db": db, "tenant": tenant, "customer": customer, "conversation": conversation, "ticket": ticket}
+        yield {"db": db, "tenant": tenant, "customer": customer, "conversation": conversation}
 
 
-def _escalate(shop, text="I want a person"):
-    """A turn whose reply opened a ticket, as the agent's escalation does."""
+def _receipt(route="live", reference="MF-ABCD2345") -> EscalationReceipt:
+    return EscalationReceipt(
+        reference=reference, route=route, reason="agent_available" if route == "live" else "no_agent_available",
+        category="escalation",
+    )
+
+
+def _escalate(shop, text="I want a person", receipt=None):
+    """A turn whose reply escalated the conversation, as the agent's escalation does."""
     db, conversation = shop["db"], shop["conversation"]
     turn = begin_turn(db, conversation_id=conversation.id, client_message_id=uuid.uuid4(), content=text, now=NOW)
     finish_turn(
-        db, conversation_id=conversation.id, turn=turn, content="A ticket was opened.", now=NOW,
-        escalation_ticket_id=shop["ticket"].id,
+        db, conversation_id=conversation.id, turn=turn, content="Passed to a person.", now=NOW,
+        escalation=receipt or _receipt(),
     )
 
 
@@ -70,7 +76,8 @@ def test_an_escalation_puts_the_conversation_in_the_waiting_state_with_a_notice(
 
     conversation = _state(shop)
     assert conversation.handoff_status == HandoffStatus.WAITING
-    assert conversation.handoff_ticket_id == shop["ticket"].id
+    assert (conversation.escalation_reference, conversation.escalation_status) == ("MF-ABCD2345", "open")
+    assert conversation.escalation_route == "live"
     assert conversation.handoff_requested_at is not None
     stored = list_messages(shop["db"], conversation_id=conversation.id)
     assert [(m.role, m.kind) for m in stored] == [("user", "text"), ("assistant", "text"), ("system", "system")]
@@ -78,11 +85,38 @@ def test_an_escalation_puts_the_conversation_in_the_waiting_state_with_a_notice(
     assert stored[2].content == ESCALATION_NOTICE
 
 
-def test_a_turn_without_a_ticket_does_not_wait_for_a_person(shop):
+def test_a_turn_that_does_not_escalate_does_not_wait_for_a_person(shop):
     db, conversation = shop["db"], shop["conversation"]
     turn = begin_turn(db, conversation_id=conversation.id, client_message_id=uuid.uuid4(), content="hi", now=NOW)
     finish_turn(db, conversation_id=conversation.id, turn=turn, content="hello", now=NOW)
     assert _state(shop).handoff_status == HandoffStatus.NONE
+    assert _state(shop).escalation_status is None
+
+
+def test_an_offline_escalation_keeps_the_number_and_leaves_the_assistant_answering(shop):
+    _escalate(shop, receipt=_receipt("offline"))
+
+    conversation = _state(shop)
+    assert (conversation.escalation_route, conversation.escalation_status) == ("offline", "open")
+    assert conversation.escalation_reason == "no_agent_available"
+    assert conversation.handoff_status == HandoffStatus.NONE
+    assert [m.role for m in list_messages(shop["db"], conversation_id=conversation.id)] == ["user", "assistant"]
+    db = shop["db"]
+    next_turn = begin_turn(db, conversation_id=conversation.id, client_message_id=uuid.uuid4(), content="and?", now=NOW)
+    assert next_turn.action is TurnAction.RUN  # nobody is coming to the chat
+    assert next_turn.open_escalation.reference == "MF-ABCD2345"
+
+
+def test_insisting_keeps_the_open_number_and_a_resolved_one_is_replaced(shop):
+    _escalate(shop, receipt=_receipt("offline", "MF-FIRST222"))
+    _escalate(shop, receipt=_receipt("offline", "MF-SECOND33"))
+    assert _state(shop).escalation_reference == "MF-FIRST222"
+
+    shop["db"].query(Conversation).filter_by(id=shop["conversation"].id).update({"escalation_status": "resolved"})
+    shop["db"].commit()
+    _escalate(shop, receipt=_receipt("offline", "MF-THIRD444"))
+    conversation = _state(shop)
+    assert (conversation.escalation_reference, conversation.escalation_status) == ("MF-THIRD444", "open")
 
 
 def test_while_a_person_has_the_conversation_a_message_is_stored_and_not_answered(shop):
@@ -173,13 +207,11 @@ def test_the_messages_endpoint_says_there_is_no_handoff_in_a_normal_conversation
     assert stored["handoff"] == "none"
 
 
-def test_a_chat_turn_that_opens_a_ticket_leaves_the_conversation_waiting_for_a_person(shop, monkeypatch):
-    from types import SimpleNamespace
-
+def test_a_chat_turn_that_escalates_live_leaves_the_conversation_waiting_for_a_person(shop, monkeypatch):
     final = {
-        "messages": [HumanMessage(content="I want a person"), AIMessage(content="A ticket was opened.")],
+        "messages": [HumanMessage(content="I want a person"), AIMessage(content="Passed to a person.")],
         "escalated": True,
-        "ticket_receipt": SimpleNamespace(ticket_id=shop["ticket"].id),
+        "escalation_receipt": _receipt(),
     }
 
     class Escalating(_Graph):
@@ -191,4 +223,4 @@ def test_a_chat_turn_that_opens_a_ticket_leaves_the_conversation_waiting_for_a_p
     client.post("/api/chat", json={"message": "I want a person", "message_id": str(uuid.uuid4())}, headers=_auth(shop))
 
     assert _state(shop).handoff_status == HandoffStatus.WAITING
-    assert _state(shop).handoff_ticket_id == shop["ticket"].id
+    assert _state(shop).escalation_reference == "MF-ABCD2345"

@@ -88,6 +88,7 @@ from app.schemas.chat import (
 )
 from app.schemas.orders import PendingReturn
 from app.schemas.rag import SourceReference
+from app.schemas.tools import EscalationReceipt
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,7 @@ def _build_initial_state(
         "conversation_properties": turn.properties,
         "conversation_tags": turn.tags,
         "pending_return": turn.pending_return,
+        "open_escalation": turn.open_escalation,
         "action": turn.click,
         "action_order_id": turn.click_order_id,
         "scopes": sorted(s.value for s in scopes_for(session.level, scope_overrides)),
@@ -136,7 +138,7 @@ def _collect_sources(messages: list) -> list[SourceReference]:
 
 def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSummary:
     eligibility_result = final_state.get("eligibility_result")
-    ticket_receipt = final_state.get("ticket_receipt")
+    receipt = final_state.get("escalation_receipt")
     # The raw classifier score is an oracle for whoever is probing the input
     # filter (rephrase until it goes up), so production clients never get it;
     # it stays in the traces. Outside production the evaluation suite needs it.
@@ -147,7 +149,7 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
         conversation_id=conversation_id,
         intent=final_state.get("intent"),
         guardrail_flags=final_state.get("guardrail_flags", []),
-        ticket_created=ticket_receipt is not None,
+        ticket_created=receipt is not None,
         escalated=final_state.get("escalated", False),
         upgrade_eligible=eligibility_result.eligible if eligibility_result else None,
         tool_call_rounds=final_state.get("tool_call_rounds", 0),
@@ -155,7 +157,8 @@ def _summarize_turn(final_state: dict, conversation_id: uuid.UUID) -> ChatTurnSu
         safety_confidence=safety_confidence,
         sources=_collect_sources(final_state.get("messages", [])),
         checkout=final_state.get("checkout_session"),
-        ticket_id=ticket_receipt.ticket_id if ticket_receipt else None,
+        escalation_reference=receipt.reference if receipt else None,
+        escalation_route=receipt.route if receipt else None,
         identity_required=final_state.get("identity_required", False),
         identity_methods=final_state.get("identity_methods", []),
         cards=cards_for(final_state),
@@ -190,7 +193,7 @@ class TurnStore(Protocol):
         self,
         content: str,
         kind: MessageKind = MessageKind.TEXT,
-        escalation_ticket_id: uuid.UUID | None = None,
+        escalation: EscalationReceipt | None = None,
         pending_return: PendingReturn | None | Keep = KEEP,
         cards: list[Card] | None = None,
         return_event: dict | None = None,
@@ -223,7 +226,7 @@ class _DbTurnStore:
         self,
         content: str,
         kind: MessageKind = MessageKind.TEXT,
-        escalation_ticket_id: uuid.UUID | None = None,
+        escalation: EscalationReceipt | None = None,
         pending_return: PendingReturn | None | Keep = KEEP,
         cards: list[Card] | None = None,
         return_event: dict | None = None,
@@ -238,7 +241,7 @@ class _DbTurnStore:
                         content=content,
                         now=datetime.now(UTC),
                         kind=kind,
-                        escalation_ticket_id=escalation_ticket_id,
+                        escalation=escalation,
                         pending_return=pending_return,
                         cards=cards,
                         return_event=return_event,
@@ -396,12 +399,12 @@ async def _stream_turn(
     )
     try:
         # Shielded, so a disconnect can't interrupt saving the reply halfway.
-        receipt = final_state.get("ticket_receipt")
+        receipt = final_state.get("escalation_receipt")
         await asyncio.shield(
             store.finish(
                 final_text,
                 kind,
-                escalation_ticket_id=receipt.ticket_id if receipt else None,
+                escalation=receipt,
                 # Absent means "this run did not touch it", never "clear it".
                 pending_return=final_state.get("pending_return", KEEP),
                 cards=cards_for(final_state),

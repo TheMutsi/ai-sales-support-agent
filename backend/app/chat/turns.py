@@ -20,9 +20,11 @@ from enum import StrEnum
 
 from sqlalchemy.orm import Session
 
+from app.business.escalation import EscalationRoute
 from app.db.models import Conversation, Message, ReturnEvent
 from app.schemas.cards import Card, CardAction
 from app.schemas.orders import PendingReturn, ReturnStage
+from app.schemas.tools import EscalationReceipt
 
 DEFAULT_HISTORY_LIMIT = 20
 TURN_STALE_AFTER = timedelta(minutes=2)
@@ -93,6 +95,9 @@ class TurnStart:
     # The conversation's public hints (see `app.chat.context`), read when the turn starts.
     properties: dict[str, str] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
+    # The escalation this conversation already has open, so a customer who insists is given the same
+    # follow-up number again instead of a new one.
+    open_escalation: EscalationReceipt | None = None
 
 
 ESCALATION_NOTICE = (
@@ -237,6 +242,18 @@ def begin_turn(
         pending_return=pending,
         properties=dict(conversation.properties),
         tags=list(conversation.tags),
+        open_escalation=_open_escalation(conversation),
+    )
+
+
+def _open_escalation(conversation: Conversation) -> EscalationReceipt | None:
+    if conversation.escalation_status != "open":
+        return None
+    return EscalationReceipt(
+        reference=conversation.escalation_reference,
+        route=conversation.escalation_route,
+        reason=conversation.escalation_reason,
+        category=conversation.escalation_category,
     )
 
 
@@ -248,13 +265,15 @@ def finish_turn(
     content: str,
     now: datetime,
     kind: MessageKind = MessageKind.TEXT,
-    escalation_ticket_id: uuid.UUID | None = None,
+    escalation: EscalationReceipt | None = None,
     pending_return: PendingReturn | None | Keep = KEEP,
     cards: list[Card] | None = None,
     return_event: dict | None = None,
 ) -> None:
-    """Saves the reply. If the turn opened a ticket, the conversation now waits for a person:
-    from here on the assistant stops answering it (see `begin_turn`). `pending_return` replaces
+    """Saves the reply. If the turn escalated the conversation, its follow-up number is kept on it;
+    when the route is live it also waits for a person, and from here on the assistant stops
+    answering it (see `begin_turn`). An offline escalation leaves the assistant answering: nobody
+    is coming to the chat. `pending_return` replaces
     the customer's unfinished return (None clears it); left out, it is not touched."""
     conversation = _lock(db, conversation_id)
     if conversation.turn_id != turn.turn_id:
@@ -264,11 +283,21 @@ def finish_turn(
     _append(db, conversation, "assistant", content, now, reply_to_seq=reply_to, kind=kind, cards=cards)
     if return_event is not None:
         db.add(ReturnEvent(**return_event))  # with the reply, in one transaction
-    if escalation_ticket_id is not None and conversation.handoff_status == HandoffStatus.NONE:
-        conversation.handoff_status = HandoffStatus.WAITING
-        conversation.handoff_requested_at = now
-        conversation.handoff_ticket_id = escalation_ticket_id
-        _append(db, conversation, "system", ESCALATION_NOTICE, now, kind=MessageKind.SYSTEM)
+    if escalation is not None and conversation.escalation_status != "open":
+        # One open escalation per conversation: a customer who insists again keeps the number they
+        # were given. A resolved one is replaced by the new request.
+        conversation.escalation_reference = escalation.reference
+        conversation.escalation_route = escalation.route
+        conversation.escalation_reason = escalation.reason
+        conversation.escalation_category = escalation.category
+        conversation.escalation_status = "open"
+        conversation.escalated_at = now
+        conversation.escalation_resolved_at = conversation.escalation_resolved_by = None
+        conversation.escalation_notes = None
+        if escalation.route is EscalationRoute.LIVE and conversation.handoff_status == HandoffStatus.NONE:
+            conversation.handoff_status = HandoffStatus.WAITING
+            conversation.handoff_requested_at = now
+            _append(db, conversation, "system", ESCALATION_NOTICE, now, kind=MessageKind.SYSTEM)
     if not isinstance(pending_return, Keep):
         order_id = pending_return.order_id if pending_return else None
         stage = pending_return.stage.value if pending_return else None

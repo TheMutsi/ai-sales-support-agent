@@ -63,6 +63,9 @@ class Tenant(Base):
     # The pages (origins) the shop's widget runs on. A browser request carrying another
     # origin is refused; see `app.api.origins`.
     allowed_origins: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    # When the team answers live: {"timezone": "America/Argentina/Buenos_Aires", "opens": "09:00",
+    # "closes": "18:00", "weekdays": [0, 1, 2, 3, 4]}. Empty means always (see `app.business.escalation`).
+    support_hours: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     @validates("allowed_origins")
@@ -149,9 +152,18 @@ class Conversation(Base):
     pending_return_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     handoff_agent_name: Mapped[str | None]  # the name the visitor sees, while `active`
     handoff_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    handoff_ticket_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("tickets.id", ondelete="SET NULL")
-    )
+    # An escalation to a person, live (the handoff above) or offline (somebody writes back later).
+    # `escalation_reference` is the follow-up number the customer is given; there is no separate
+    # ticket: what happened is the conversation itself.
+    escalation_reference: Mapped[str | None] = mapped_column(unique=True)
+    escalation_route: Mapped[str | None]  # live | offline
+    escalation_reason: Mapped[str | None]  # why that route, see `app.business.escalation`
+    escalation_category: Mapped[str | None]  # escalation | refund | technical | billing | other
+    escalation_status: Mapped[str | None]  # open | resolved
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    escalation_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    escalation_resolved_by: Mapped[str | None]
+    escalation_notes: Mapped[str | None] = mapped_column(Text)
     # Public hints about the conversation (`device: iphone`, a `landing-sale` tag), set by the
     # widget or the shop's page; see `app.chat.context`. Never a reason to allow anything.
     properties: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, server_default="{}")
@@ -337,7 +349,6 @@ class Customer(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="customer")
-    tickets: Mapped[list["Ticket"]] = relationship(back_populates="customer")
 
 
 class Subscription(Base):
@@ -438,25 +449,15 @@ class DocumentChunk(Base):
     document: Mapped["Document"] = relationship(back_populates="chunks")
 
 
-class Ticket(Base):
-    """A support ticket, created either by the agent (escalation, refund review)
-    or, in the real product, by a human."""
+class AgentPresence(Base):
+    """A back-office agent seen recently: the live escalation route is only taken when someone is
+    there to answer (see `app.chat.presence`)."""
 
-    __tablename__ = "tickets"
+    __tablename__ = "agent_presence"
 
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"))
-    category: Mapped[str]  # escalation | refund | technical | billing | other
-    subject: Mapped[str]
-    description: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(default="open")  # open | pending | resolved
-    priority: Mapped[str] = mapped_column(default="medium")  # low | medium | high
-    created_by: Mapped[str] = mapped_column(default="agent")  # agent | human
-    resolution_notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    resolved_at: Mapped[datetime | None]
-
-    customer: Mapped["Customer"] = relationship(back_populates="tickets")
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
+    agent_name: Mapped[str] = mapped_column(primary_key=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class EvaluationRun(Base):

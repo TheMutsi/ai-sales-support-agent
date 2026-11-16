@@ -183,6 +183,8 @@ legend label { display: inline-flex; align-items: center; gap: 0.45rem; }
 .detail-head { display: flex; align-items: center; gap: 0.6rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
 .chip { padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; background: var(--surface-2); color: var(--muted); }
 .chip.waiting { background: var(--warn-soft); color: var(--warn); }
+.item[data-state="resolved"] { border-left-color: var(--muted); opacity: 0.8; }
+.filters { display: grid; gap: 0.4rem; }
 .chip.active { background: var(--ok-soft); color: var(--ok); }
 .timeline { color: var(--muted); font-size: 0.85rem; margin: 0; padding: 0.5rem 0.75rem 0.5rem 1.6rem; background: var(--surface-2); border-radius: 8px; }
 

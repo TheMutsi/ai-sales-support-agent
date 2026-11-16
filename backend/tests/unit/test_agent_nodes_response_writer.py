@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.nodes import response_writer as response_writer_module
 from app.schemas.agent import Intent
-from app.schemas.tools import PlanSummary, TicketReceipt
+from app.schemas.tools import EscalationReceipt, PlanSummary
 
 
 class _FakeChatModel:
@@ -37,12 +37,13 @@ def test_context_blob_is_empty_note_when_state_has_no_extra_data():
 
 
 def test_context_blob_includes_populated_fields_only():
-    ticket = TicketReceipt(ticket_id=uuid.uuid4(), status="open", created_at="2026-01-01T00:00:00")
-    state = {"ticket_receipt": ticket}
+    receipt = EscalationReceipt(reference="MF-ABCD2345", route="live", reason="agent_available", category="escalation")
+    state = {"escalation_receipt": receipt}
 
     blob = response_writer_module._build_context_blob(state)
 
-    assert "Support ticket created" in blob
+    assert "Follow-up number: MF-ABCD2345" in blob
+    assert "agent will join" in blob
     assert "Customer account" not in blob
 
 

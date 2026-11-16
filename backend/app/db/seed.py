@@ -1,6 +1,6 @@
 """Populate plans, customers, subscriptions and their orders from the fixtures in `data/seed/`.
 
-Documents, tickets, and evaluation runs are intentionally left empty here — they're
+Documents and evaluation runs are intentionally left empty here — they're
 produced by later stages (RAG ingestion, live agent runs, the evaluation suite), not
 by this fixture load.
 """

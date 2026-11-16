@@ -19,6 +19,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.business.escalation import EscalationRoute
 from app.schemas.agent import Intent
 from app.schemas.cards import Card, CardAction
 from app.schemas.rag import SourceReference
@@ -126,7 +127,10 @@ class ChatTurnSummary(BaseModel):
     # from the model's words.
     sources: list[SourceReference] = Field(default_factory=list)
     checkout: CheckoutSession | None = None
-    ticket_id: uuid.UUID | None = None
+    # The follow-up number of an escalation opened this turn, and whether a person joins the chat
+    # now (`live`) or follows up later (`offline`); the widget waits for an agent only for `live`.
+    escalation_reference: str | None = None
+    escalation_route: EscalationRoute | None = None
 
     # The assistant could not go on without knowing who this is. `identity_methods` are the
     # forms the widget should offer ("otp", "order_id"); empty means only the shop's own

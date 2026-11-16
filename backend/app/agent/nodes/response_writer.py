@@ -3,6 +3,7 @@ from langchain_core.messages import SystemMessage
 from app.agent.llm_tools.knowledge_base import make_search_knowledge_base_tool
 from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
 from app.agent.state import AgentState
+from app.business.escalation import EscalationRoute
 from app.core.llm import get_chat_model
 from app.schemas.agent import Intent
 from app.schemas.orders import (
@@ -11,7 +12,7 @@ from app.schemas.orders import (
     RetentionChoice,
     RetentionReceipt,
 )
-from app.schemas.tools import PlanSummary
+from app.schemas.tools import EscalationReceipt, PlanSummary
 
 # The intents where response_writer binds the knowledge-base tool. Billing is
 # included because general billing questions (payment methods, cancellation,
@@ -79,12 +80,22 @@ def _build_context_blob(state: AgentState) -> str:
     if checkout_session := state.get("checkout_session"):
         sections.append(f"Checkout created:\n{checkout_session.model_dump_json(indent=2)}")
 
-    if ticket_receipt := state.get("ticket_receipt"):
-        sections.append(f"Support ticket created:\n{ticket_receipt.model_dump_json(indent=2)}")
+    if receipt := state.get("escalation_receipt"):
+        sections.append(f"Escalated to a person:\n{_format_escalation(receipt)}")
 
     return (
         "\n\n".join(sections) if sections else "No additional data was retrieved for this request."
     )
+
+
+def _format_escalation(receipt: EscalationReceipt) -> str:
+    follow_up = (
+        "An agent will join this chat when one is free; the customer can keep writing here."
+        if receipt.route is EscalationRoute.LIVE
+        else "Nobody can join the chat now: a person will follow up later. The reference is "
+        "how the customer (or the team) finds this conversation again."
+    )
+    return f"Follow-up number: {receipt.reference}\n{follow_up}"
 
 
 def _format_plan_catalog(plans: list[PlanSummary]) -> str:

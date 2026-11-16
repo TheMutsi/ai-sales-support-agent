@@ -27,7 +27,7 @@ from app.schemas.agent import Intent, ReturnChoice
 from app.schemas.business import EligibilityResult, UpsellDecision
 from app.schemas.cards import CardAction
 from app.schemas.orders import OrderDetails, PendingReturn, ReturnResult
-from app.schemas.tools import CheckoutSession, CustomerContext, PlanSummary, TicketReceipt
+from app.schemas.tools import CheckoutSession, CustomerContext, EscalationReceipt, PlanSummary
 
 
 class AgentState(TypedDict):
@@ -73,7 +73,9 @@ class AgentState(TypedDict):
     upsell_decision: UpsellDecision | None
 
     checkout_session: CheckoutSession | None
-    ticket_receipt: TicketReceipt | None
+    escalation_receipt: EscalationReceipt | None
+    # The escalation the conversation already has open (see `TurnStart.open_escalation`).
+    open_escalation: EscalationReceipt | None
 
     escalated: bool
     escalation_reason: str | None
