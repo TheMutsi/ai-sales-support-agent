@@ -12,7 +12,6 @@ import { installGlobal, readKey } from "./loader/global";
 import { App } from "./widget/App";
 import styles from "./widget/styles.css?inline";
 
-// Must be read while the script is executing; afterwards `currentScript` is null.
 const script = document.currentScript as HTMLScriptElement | null;
 
 function boot() {
@@ -28,7 +27,6 @@ function boot() {
   const context = createContext(api, auth);
   const chat = createChat(api, auth, store, context);
   const identity = createIdentity(api, auth, chat);
-  // Another tab changed the conversation (a message, a login): show the stored state.
   store.subscribe(() => void chat.load());
   const settings = { sound: true };
   installGlobal(
@@ -55,6 +53,5 @@ function boot() {
   createRoot(mount).render(createElement(App, { controller, chat, identity, settings }));
 }
 
-// The shop may place the <script> in <head>, before <body> exists.
 if (document.body) boot();
 else document.addEventListener("DOMContentLoaded", boot);

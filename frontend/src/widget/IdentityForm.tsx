@@ -3,18 +3,10 @@ import type { Identity } from "../data/identity";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE = /^[0-9]{6}$/;
-// Exactly what the server accepts: 20 ASCII letters or digits.
 const ORDER_ID = /^[A-Za-z0-9]{20}$/;
 
 type Step = "email" | "choose" | "code" | "order";
 
-/**
- * One card, outside the chat bubbles. The email always comes first; then the visitor proves it
- * with a code we email them, or with the number of one of their orders (when the shop allows
- * both they choose; with only one it goes straight to it). Whether the address or the order
- * exists is never revealed: the server always answers the same, so each step is shown either way
- * and a failure gets one generic message.
- */
 export function IdentityForm({ identity, methods }: { identity: Identity; methods: string[] }) {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");

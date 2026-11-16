@@ -10,14 +10,9 @@ export const Logo = ({ online = false }: { online?: boolean }) => (
 interface Entry {
   label: string;
   icon: ReactNode;
-  /** Only an entry with a handler does anything; the others are placeholders for later. */
   onSelect?: () => void;
 }
 
-/**
- * The home view: a greeting and the things a visitor can do. Only "Help & Support" leads
- * anywhere (to the chat); the other entries are drawn but do nothing yet.
- */
 export function Menu({
   unread = 0,
   onHelp,

@@ -2,20 +2,15 @@ import type { ChatEvent, ChatMessage, Handoff } from "./types";
 
 export interface ChatState {
   messages: ChatMessage[];
-  /** A turn is in flight: the input should wait. */
   streaming: boolean;
   error: string | null;
-  /** The assistant asked the visitor to identify; `methods` are the ways to offer (empty: only the shop's own login). */
   identity: { methods: string[] } | null;
-  /** A person has the conversation: the widget polls for what they write. */
   handoff: Handoff;
-  /** The server refused what was sent as malformed (our own widget cannot do that): this conversation cannot go on. */
   broken: boolean;
 }
 
 export const initialState: ChatState = { messages: [], streaming: false, error: null, identity: null, handoff: "none", broken: false };
 
-/** Id of the assistant message being written by the current turn. */
 export const STREAMING_ID = "streaming";
 
 function setAnswer(state: ChatState, text: string): ChatState {
@@ -27,11 +22,6 @@ function setAnswer(state: ChatState, text: string): ChatState {
   return { ...state, messages };
 }
 
-/**
- * How one server event changes the conversation. `delta` appends live text; `reset` drops text
- * the model said before searching the knowledge base; `message` and `correction` carry the final
- * text (a guardrail may have rewritten what was streamed), so they replace rather than append.
- */
 export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
   switch (event.event) {
     case "delta": {
@@ -57,8 +47,6 @@ export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
         messages,
         streaming: false,
         identity: event.data.identity_required ? { methods: event.data.identity_methods } : null,
-        // A turn that escalated live leaves the conversation waiting for a person (the server
-        // decided that when it saved the reply). An offline one only gives a number: nobody joins.
         handoff: event.data.handoff ?? (event.data.escalation_route === "live" ? "waiting" : state.handoff),
       };
     }

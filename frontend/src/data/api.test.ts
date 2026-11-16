@@ -87,7 +87,6 @@ describe("cards", () => {
   });
 });
 
-
 describe("picture addresses", () => {
   it("accepts only http(s) ones and drops anything else", async () => {
     const card = (url: string) => ({ type: "product", id: url, name: "x", image: { url, alt: "x" } });

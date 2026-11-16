@@ -18,7 +18,7 @@ export function Composer({
     if (disabled || !text.trim()) return;
     onSend(text.trim(), images);
     setText("");
-    setImages([]); // the sent message keeps its preview URLs, so they are not revoked here
+    setImages([]);
     setProblem(null);
   };
 
@@ -31,7 +31,7 @@ export function Composer({
       else added.push({ url: URL.createObjectURL(file), name: file.name });
     }
     setImages([...images, ...added]);
-    event.target.value = ""; // picking the same file again must still fire a change
+    event.target.value = "";
   };
 
   const remove = (url: string) => {
@@ -39,8 +39,6 @@ export function Composer({
     setImages(images.filter((image) => image.url !== url));
   };
 
-  // Enter sends, Shift+Enter adds a line. `isComposing` keeps an IME's Enter (choosing a
-  // character) from sending a half-typed message.
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();

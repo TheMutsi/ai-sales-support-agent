@@ -2,20 +2,13 @@ import { useEffect, useState } from "react";
 import type { Card, CardImage } from "../data/types";
 import { ChevronRight } from "./icons";
 
-/** A card the visitor can click. */
 export type ActionCard = Extract<Card, { type: "action" }>;
 
 interface Handlers {
-  /** An action card was chosen: it is sent as the action it carries, saying what its message says. */
   onPick: (card: ActionCard) => void;
-  /** A product's pictures were chosen: show them large (the first one first). */
   onZoom: (images: CardImage[]) => void;
 }
 
-/**
- * The cards of one reply. Action cards only work on the latest reply (an old offer must not be
- * taken again), and not while an answer is being written.
- */
 export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active: boolean } & Handlers) {
   return (
     <div className="mew-cards">
@@ -72,12 +65,9 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
   );
 }
 
-/** A picture shown large over the panel; Escape, the backdrop or the button close it. */
 export function Lightbox({ images, onClose }: { images: CardImage[]; onClose: () => void }) {
   const [shown, setShown] = useState(0);
   const image = images[shown] ?? images[0];
-  // Closing puts the focus back where it was (the picture that was chosen). Read while rendering,
-  // before the close button takes the focus.
   const [opener] = useState(() => document.activeElement as HTMLElement | null);
   useEffect(() => () => opener?.focus?.(), [opener]);
   useEffect(() => {

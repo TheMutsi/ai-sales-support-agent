@@ -1,16 +1,10 @@
 import { isCommand, type Command } from "./commands";
 
 export interface WidgetState {
-  /** The chat panel is expanded. */
   open: boolean;
-  /** The launcher button is on screen at all (`hide` removes it, `show` brings it back). */
   visible: boolean;
 }
 
-/**
- * The widget's state lives outside React so the shop's `Mew(...)` calls can change it
- * before, during or after the UI mounts. React reads it with `useSyncExternalStore`.
- */
 export function createController() {
   let state: WidgetState = { open: false, visible: true };
   const listeners = new Set<() => void>();

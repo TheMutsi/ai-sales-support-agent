@@ -1,6 +1,5 @@
 import type { Session } from "./types";
 
-/** A conversation stays resumable for 24 hours after its last activity. */
 export const CONVERSATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 interface Stored {
@@ -8,12 +7,6 @@ interface Stored {
   lastActivity: number;
 }
 
-/**
- * The session in `localStorage` (the iframe is same-origin with the shop's page), so every tab of
- * the shop shares one conversation. A `BroadcastChannel` tells the other tabs when it changes.
- * Storage can throw (private windows, blocked site data): then the widget still works, it just
- * starts a new conversation on every page load.
- */
 export function createSessionStore(
   apiKey: string,
   storage: Storage = localStorage,
@@ -35,14 +28,11 @@ export function createSessionStore(
     try {
       if (stored) storage.setItem(key, JSON.stringify(stored));
       else storage.removeItem(key);
-    } catch {
-      /* storage unavailable: keep working without persistence */
-    }
+    } catch {}
     channel?.postMessage("changed");
   };
 
   return {
-    /** The saved session, or null if there is none, the window passed, or the server's expiry did. */
     load(): Session | null {
       const stored = read();
       if (!stored) return null;
@@ -50,7 +40,6 @@ export function createSessionStore(
       return expired || now() - stored.lastActivity > CONVERSATION_WINDOW_MS ? null : stored.session;
     },
     save: (session: Session) => write({ session, lastActivity: now() }),
-    /** Call when the visitor sends a message: it restarts the 24 hour window. */
     touch() {
       const stored = read();
       if (stored) write({ ...stored, lastActivity: now() });

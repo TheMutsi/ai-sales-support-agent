@@ -69,6 +69,47 @@ src/widget/           React components, markdown, attachments, unread badge, sou
 example/index.html    a fake shop page that embeds the widget
 ```
 
+## Behaviour the code relies on
+
+- **Sessions.** One session per shop, in `localStorage` (the iframe shares the page's origin), so
+  every tab shares the conversation; a `BroadcastChannel` tells the others when it changes. If
+  storage throws (private windows, blocked site data) the widget still works and starts a new
+  conversation on each load. A conversation stays resumable for 24 hours after the last message.
+  Concurrent callers share one login request, the shop's `getToken` is asked again whenever a
+  new session is needed (its token is short-lived), and a rejected session is renewed once.
+- **Turns.** A turn is a `fetch` POST read as server-sent events (`EventSource` cannot POST or
+  send `Authorization`); text is buffered until a blank line closes an event. `delta` appends,
+  `reset` drops what the model said before searching, `message` and `correction` replace. The
+  turn opens only on the first event, so a rejected session fails before any text shows. A 422
+  means our own widget sent something malformed: the visitor is offered a fresh start, nothing
+  more. A click is sent as its action, saying what its card says; a card stored before actions
+  existed is sent as text. Typing dots show from sending until the first word.
+- **While a person has the conversation** the widget polls every few seconds, open or closed (the
+  badge still counts). The poll never starts a conversation or renews a session, which would fork
+  the visitor away from the person, never runs during a turn, and only the newest poll may change
+  the screen. On the menu it still looks, without starting anything, for a conversation a person
+  is in, so a reload while waiting goes straight back to it. The menu itself starts nothing.
+- **Unread badge and sound.** Only finished answers count. The first look at a conversation is the
+  baseline, so an old one does not light the badge; "seen" means the chat is on screen. The sound
+  is a Web Audio ping, silent until the visitor has interacted with the page, and it never throws.
+- **Cards and scrolling.** Action cards work only on the latest reply, not while one is being
+  written, and not once a person has the conversation. A reply with cards holds the scroll at its
+  top so it is read from the start (`HOLD_SCROLL_FOR` in `scroll.ts`; an empty set brings
+  back autoscroll); otherwise the list follows the answer. A picture opens large and gives the
+  focus back to where it was when closed.
+- **Identity form.** Email first, then a code or an order number (20 ASCII letters or digits,
+  what the server accepts); each step is shown whatever the server answers, and a failure gets one
+  generic message, so it never reveals whether an address or an order exists.
+- **Hints** (`addProperty`, `addTag`) are checked against the server's limits here, because one bad
+  value makes the server refuse the whole batch. They are sent before a message, never start a
+  conversation, and a failed send is retried with the next message.
+- **The iframe is sized to what it draws.** `pointer-events: none` on the iframe would also stop
+  the widget's own clicks, so the frame shrinks to the launcher when closed instead.
+- **Markdown** covers paragraphs, lists, bold, code, links and bare urls (the punctuation after a
+  bare url stays in the sentence); headings are bold text, and anything unrecognized, such as a
+  half-streamed `**Star`, stays plain text. Enter sends, Shift+Enter adds a line, and an IME's
+  Enter does not send. SVG is refused as an attachment because it can carry script.
+
 ## Run it
 
 ```bash

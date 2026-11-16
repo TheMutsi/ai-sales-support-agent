@@ -11,11 +11,6 @@ function parseBlock(block: string): ChatEvent | null {
   return { event, data: data.length ? JSON.parse(data.join("\n")) : {} } as ChatEvent;
 }
 
-/**
- * Turns a streamed response body into events. `EventSource` cannot be used: it only does GET
- * and cannot send the `Authorization` header, and a chat turn is a POST. A network chunk can end
- * anywhere, so text is buffered until a blank line closes an event.
- */
 export async function* parseSse(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();

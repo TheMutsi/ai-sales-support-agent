@@ -31,26 +31,20 @@ export function App({
     chat.getState,
   );
 
-  // While a person has the conversation, ask for what they wrote every few seconds, open or not
-  // (a closed panel still shows the unread badge).
   useEffect(() => {
     if (handoff === "none") return;
     const timer = setInterval(() => void chat.refresh(), POLL_MS);
     return () => clearInterval(timer);
   }, [handoff, chat]);
 
-  // The panel starts on the menu; a conversation a person is already in goes straight to the chat.
   const [view, setView] = useState<"menu" | "chat">(handoff === "none" ? "menu" : "chat");
   useEffect(() => {
     if (handoff !== "none") setView("chat");
   }, [handoff]);
 
-  // The conversation is only fetched (and an anonymous one only created) when the chat is shown,
-  // not when the menu is: looking at the menu starts nothing.
   const [synced, setSynced] = useState(false);
   const [zoomed, setZoomed] = useState<CardImage[] | null>(null);
   const showingChat = open && view === "chat";
-  // A picture shown large belongs to the chat that is on screen.
   useEffect(() => {
     if (!showingChat) setZoomed(null);
   }, [showingChat]);
@@ -58,17 +52,13 @@ export function App({
     if (showingChat) void chat.load().finally(() => setSynced(true));
   }, [showingChat, chat]);
 
-  // On the menu, still look (without starting anything) for a conversation a person is in, so a
-  // visitor who reloads while waiting for one is taken to it instead of to a menu that hides it.
   useEffect(() => {
     if (open && view === "menu") void chat.refresh().finally(() => setSynced(true));
   }, [open, view, chat]);
 
-  // "Seen" means the chat is on screen: an answer that arrives while the menu is showing is unread.
   const unread = useUnread(answeredCount(messages), showingChat, () => settings.sound && playPing(), synced || messages.length > 0);
 
   if (!visible) return null;
-  // Typing dots show from the moment of sending until the first word of the answer arrives.
   const waiting = streaming && messages.at(-1)?.role === "user";
   return (
     <div className="mew-root">

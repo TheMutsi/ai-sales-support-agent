@@ -19,7 +19,6 @@ function Part({ part }: { part: MessagePart }) {
   }
 }
 
-/** The assistant's picture next to what it says. */
 export const Avatar = () => (
   <span className="mew-avatar" aria-hidden="true">
     M
@@ -27,14 +26,12 @@ export const Avatar = () => (
 );
 
 export interface CardControls {
-  /** Whether this message is the latest, so its action cards may still be used. */
   active: boolean;
   onPick: (card: ActionCard) => void;
   onZoom: (images: CardImage[]) => void;
 }
 
 export function MessageView({ message, cards }: { message: ChatMessage; cards?: CardControls }) {
-  // A notice ("Mónica joined the chat") is not anyone's speech.
   if (message.role === "system") return <div className="mew-notice">{message.content}</div>;
   if (message.role === "human") {
     return (
@@ -46,7 +43,6 @@ export function MessageView({ message, cards }: { message: ChatMessage; cards?: 
       </div>
     );
   }
-  // The assistant writes markdown; what a visitor types is shown as typed.
   if (message.role === "assistant") {
     return (
       <div className="mew-row-assistant" data-message="">

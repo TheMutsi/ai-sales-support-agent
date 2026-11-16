@@ -25,10 +25,9 @@ const toSession = (json: SessionJson): Session => ({
 });
 
 export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch = fetch) {
-  /** A picture on our API comes as a path; the widget lives on the shop's page, so make it absolute. */
   const safeUrl = (url: string): string => {
     const absolute = url.startsWith("/") ? `${baseUrl}${url}` : url;
-    return /^https?:\/\//i.test(absolute) ? absolute : ""; // a picture is only ever http(s)
+    return /^https?:\/\//i.test(absolute) ? absolute : "";
   };
   const resolveCards = (cards: Card[] | undefined): Card[] | undefined =>
     cards?.map((card) =>
@@ -71,27 +70,20 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
       return toSession(await (await request("/conversations", { body: { api_key: apiKey } })).json());
     },
 
-    /** Exchanges the shop's signed token for a session; `current` keeps an ongoing conversation. */
     async login(token: string, current?: string): Promise<Session> {
       const response = await request("/auth/login", { body: { api_key: apiKey, token }, token: current });
       return toSession(await response.json());
     },
 
-    /** Emails a code. Always the same empty 202, whether or not the address is a customer. */
     async requestOtp(email: string, current?: string): Promise<void> {
       await request("/auth/otp/request", { body: { api_key: apiKey, email }, token: current });
     },
 
-    /** Checks the code on the server (it never passes through the chat) and upgrades the session. */
     async verifyOtp(email: string, code: string, current?: string): Promise<Session> {
       const response = await request("/auth/otp/verify", { body: { api_key: apiKey, email, code }, token: current });
       return toSession(await response.json());
     },
 
-    /**
-     * A weaker proof than a code: an email and one of its orders. The session it gives can read
-     * that order and nothing about the customer. Any mismatch is the same generic 401.
-     */
     async orderLookup(email: string, orderId: string, current?: string): Promise<Session> {
       const response = await request("/auth/order-lookup", {
         body: { api_key: apiKey, email, order_id: orderId },
@@ -100,7 +92,6 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
       return toSession(await response.json());
     },
 
-    /** Sets or removes the conversation's public hints (a `null` property is removed). */
     async updateContext(
       session: Session,
       update: { properties: Record<string, string | null>; add_tags: string[]; remove_tags: string[] },
@@ -128,7 +119,6 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
       };
     },
 
-    /** One chat turn. `messageId` makes a retry replay the stored answer instead of running twice. */
     async *chat(session: Session, input: ChatInput, messageId: string, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
       const response = await request("/chat", { body: { input, message_id: messageId }, token: session.token, signal });
       yield* withCards(parseSse(response.body!));

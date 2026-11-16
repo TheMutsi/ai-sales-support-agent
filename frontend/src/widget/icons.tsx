@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-/** Line icons, drawn inline so the widget stays one script with no image requests. */
 function Icon({ children, size = 22 }: { children: ReactNode; size?: number }) {
   return (
     <svg
