@@ -1,13 +1,3 @@
-"""Unit tests for the `/api/chat` streaming logic (`app/api/chat.py`).
-
-Per CLAUDE.md's testing philosophy, this exercises `stream_chat_turn` against
-a stubbed compiled graph whose `astream_events` yields the exact event shapes
-captured from a real run against the compiled graph (verified live with
-Ollama — see the Stage 8 PR description) — not a real LLM call. The Langfuse
-tracing paths are exercised against a stub client (same approach), captured
-from a real self-hosted Langfuse instance during manual verification.
-"""
-
 import asyncio
 import json
 import uuid
@@ -31,9 +21,6 @@ class _FakeChunk:
 
 
 class _FakeGraph:
-    """`events` is a list of dicts shaped like real `astream_events` output —
-    only the keys `stream_chat_turn` actually reads are required."""
-
     def __init__(self, events: list[dict]):
         self._events = events
         self.received_config: dict | None = None
@@ -61,9 +48,6 @@ class _FakeSpan:
 
 
 class _FakeLangfuseClient:
-    """Stands in for `langfuse.get_client()` — records the metadata a span
-    was started with, same approach as `_FakeGraph` above."""
-
     def __init__(self):
         self.span = _FakeSpan()
         self.start_as_current_observation_kwargs: dict | None = None
@@ -100,13 +84,10 @@ def _graph_end_event(final_state: dict) -> dict:
 
 
 def _request(message: str = "how much is the pro plan?", history=()) -> TurnStart:
-    """An opened turn: what `begin_turn` hands the agent."""
     return TurnStart(TurnAction.RUN, user_seq=1, user_text=message, history=list(history))
 
 
 class _Store:
-    """Stands in for the DB side of a turn and records what happened to it."""
-
     def __init__(self, fail_finish: bool = False):
         self.finished: list[str] = []
         self.kinds: list[MessageKind] = []
@@ -142,9 +123,6 @@ def _anonymous_session() -> SessionClaims:
 
 
 async def _collect(generator) -> list[dict]:
-    """Parses each `event: X\\ndata: {...}\\n\\n` block back into
-    `{"event": X, "data": {...}}` so assertions read the structure, not the
-    wire format."""
     parsed = []
     async for raw in generator:
         event_line, data_line = raw.strip("\n").split("\n")
@@ -159,8 +137,6 @@ async def _collect(generator) -> list[dict]:
 
 @pytest.mark.asyncio
 async def test_streams_deltas_without_touching_langfuse_when_tracing_is_disabled(monkeypatch):
-    # Tracing is off by default (Settings()) — get_client/CallbackHandler must
-    # never even be constructed, not just "called with tracing disabled".
     monkeypatch.setattr(chat_module, "get_client", lambda: pytest.fail("should not touch Langfuse"))
     monkeypatch.setattr(
         chat_module, "CallbackHandler", lambda: pytest.fail("should not touch Langfuse")
@@ -208,7 +184,7 @@ async def test_types_a_refusal_out_word_by_word_when_input_is_blocked(monkeypatc
     )
 
     deltas = [e["data"]["text"] for e in events if e["event"] == "delta"]
-    assert len(deltas) > 1 and "".join(deltas) == refusal  # several chunks, not one block
+    assert len(deltas) > 1 and "".join(deltas) == refusal
     assert [e for e in events if e["event"] in {"message", "correction"}] == []
 
 
@@ -304,9 +280,6 @@ def test_build_trace_metadata_includes_the_expected_fields(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_done_event_reports_no_ticket_and_no_eligibility_by_default():
-    """Most intents never touch `human_escalation_node`/`business_rules_node`
-    at all — `ticket_receipt`/`eligibility_result` should read as "didn't
-    happen" (`False`/`None`), not raise, when those keys are simply absent."""
     final_state = {
         "messages": [HumanMessage(content="hi"), AIMessage(content="It's $49 per month.")],
         "intent": "pricing_question",
@@ -400,9 +373,6 @@ async def test_done_event_reports_upgrade_eligibility_when_business_rules_ran():
 
 
 class _FailingGraph:
-    """Emits the given events, then raises — e.g. a tool error escaping the
-    graph midway through a streamed answer."""
-
     def __init__(self, events_before_failure: list[dict]):
         self._events = events_before_failure
 
@@ -421,7 +391,6 @@ async def test_a_failing_graph_ends_the_stream_with_an_error_event_and_no_done()
     assert [e["event"] for e in events] == ["delta", "error"]
     error = events[-1]["data"]
     assert uuid.UUID(error["conversation_id"])
-    # Internal details stay in the server log, never on the wire.
     assert "tool exploded" not in error["message"]
 
 
@@ -507,11 +476,6 @@ def _node_start_event(node: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_preamble_before_a_knowledge_base_search_is_reset_not_corrected():
-    """Regression: a model that talks before calling the search tool ("let me
-    check...") had that text streamed, but the final answer is only the last
-    message — so every searching turn ended with a `correction`, which is
-    meant to signal a guardrail rewrite. The search starting resets what was
-    streamed so far instead."""
     final_state = {
         "messages": [HumanMessage(content="hi"), AIMessage(content="Refunds take 5 days.")],
         "guardrail_flags": [],
@@ -582,7 +546,6 @@ def _answering_graph(text: str, final_text: str | None = None) -> _FakeGraph:
 
 @pytest.mark.asyncio
 async def test_the_reply_stored_is_the_final_text_after_a_guardrail_rewrite():
-    """So a claim the guardrail blocked never sits in the history the model sees next turn."""
     graph = _answering_graph("Your refund has been approved.", final_text="An agent will follow up.")
     store = _Store()
 
@@ -624,8 +587,6 @@ async def test_a_client_disconnect_frees_the_conversation():
 
 @pytest.mark.asyncio
 async def test_a_failure_storing_the_reply_frees_the_conversation_and_keeps_the_stream():
-    """The user already has their answer, so the stream still ends with `done`; but the
-    turn isn't left marked busy for the next two minutes."""
     store = _Store(fail_finish=True)
 
     events = await _collect(
@@ -637,13 +598,12 @@ async def test_a_failure_storing_the_reply_frees_the_conversation_and_keeps_the_
 
 @pytest.mark.asyncio
 async def test_closing_the_stream_early_frees_the_conversation():
-    """A disconnect can close the generator at a `yield` (GeneratorExit), not only cancel it."""
     store = _Store()
     stream = chat_module.stream_chat_turn(
         _answering_graph("Hello!"), _session(), _request(), store
     )
 
-    await stream.__anext__()  # the first delta
+    await stream.__anext__()
     await stream.aclose()
 
     assert store.abandoned == 1 and store.finished == []
@@ -651,7 +611,6 @@ async def test_closing_the_stream_early_frees_the_conversation():
 
 @pytest.mark.asyncio
 async def test_closing_the_stream_also_closes_the_graph_run():
-    """Otherwise the graph run (and its trace span) outlives a client that left."""
     closed = []
 
     class _Graph:
@@ -701,7 +660,7 @@ async def test_the_graph_starts_with_the_visitors_scopes():
     await _collect(chat_module.stream_chat_turn(graph, _anonymous_session(), _request(), _Store()))
 
     assert graph.initial_state["scopes"] == ["kb:read"]
-    assert graph.initial_state["customer_id"] is None  # not the string "None"
+    assert graph.initial_state["customer_id"] is None
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,3 @@
-"""Unit test for knowledge_tool_node, with the tool itself mocked out —
-exercises the ToolMessage/round-counter bookkeeping, not real retrieval."""
-
 import uuid
 
 import pytest
@@ -63,11 +60,6 @@ def test_increments_the_round_counter_from_its_current_value(monkeypatch):
 
 
 def test_invalid_arguments_become_an_error_tool_message_instead_of_raising(monkeypatch):
-    """Regression for a crash found by the evaluation suite: a tool call with
-    invalid arguments raised a validation error that escaped the graph and cut
-    the HTTP stream. The real tool is used so its own argument validation
-    runs; retrieval must never be reached."""
-
     def fail_if_called(*args, **kwargs):
         raise AssertionError("retrieval must not run with invalid arguments")
 

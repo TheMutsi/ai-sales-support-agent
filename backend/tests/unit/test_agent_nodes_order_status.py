@@ -1,6 +1,3 @@
-"""The order_status step: it reads the order the session proved, through the shop's orders
-interface, and nothing else. No LLM, no database."""
-
 import uuid
 from datetime import UTC, datetime
 
@@ -84,9 +81,9 @@ def test_the_writer_is_given_the_order_as_text_with_the_amount_already_in_dollar
     blob = _build_context_blob({"order_details": _order()})
 
     assert "Order:" in blob
-    assert ORDER_ID not in blob  # an order is never shown by its number
+    assert ORDER_ID not in blob
     assert "$99.00" in blob and "paid" in blob and "Pro" in blob and "2026-09-17" in blob
-    assert "99.0" not in blob.replace("$99.00", "")  # no raw cents for the model to convert
+    assert "99.0" not in blob.replace("$99.00", "")
 
 
 def test_the_writer_is_told_when_the_order_could_not_be_found():

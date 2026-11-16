@@ -12,5 +12,4 @@ def test_secret_has_at_least_256_bits_of_entropy_and_is_unique():
     secrets_ = {generate_secret() for _ in range(50)}
 
     assert len(secrets_) == 50
-    # token_urlsafe(32) encodes 32 random bytes as 43 base64url characters.
     assert all(len(s) >= 43 for s in secrets_)

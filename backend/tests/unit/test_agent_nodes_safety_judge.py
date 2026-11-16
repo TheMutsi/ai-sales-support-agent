@@ -1,6 +1,3 @@
-"""Unit tests for the safety_judge node, with the chat model mocked out —
-same pattern as test_agent_nodes_intent_router.py."""
-
 from langchain_core.messages import HumanMessage
 
 from app.agent.nodes import safety_judge as safety_judge_module

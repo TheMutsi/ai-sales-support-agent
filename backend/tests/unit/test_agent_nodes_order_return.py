@@ -1,6 +1,3 @@
-"""The order_return step: what the model reads decides nothing by itself. Rules, the orders
-interface and the conversation's pending state are real; the model and the shop are fakes."""
-
 import uuid
 from datetime import UTC, datetime
 
@@ -36,8 +33,6 @@ def _order(order_id, status, cents, retention=None) -> OrderDetails:
 
 
 class FakeShop:
-    """An in-memory shop that follows the same rules the real source enforces."""
-
     def __init__(self, *orders: OrderDetails):
         self.orders = {o.order_id: o for o in orders}
         self.calls: list[tuple] = []
@@ -105,7 +100,6 @@ def _pending(order_id, stage) -> PendingReturn:
 
 
 async def _run(setup, orders, choice=None, pending=None, order_id=None):
-    """The node against a shop holding `orders`; the model (if asked) reads `choice`."""
     reading = None if choice is None else ReturnReading(choice=choice, order_id=order_id)
     shop, reader = setup(*orders, reading=reading)
     result = await order_return_node(_state(pending))
@@ -122,7 +116,6 @@ CHECK = ReturnStage.CHECK
 
 
 async def _yes_this_one(setup, order, others=()):
-    """Asks to cancel, then answers "yes, this one" to the question that shows the order."""
     return await _run(setup, [order, *others], ReturnChoice.REJECT, _pending(order.order_id, CHECK))
 
 
@@ -133,7 +126,7 @@ async def test_asking_to_cancel_one_order_shows_it_and_asks_if_it_is_the_one_bef
     assert result["return_result"].outcome is ReturnOutcome.CONFIRM_ORDER
     assert result["return_result"].order.order_id == OPEN_70
     assert result["pending_return"] == _pending(OPEN_70, CHECK)
-    assert shop.calls == [] and reader.asked == 0  # nothing offered, nothing changed, no model
+    assert shop.calls == [] and reader.asked == 0
 
 
 @pytest.mark.asyncio
@@ -210,7 +203,7 @@ async def test_taking_the_offer_keeps_the_order_and_records_what_was_chosen(
     receipt = result["return_result"].receipt
     assert result["return_result"].outcome is outcome and result["pending_return"] is None
     assert (receipt.refund_cents, receipt.credit_cents) == (refund, points)
-    assert shop.orders[OPEN_70].status is OrderStatus.OPEN  # kept: nothing is cancelled
+    assert shop.orders[OPEN_70].status is OrderStatus.OPEN
     assert [call[0] for call in shop.calls] == ["keep"]
 
 
@@ -255,7 +248,6 @@ async def test_confirming_cancels_and_changing_their_mind_keeps_the_order(setup)
     [
         (OPEN70, OFFER, ReturnChoice.UNCLEAR, ReturnOutcome.OFFER),
         (OPEN30, CONFIRM, ReturnChoice.UNCLEAR, ReturnOutcome.CONFIRM_CANCEL),
-        # An offer answer to a plain confirmation has nothing to apply.
         (OPEN30, CONFIRM, ReturnChoice.REFUND, ReturnOutcome.CONFIRM_CANCEL),
     ],
 )
@@ -277,8 +269,6 @@ async def test_with_several_orders_the_customer_picks_one_and_a_made_up_id_is_ig
     assert {o.order_id for o in asked["return_result"].candidates} == {OPEN_30, OPEN_70}
     assert chosen["return_result"].outcome is ReturnOutcome.OFFER
     assert chosen["return_result"].order.order_id == OPEN_70
-    # No node after this one writes a reply, so each branch must add its own: otherwise the last
-    # message in the state is the customer's, and it is sent back to them as the answer.
     assert asked["messages"][-1].content == reply_for(asked["return_result"])
 
 
@@ -355,12 +345,11 @@ async def test_the_other_outcomes_have_their_own_fixed_replies(setup):
 
     replies = {outcome: reply_for(ReturnResult(outcome=outcome)) for outcome in ReturnOutcome}
 
-    assert all(replies[o] for o in ReturnOutcome if o not in (ReturnOutcome.KEPT_WITH_REFUND, ReturnOutcome.KEPT_WITH_CREDITS, ReturnOutcome.ESCALATED))  # escalated: the writer words it
+    assert all(replies[o] for o in ReturnOutcome if o not in (ReturnOutcome.KEPT_WITH_REFUND, ReturnOutcome.KEPT_WITH_CREDITS, ReturnOutcome.ESCALATED))
     assert "go ahead" in replies[ReturnOutcome.CONFIRM_CANCEL] and "once it arrives" in replies[ReturnOutcome.RETURN_LATER]
 
 
 async def _click(setup, orders, action, pending=None, order_id=None):
-    """The node answering a button click: the model must not be asked (it has no reading to give)."""
     shop, reader = setup(*orders, reading=None)
     state = {**_state(pending), "action": action, "action_order_id": order_id}
     return await order_return_node(state), shop, reader
@@ -399,7 +388,7 @@ async def test_confirming_the_cancellation_with_a_click_cancels_and_keeping_does
 @pytest.mark.parametrize(
     ("stage", "action", "again"),
     [
-        (CONFIRM, CardAction.DECLINE_OFFER, ReturnOutcome.CONFIRM_CANCEL),  # must not cancel
+        (CONFIRM, CardAction.DECLINE_OFFER, ReturnOutcome.CONFIRM_CANCEL),
         (CONFIRM, CardAction.TAKE_REFUND, ReturnOutcome.CONFIRM_CANCEL),
         (OFFER, CardAction.CONFIRM_CANCEL, ReturnOutcome.OFFER),
         (OFFER, CardAction.KEEP_ORDER, ReturnOutcome.OFFER),
@@ -419,7 +408,7 @@ async def test_a_click_that_does_not_fit_the_step_changes_nothing_and_asks_again
 async def test_choosing_an_order_with_a_click_takes_only_one_of_the_listed_orders(setup):
     chosen, _, _ = await _click(setup, [OPEN70, OPEN30], CardAction.CHOOSE_ORDER, order_id=OPEN_70)
     made_up, _, _ = await _click(setup, [OPEN70, OPEN30], CardAction.CHOOSE_ORDER, order_id="Z" * 20)
-    stray, _, _ = await _click(setup, [OPEN70, OPEN30], CardAction.TAKE_REFUND)  # nothing is pending
+    stray, _, _ = await _click(setup, [OPEN70, OPEN30], CardAction.TAKE_REFUND)
 
     assert chosen["return_result"].outcome is ReturnOutcome.OFFER
     assert chosen["return_result"].order.order_id == OPEN_70
@@ -428,8 +417,6 @@ async def test_choosing_an_order_with_a_click_takes_only_one_of_the_listed_order
 
 
 def _after_no(order_state=None) -> dict:
-    """The conversation right after the assistant told the customer an order on its way cannot be
-    cancelled, and the customer writes back."""
     no = reply_for(ReturnResult(outcome=ReturnOutcome.RETURN_LATER))
     return {**_state(), "messages": [AIMessage(content=no), HumanMessage(content="Como que no? No la quiero")]}
 
@@ -441,9 +428,9 @@ async def test_pushing_back_on_a_no_hands_the_customer_to_a_person_without_askin
     update = await order_return_node(_after_no())
 
     assert update["return_result"].outcome is ReturnOutcome.ESCALATED
-    assert update["intent"] is Intent.HUMAN_ESCALATION  # the ticket is written as a request for a person
+    assert update["intent"] is Intent.HUMAN_ESCALATION
     assert update["pending_return"] is None
-    assert "messages" not in update  # the writer words the reply, after the ticket exists
+    assert "messages" not in update
     assert shop.calls == []
 
 
@@ -465,7 +452,7 @@ async def test_after_a_no_naming_another_order_in_delivery_gets_its_own_answer_w
 
     assert update["return_result"].outcome is not ReturnOutcome.ESCALATED
     assert update["return_result"].order.order_id == SHIPPED_70
-    assert reader.asked == 1  # the reading is reused, not repeated
+    assert reader.asked == 1
 
 
 @pytest.mark.asyncio
