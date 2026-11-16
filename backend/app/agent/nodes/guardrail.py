@@ -28,18 +28,28 @@ FALLBACK_MESSAGE = (
     "a person and I'll connect you with our support team."
 )
 
-# When `human_escalation` did create a ticket, the blocked reply was the one
+# When `human_escalation` did open an escalation, the blocked reply was the one
 # place the customer would have learned that; the fallback must keep it.
-_FALLBACK_WITH_TICKET_MESSAGE = (
-    "I can't confirm that information right now, but I've created support ticket "
-    "{ticket_id} and a person from our support team will follow up with you."
+_FALLBACK_WITH_ESCALATION_MESSAGE = (
+    "I can't confirm that information right now, but I've passed this to our support team "
+    "(follow-up number {reference}) and a person will follow up with you."
 )
 
 
 def _fallback_message(state: AgentState) -> str:
-    if ticket_receipt := state.get("ticket_receipt"):
-        return _FALLBACK_WITH_TICKET_MESSAGE.format(ticket_id=ticket_receipt.ticket_id)
+    if receipt := state.get("escalation_receipt"):
+        return _FALLBACK_WITH_ESCALATION_MESSAGE.format(reference=receipt.reference)
     return FALLBACK_MESSAGE
+
+
+def _with_follow_up_number(state: AgentState, text: str) -> str | None:
+    """The customer must leave with their number, and a small model leaves it out sometimes (seen
+    live). If the escalation has one and the reply never says it, a fixed sentence is added;
+    returns None when nothing needs adding."""
+    receipt = state.get("escalation_receipt")
+    if receipt is None or receipt.reference in text:
+        return None
+    return f"{text}\n\nYour follow-up number is {receipt.reference}."
 
 
 def _confirmed_return_actions(state: AgentState) -> dict[str, bool]:
@@ -65,15 +75,20 @@ def _confirmed_return_actions(state: AgentState) -> dict[str, bool]:
     }
 
 
+def _escalation_reference(state: AgentState) -> str | None:
+    escalation = state.get("escalation_receipt") or state.get("open_escalation")
+    return escalation.reference if escalation else None
+
+
 def _output_check_context(state: AgentState) -> OutputCheckContext:
     return OutputCheckContext(
         intent=state.get("intent"),
-        ticket_created=state.get("ticket_receipt") is not None,
+        ticket_created=state.get("escalation_receipt") is not None,
+        escalation_reference=_escalation_reference(state),
         checkout_created=state.get("checkout_session") is not None,
         tool_call_rounds=state.get("tool_call_rounds", 0),
         order_found=state.get("order_details") is not None or bool(state.get("customer_orders")),
         **_confirmed_return_actions(state),
-        allowed_uuids=[str(receipt.ticket_id)] if (receipt := state.get("ticket_receipt")) else [],
         protected_prompt=RESPONSE_WRITER_SYSTEM_PROMPT,
     )
 
@@ -84,6 +99,8 @@ def guardrail_node(state: AgentState) -> dict:
 
     violations = run_output_guardrails(_output_check_context(state), response_text)
     if not violations:
+        if (with_number := _with_follow_up_number(state, response_text)) is not None:
+            return {"messages": [AIMessage(content=with_number, id=response_message.id)]}
         return {}
 
     for violation in violations:
@@ -101,5 +118,7 @@ def guardrail_node(state: AgentState) -> dict:
         # `add_messages` overwrite the blocked content in place, so the
         # unverified claim never sits in conversation history either.
         update["messages"] = [AIMessage(content=_fallback_message(state), id=response_message.id)]
+    elif (with_number := _with_follow_up_number(state, response_text)) is not None:
+        update["messages"] = [AIMessage(content=with_number, id=response_message.id)]
 
     return update

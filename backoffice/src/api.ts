@@ -89,6 +89,10 @@ export interface ConversationDetail extends Omit<ConversationSummary, "message_c
   linked_via: string | null;
   handoff_status: string;
   handoff_agent_name: string | null;
+  escalation_reference: string | null;
+  escalation_route: "live" | "offline" | null;
+  escalation_status: "open" | "resolved" | null;
+  escalation_notes: string | null;
   /** Hints the visitor's page set: not verified facts. */
   properties: Record<string, string>;
   messages: {
@@ -120,19 +124,56 @@ export const readConversation = (token: string, tenantId: string, conversationId
 
 export interface EscalationItem {
   id: string;
-  handoff_status: "waiting" | "active";
+  /** The follow-up number the visitor was given. */
+  reference: string;
+  /** `live`: the visitor waits in the chat for a person. `offline`: a person writes back later. */
+  route: "live" | "offline";
+  reason: string | null;
+  category: string | null;
+  status: "open" | "resolved";
+  handoff_status: "none" | "waiting" | "active";
   agent_name: string | null;
-  requested_at: string | null;
+  escalated_at: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  notes: string | null;
   customer: { name: string; email_masked: string } | null;
-  ticket: { category: string; subject: string; priority: string } | null;
+  tags: string[];
+  properties: Record<string, string>;
   last_message: string | null;
+}
+
+/** What the inbox can be narrowed by; every one that is set must match. */
+export interface EscalationFilters {
+  status: "open" | "resolved" | "all";
+  route?: "live" | "offline";
+  q?: string;
+  tags?: string[];
+  /** `key:value` pairs of the visitor's public properties. */
+  properties?: string[];
 }
 
 const inbox = (tenantId: string, conversationId?: string, action?: string) =>
   `/tenants/${tenantId}/escalations${conversationId ? `/${conversationId}/${action}` : ""}`;
 
-export const listEscalations = (token: string, tenantId: string) =>
-  request<EscalationItem[]>(inbox(tenantId), {}, token);
+export function escalationQuery(filters: EscalationFilters): string {
+  const params = new URLSearchParams({ status: filters.status });
+  if (filters.route) params.set("route", filters.route);
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  for (const tag of filters.tags ?? []) params.append("tag", tag);
+  for (const property of filters.properties ?? []) params.append("property", property);
+  return params.toString();
+}
+
+export const listEscalations = (token: string, tenantId: string, filters: EscalationFilters = { status: "open" }) =>
+  request<EscalationItem[]>(`${inbox(tenantId)}?${escalationQuery(filters)}`, {}, token);
+
+export const resolveEscalation = (token: string, tenantId: string, conversationId: string, notes: string) =>
+  request<void>(
+    inbox(tenantId, conversationId, "resolve"),
+    { method: "POST", body: JSON.stringify({ notes: notes || null }) },
+    token,
+  );
 
 export const claimEscalation = (token: string, tenantId: string, conversationId: string) =>
   request<void>(inbox(tenantId, conversationId, "claim"), { method: "POST" }, token);

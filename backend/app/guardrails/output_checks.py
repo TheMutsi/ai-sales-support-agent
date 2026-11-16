@@ -36,7 +36,7 @@ _BILLING_SPECULATION_PATTERN = re.compile(
 
 _TICKET_CREATION_CLAIM_PATTERN = re.compile(
     r"(he creado|ha creado|hemos creado|se cre[oó]|creamos|i('ve| have)? created|created a) "
-    r".{0,20}ticket",
+    r".{0,20}(ticket|follow-up number|n[uú]mero de seguimiento)",
     re.IGNORECASE,
 )
 
@@ -47,6 +47,8 @@ _TICKET_NUMBER_CLAIM_PATTERN = re.compile(
     r"(ticket|caso)\D{0,25}\d{3,}|\d{3,}\D{0,25}(ticket|caso)",
     re.IGNORECASE,
 )
+
+_FOLLOW_UP_NUMBER_PATTERN = re.compile(r"\bMF-[A-Z0-9]{8}\b", re.IGNORECASE)
 
 
 # Claims of having consulted the knowledge base. Spanish alternatives are kept
@@ -174,9 +176,16 @@ def check_fabricated_ticket_claim(
     from their own UUID. `create_support_ticket` is the only thing that can
     make `ticket_receipt` non-`None`, so this is exactly as falsifiable as the
     refund check above."""
-    if not context.ticket_created and (
-        _TICKET_CREATION_CLAIM_PATTERN.search(response_text)
-        or _TICKET_NUMBER_CLAIM_PATTERN.search(response_text)
+    known = (context.escalation_reference or "").upper()
+    invented_number = any(
+        match.upper() != known for match in _FOLLOW_UP_NUMBER_PATTERN.findall(response_text)
+    )
+    if invented_number or (
+        not context.ticket_created
+        and (
+            _TICKET_CREATION_CLAIM_PATTERN.search(response_text)
+            or _TICKET_NUMBER_CLAIM_PATTERN.search(response_text)
+        )
     ):
         return GuardrailViolation(
             code="fabricated_ticket_claim",

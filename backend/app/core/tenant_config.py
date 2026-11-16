@@ -38,6 +38,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
+from app.business.escalation import SupportHours
 from app.core.config import get_settings
 from app.db.models import Tenant
 from app.db.session import SessionLocal
@@ -52,6 +53,7 @@ class TenantConfig:
     api_key: str
     scope_overrides: dict | None
     allowed_origins: tuple[str, ...]
+    support_hours: SupportHours | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,16 @@ class _Snapshot:
     origins: frozenset[str]
     loaded_at: float
     generation: int
+
+
+def _support_hours_of(tenant: Tenant) -> SupportHours | None:
+    """A bad schedule must not stop every tenant from loading: that one is taken as always open,
+    which only means live escalations are tried (an agent still has to be there), and it is logged."""
+    try:
+        return SupportHours.from_config(tenant.support_hours)
+    except (KeyError, ValueError, TypeError):
+        logger.exception("ignoring the invalid support_hours of tenant %s", tenant.id)
+        return None
 
 
 def load_all_tenant_configs() -> list[TenantConfig]:
@@ -73,6 +85,7 @@ def load_all_tenant_configs() -> list[TenantConfig]:
                 api_key=t.api_key,
                 scope_overrides=t.scope_overrides,
                 allowed_origins=tuple(t.allowed_origins or ()),
+                support_hours=_support_hours_of(t),
             )
             for t in rows
         ]

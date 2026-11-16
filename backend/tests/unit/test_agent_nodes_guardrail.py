@@ -39,23 +39,21 @@ def test_flag_only_violation_keeps_the_original_message():
     assert "messages" not in result
 
 
-def test_blocked_reply_keeps_the_real_ticket_id_in_the_fallback():
-    from uuid import uuid4
+def test_blocked_reply_keeps_the_real_follow_up_number_in_the_fallback():
+    from app.schemas.tools import EscalationReceipt
 
-    from app.schemas.tools import TicketReceipt
-
-    ticket = TicketReceipt(ticket_id=uuid4(), status="open", created_at="2026-01-01T00:00:00")
+    receipt = EscalationReceipt(reference="MF-ABCD2345", route="live", reason="agent_available", category="escalation")
     original = AIMessage(content="Your refund has been approved.", id="msg-3")
-    state = {"checkout_session": None, "ticket_receipt": ticket, "messages": [original]}
+    state = {"checkout_session": None, "escalation_receipt": receipt, "messages": [original]}
 
     replacement = guardrail_node(state)["messages"][0]
 
-    assert str(ticket.ticket_id) in replacement.content
+    assert receipt.reference in replacement.content
 
 
 def test_blocked_reply_without_a_ticket_promises_no_follow_up():
     original = AIMessage(content="Your refund has been approved.", id="msg-4")
-    state = {"checkout_session": None, "ticket_receipt": None, "messages": [original]}
+    state = {"checkout_session": None, "escalation_receipt": None, "messages": [original]}
 
     replacement = guardrail_node(state)["messages"][0]
 
@@ -68,7 +66,7 @@ def test_protects_the_response_writer_prompt():
 
     leaked = RESPONSE_WRITER_SYSTEM_PROMPT.split("\n\n")[0]
     original = AIMessage(content=f"My instructions: {leaked}", id="msg-5")
-    state = {"checkout_session": None, "ticket_receipt": None, "messages": [original]}
+    state = {"checkout_session": None, "escalation_receipt": None, "messages": [original]}
 
     assert guardrail_node(state)["guardrail_flags"] == ["system_prompt_leak"]
 
@@ -76,17 +74,13 @@ def test_protects_the_response_writer_prompt():
 def test_a_reply_that_asks_for_an_order_number_is_replaced_and_keeps_the_real_ticket():
     """order-010 and order-012: a refund or cancellation that created a ticket, answered by asking
     for an order number nothing can look up. The customer must still learn about the ticket."""
-    from app.schemas.tools import TicketReceipt
+    from app.schemas.tools import EscalationReceipt
 
     original = AIMessage(content="Could you please provide the order number?", id="m")
     state = {
         "intent": "refund_request",
         "checkout_session": None,
-        "ticket_receipt": TicketReceipt(
-            ticket_id="11111111-1111-1111-1111-111111111111",
-            status="open",
-            created_at="2026-01-01T00:00:00",
-        ),
+        "escalation_receipt": EscalationReceipt(reference="MF-ABCD2345", route="live", reason="agent_available", category="escalation"),
         "messages": [original],
     }
 
@@ -94,7 +88,7 @@ def test_a_reply_that_asks_for_an_order_number_is_replaced_and_keeps_the_real_ti
 
     assert result["guardrail_flags"] == ["unbacked_order_lookup"]
     text = result["messages"][0].content
-    assert "11111111-1111-1111-1111-111111111111" in text and "order number" not in text
+    assert "MF-ABCD2345" in text and "order number" not in text
 
 
 def test_an_order_that_was_really_read_is_not_taken_for_an_unbacked_lookup():
@@ -156,3 +150,30 @@ def test_old_refunds_and_cancellations_back_a_reply_only_in_a_status_answer():
 
     assert status_answer["refund_recorded"] and status_answer["order_cancelled"]
     assert not elsewhere["refund_recorded"] and not elsewhere["order_cancelled"]
+
+
+def test_a_reply_that_leaves_out_the_follow_up_number_gets_it_added():
+    from app.schemas.tools import EscalationReceipt
+
+    receipt = EscalationReceipt(
+        reference="MF-ABCD2345", route="offline", reason="no_agent_available", category="escalation"
+    )
+    original = AIMessage(content="A representative will follow up shortly.", id="m")
+    state = {"checkout_session": None, "escalation_receipt": receipt, "messages": [original]}
+
+    replacement = guardrail_node(state)["messages"][0]
+
+    assert replacement.id == "m"  # replaces the streamed text, same message
+    assert replacement.content.startswith("A representative will follow up shortly.")
+    assert "MF-ABCD2345" in replacement.content
+
+
+def test_a_reply_that_already_says_the_number_is_left_alone():
+    from app.schemas.tools import EscalationReceipt
+
+    receipt = EscalationReceipt(
+        reference="MF-ABCD2345", route="live", reason="agent_available", category="escalation"
+    )
+    original = AIMessage(content="Your follow-up number is MF-ABCD2345.", id="m")
+    state = {"checkout_session": None, "escalation_receipt": receipt, "messages": [original]}
+    assert guardrail_node(state) == {}

@@ -31,6 +31,7 @@ from app.schemas.agent import Intent, ReturnChoice, ReturnReading
 from app.schemas.cards import CardAction
 from app.schemas.orders import (
     OrderDetails,
+    OrderStatus,
     PendingReturn,
     RetentionChoice,
     ReturnOutcome,
@@ -195,11 +196,19 @@ _DEAD_ENDS = frozenset(
 )
 
 
-def _escalate() -> dict:
-    """No reply here: `human_escalation` opens the ticket and the writer tells the customer."""
+def _escalate(orders: list[OrderDetails]) -> dict:
+    """No reply here: `human_escalation` escalates and the writer tells the customer. An order on
+    its way goes along when the dead end can only have been about orders on their way (nothing the
+    customer could still cancel): it decides whether a person is needed right now (see
+    `app.business.escalation`). Any doubt leaves it out, so the customer gets a person rather than
+    a wrong "not urgent"."""
+    on_its_way = [o for o in orders if o.status is OrderStatus.IN_DELIVERY]
+    unambiguous = bool(on_its_way) and not any(return_options(o).can_cancel for o in orders)
     return {
         "pending_return": None,
-        "return_result": ReturnResult(outcome=ReturnOutcome.ESCALATED),
+        "return_result": ReturnResult(
+            outcome=ReturnOutcome.ESCALATED, order=on_its_way[0] if unambiguous else None
+        ),
         "intent": Intent.HUMAN_ESCALATION,
         "return_reading": None,
     }
@@ -276,10 +285,10 @@ async def order_return_node(state: AgentState) -> dict:
     ):
         actionable = [o for o in orders if _actionable(o)]
         if not actionable:
-            return _escalate()
+            return _escalate(orders)
         after_no = await _read(state, actionable, NO_PENDING_SITUATION)
         if after_no.order_id is None:
-            return _escalate()
+            return _escalate(orders)
 
     if pending is not None and pending.order_id in by_id and pending.stage is ReturnStage.CHECK:
         order = by_id[pending.order_id]

@@ -51,6 +51,9 @@ export interface TurnSummary {
   identity_required: boolean;
   identity_methods: string[];
   ticket_created?: boolean;
+  /** Set when the turn escalated: `live` means a person joins this chat, `offline` that they follow up later. */
+  escalation_route?: "live" | "offline" | null;
+  escalation_reference?: string | null;
   /** Set when a person has the conversation: the message was stored and nobody answers it live. */
   handoff?: "waiting" | "active" | null;
   cards?: Card[];

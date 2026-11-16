@@ -57,9 +57,9 @@ export function applyEvent(state: ChatState, event: ChatEvent): ChatState {
         messages,
         streaming: false,
         identity: event.data.identity_required ? { methods: event.data.identity_methods } : null,
-        // A turn that opened a ticket leaves the conversation waiting for a person (the server
-        // decided that when it saved the reply).
-        handoff: event.data.handoff ?? (event.data.ticket_created ? "waiting" : state.handoff),
+        // A turn that escalated live leaves the conversation waiting for a person (the server
+        // decided that when it saved the reply). An offline one only gives a number: nobody joins.
+        handoff: event.data.handoff ?? (event.data.escalation_route === "live" ? "waiting" : state.handoff),
       };
     }
   }

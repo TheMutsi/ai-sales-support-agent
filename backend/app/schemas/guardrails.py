@@ -31,6 +31,9 @@ class OutputCheckContext(BaseModel):
 
     intent: Intent | None = None
     ticket_created: bool = False
+    # The follow-up number this conversation really has (opened this turn or still open), the only
+    # one a reply may quote.
+    escalation_reference: str | None = None
     checkout_created: bool = False
     tool_call_rounds: int = 0
     # An order was really read this turn (the order_status step found one).

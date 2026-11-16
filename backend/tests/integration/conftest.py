@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.tenant_config import tenant_configs
 from app.db.models import (
+    AgentPresence,
     Conversation,
     Customer,
     Document,
@@ -21,7 +22,6 @@ from app.db.models import (
     Tenant,
     TenantSecret,
     TenantSmtp,
-    Ticket,
 )
 from app.db.seed import seed as seed_fixtures
 from app.db.session import SessionLocal
@@ -54,7 +54,7 @@ def _wipe_commercial_tables(session: Session) -> None:
     session.query(IdentificationEvent).delete()
     session.query(ReturnEvent).delete()
     session.query(RateLimitCounter).delete()
-    session.query(Ticket).delete()
+    session.query(AgentPresence).delete()
     session.query(Order).delete()
     session.query(Subscription).delete()
     session.query(Message).delete()

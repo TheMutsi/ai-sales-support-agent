@@ -11,7 +11,6 @@ from a real self-hosted Langfuse instance during manual verification.
 import asyncio
 import json
 import uuid
-from datetime import UTC, datetime
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -23,7 +22,7 @@ from app.chat.turns import MessageKind, TurnAction, TurnStart
 from app.core.config import Settings
 from app.schemas.business import EligibilityResult, PriceQuote
 from app.schemas.rag import SourceReference
-from app.schemas.tools import CheckoutSession, TicketReceipt
+from app.schemas.tools import CheckoutSession, EscalationReceipt
 
 
 class _FakeChunk:
@@ -114,7 +113,7 @@ class _Store:
         self.abandoned = 0
         self._fail_finish = fail_finish
 
-    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT, escalation_ticket_id=None, pending_return=None, cards=None, return_event=None) -> None:
+    async def finish(self, content: str, kind: MessageKind = MessageKind.TEXT, escalation=None, pending_return=None, cards=None, return_event=None) -> None:
         if self._fail_finish:
             raise RuntimeError("db down")
         self.finished.append(content)
@@ -331,9 +330,7 @@ async def test_done_event_reports_ticket_created_and_tool_call_rounds():
         "messages": [HumanMessage(content="hi"), AIMessage(content="A ticket was created.")],
         "intent": "refund_request",
         "guardrail_flags": [],
-        "ticket_receipt": TicketReceipt(
-            ticket_id=uuid.uuid4(), status="open", created_at=datetime.now(UTC)
-        ),
+        "escalation_receipt": EscalationReceipt(reference="MF-ABCD2345", route="live", reason="agent_available", category="escalation"),
         "tool_call_rounds": 2,
     }
     graph = _FakeGraph([_graph_end_event(final_state)])
@@ -451,7 +448,7 @@ async def test_done_event_lists_the_sources_the_knowledge_base_search_returned()
 
 
 @pytest.mark.asyncio
-async def test_done_event_has_no_sources_checkout_or_ticket_id_by_default():
+async def test_done_event_has_no_sources_checkout_or_escalation_by_default():
     final_state = {
         "messages": [HumanMessage(content="hi"), AIMessage(content="Hello!")],
         "guardrail_flags": [],
@@ -463,12 +460,11 @@ async def test_done_event_has_no_sources_checkout_or_ticket_id_by_default():
     done = events[-1]["data"]
     assert done["sources"] == []
     assert done["checkout"] is None
-    assert done["ticket_id"] is None
+    assert done["escalation_reference"] is None
 
 
 @pytest.mark.asyncio
-async def test_done_event_carries_the_checkout_session_and_ticket_id_from_state():
-    ticket_id = uuid.uuid4()
+async def test_done_event_carries_the_checkout_session_and_escalation_from_state():
     quote = PriceQuote(
         current_plan_slug="starter",
         target_plan_slug="pro",
@@ -485,8 +481,8 @@ async def test_done_event_carries_the_checkout_session_and_ticket_id_from_state(
             target_plan_slug="pro",
             price_quote=quote,
         ),
-        "ticket_receipt": TicketReceipt(
-            ticket_id=ticket_id, status="open", created_at=datetime.now(UTC)
+        "escalation_receipt": EscalationReceipt(
+            reference="MF-ABCD2345", route="offline", reason="no_agent_available", category="refund"
         ),
     }
     graph = _FakeGraph([_graph_end_event(final_state)])
@@ -496,7 +492,8 @@ async def test_done_event_carries_the_checkout_session_and_ticket_id_from_state(
     done = events[-1]["data"]
     assert done["checkout"]["target_plan_slug"] == "pro"
     assert done["checkout"]["price_quote"]["price_delta_cents"] == 3000
-    assert done["ticket_id"] == str(ticket_id)
+    assert done["escalation_reference"] == "MF-ABCD2345"
+    assert done["escalation_route"] == "offline"
 
 
 def _node_start_event(node: str) -> dict:

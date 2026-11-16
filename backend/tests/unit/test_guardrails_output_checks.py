@@ -458,3 +458,30 @@ def test_allows_order_numbers_company_emails_prices_and_dates():
         "The Pro plan costs $29.99 per month.",
     ):
         assert check_sensitive_data_exposure(OutputCheckContext(), text) is None, text
+
+
+def test_flags_a_made_up_follow_up_number_when_nothing_was_escalated():
+    violation = check_fabricated_ticket_claim(
+        OutputCheckContext(), "Your follow-up number is MF-7K3Q9X2A, someone will write to you."
+    )
+    assert violation is not None and violation.code == "fabricated_ticket_claim"
+
+
+def test_allows_the_follow_up_number_when_it_was_really_given():
+    assert (
+        check_fabricated_ticket_claim(
+            OutputCheckContext(ticket_created=True, escalation_reference="MF-7K3Q9X2A"), "Your follow-up number is MF-7K3Q9X2A."
+        )
+        is None
+    )
+
+
+def test_allows_the_open_follow_up_number_in_a_later_turn():
+    context = OutputCheckContext(escalation_reference="MF-7K3Q9X2A")
+    assert check_fabricated_ticket_claim(context, "Your follow-up number is still MF-7K3Q9X2A.") is None
+
+
+def test_blocks_a_follow_up_number_that_is_not_the_conversations():
+    context = OutputCheckContext(ticket_created=True, escalation_reference="MF-7K3Q9X2A")
+    violation = check_fabricated_ticket_claim(context, "Your follow-up number is MF-ZZZZ2222.")
+    assert violation is not None and violation.code == "fabricated_ticket_claim"

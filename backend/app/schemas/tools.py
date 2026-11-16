@@ -15,6 +15,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+from app.business.escalation import EscalationRoute, RouteReason
 from app.schemas.business import PriceQuote
 
 
@@ -71,7 +72,7 @@ class CheckoutSession(BaseModel):
     price_quote: PriceQuote
 
 
-class TicketCategory(StrEnum):
+class EscalationCategory(StrEnum):
     ESCALATION = "escalation"
     REFUND = "refund"
     TECHNICAL = "technical"
@@ -79,13 +80,12 @@ class TicketCategory(StrEnum):
     OTHER = "other"
 
 
-class TicketPriority(StrEnum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+class EscalationReceipt(BaseModel):
+    """What the customer is given when a conversation is escalated to a person: `reference` is the
+    follow-up number, kept on the conversation. `route` says whether someone joins the chat now
+    (`live`) or writes back later (`offline`)."""
 
-
-class TicketReceipt(BaseModel):
-    ticket_id: uuid.UUID
-    status: str
-    created_at: datetime
+    reference: str
+    route: EscalationRoute
+    reason: RouteReason
+    category: EscalationCategory

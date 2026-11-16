@@ -48,9 +48,11 @@ describe("applyEvent", () => {
     expect(asked.messages.at(-1)?.kind).toBe("identity_request");
   });
 
-  it("starts waiting for a person after a turn that opened a ticket, or when told so", () => {
-    const escalated = run([{ event: "message", data: { text: "A ticket was opened." } }, { event: "done", data: { identity_required: false, identity_methods: [], ticket_created: true } }]);
+  it("starts waiting for a person after a live escalation, but not after an offline one, or when told so", () => {
+    const escalated = run([{ event: "message", data: { text: "Passed to a person." } }, { event: "done", data: { identity_required: false, identity_methods: [], escalation_route: "live", escalation_reference: "MF-ABCD2345" } }]);
     expect(escalated.handoff).toBe("waiting");
+    const offline = run([{ event: "done", data: { identity_required: false, identity_methods: [], escalation_route: "offline", escalation_reference: "MF-ABCD2345" } }]);
+    expect(offline.handoff).toBe("none");
     const told = run([{ event: "done", data: { identity_required: false, identity_methods: [], handoff: "active" } }]);
     expect(told.handoff).toBe("active");
     expect(told.messages).toEqual([]); // the message was stored; there is no answer to show
