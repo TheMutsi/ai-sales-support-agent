@@ -38,5 +38,4 @@ def test_an_origin_is_reduced_to_scheme_host_and_non_default_port(given, expecte
     ],
 )
 def test_anything_that_is_not_a_plain_origin_is_rejected(bad):
-    """A wildcard or a sloppy entry in a tenant's list must never widen who is allowed."""
     assert normalize_origin(bad) is None

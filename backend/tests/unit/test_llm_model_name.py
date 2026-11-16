@@ -1,8 +1,3 @@
-"""Unit tests for `get_chat_model_name()` — the LangSmith trace-metadata helper
-added in Stage 8. No network call: it only reads `Settings`, same as
-`get_chat_model()`'s own provider branch in `test_llm.py`."""
-
-
 from app.core import llm
 from app.core.config import Settings
 

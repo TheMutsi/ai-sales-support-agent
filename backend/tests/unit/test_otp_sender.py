@@ -12,8 +12,6 @@ from app.db.models import TenantSmtp
 
 
 class FakeSmtp:
-    """Stands in for smtplib.SMTP / SMTP_SSL and records what the sender did to it."""
-
     instances: ClassVar[list["FakeSmtp"]] = []
 
     def __init__(self, host, port, timeout=None, context=None):
@@ -105,11 +103,11 @@ def test_outside_local_environments_a_tenant_without_a_mail_server_cannot_send()
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"security": "STARTTLS"},  # a typo must not fall back to a plain connection
+        {"security": "STARTTLS"},
         {"security": "tls"},
-        {"security": "none"},  # credentials over an unencrypted connection
-        {"username": None},  # half configured: a password without a user
-        {"password_encrypted": None},  # a user without a password
+        {"security": "none"},
+        {"username": None},
+        {"password_encrypted": None},
     ],
 )
 def test_a_misconfigured_row_fails_before_connecting(overrides):

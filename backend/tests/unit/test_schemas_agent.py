@@ -9,7 +9,6 @@ def _classification(**scores):
 
 
 def test_a_score_on_a_0_to_100_scale_is_read_as_a_percentage():
-    """qwen2.5 sometimes answers `100` for 'certain'; rejecting it failed the whole turn."""
     result = _classification(confidence=100, safety_confidence=85)
 
     assert result.confidence == 1.0

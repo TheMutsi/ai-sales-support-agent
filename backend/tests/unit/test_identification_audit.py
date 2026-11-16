@@ -1,6 +1,3 @@
-"""What the audit record may hold about someone: enough for a person to recognise them and for
-attempts by the same address to be grouped, without keeping the address, the order id or a code."""
-
 import pytest
 
 from app.auth.audit import hmac_value, mask_email
@@ -38,6 +35,5 @@ def test_the_hmac_groups_the_same_value_and_hides_it():
 
 def test_the_hmac_is_normalized_for_emails_and_separated_by_kind_and_key():
     assert hmac_value(KEY, "email", " ANA@Shop.Test ") == hmac_value(KEY, "email", "ana@shop.test")
-    # An order id and an email never collide, and another key gives another value.
     assert hmac_value(KEY, "order", "ana@shop.test") != hmac_value(KEY, "email", "ana@shop.test")
     assert hmac_value("j" * 32, "email", "ana@shop.test") != hmac_value(KEY, "email", "ana@shop.test")

@@ -1,11 +1,3 @@
-"""Unit tests for the upsell decision tree.
-
-Mirrors the real seed catalog's shape (`data/seed/plans.json`: starter/pro/
-enterprise, each a feature superset of the one below) so these tests double
-as documentation of how the real plan ladder behaves, without depending on
-the seed file itself — a change to the seed data shouldn't break these.
-"""
-
 from app.business.upsell_rules import evaluate_upsell
 from app.db.models import Plan, Subscription
 

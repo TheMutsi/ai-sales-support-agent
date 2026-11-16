@@ -1,9 +1,3 @@
-"""Unit tests for the deterministic output guardrail checks.
-
-Each check is a pure function over (state, response_text) — no LLM, no DB —
-the same direct-input-output style as the business-rules tests.
-"""
-
 from app.guardrails.output_checks import (
     check_checkout_without_eligibility,
     check_fabricated_ticket_claim,
@@ -145,9 +139,6 @@ def test_lookup_claim_after_a_real_search_is_allowed():
 
 
 def test_account_or_ticket_review_claims_are_not_lookup_claims():
-    """Regression: a bare "I've checked/reviewed" matched replies about the
-    customer's account or ticket (grounded in other tools) and replaced
-    correct answers with the fallback."""
     violations = run_output_guardrails(
         OutputCheckContext(tool_call_rounds=0),
         "I've reviewed your request and checked your account; ticket created for you.",
@@ -184,7 +175,6 @@ def test_denying_access_to_billing_history_is_not_a_claim():
 
 
 def test_raw_tool_call_text_is_blocked():
-    """Captured from the evaluation suite (billing-005)."""
     text = (
         "Let's check the policy.\n\nsearch_knowledge_base_tool\n"
         "searching for refund policy for downgrades..."
@@ -197,11 +187,6 @@ def test_plain_mentions_of_a_tool_are_not_tool_text():
     text = "Our Zapier integration is a no-code tool for connecting MewFlow to other apps."
     assert run_output_guardrails(OutputCheckContext(tool_call_rounds=0), text) == []
 
-
-# --- check_ungrounded_invoice_claim ------------------------------------------------------
-# The responses below are real ones from the agent (qwen2.5:7b-instruct), captured while
-# measuring billing-006 to billing-009. No tool can read invoices, so any fact the model states
-# about them is invented unless it first searched the knowledge base.
 
 _BILLING = OutputCheckContext(intent=Intent.BILLING_QUESTION, tool_call_rounds=0)
 
@@ -237,7 +222,6 @@ def test_does_not_flag_an_honest_admission_of_no_access():
             "provided in your account context."
         ),
         "No tengo acceso a tus facturas, pero puedo buscar en la base de conocimiento.",
-        # Real response from billing-006: an admission worded with "ability", not "access".
         (
             "I'm sorry, but I currently don't have the ability to send invoices directly. "
             "My knowledge is primarily focused on your subscription and account details."
@@ -271,9 +255,6 @@ def test_invoice_check_only_applies_to_billing_questions():
 
 
 def test_known_gap_an_honest_opening_hides_an_invented_follow_up():
-    """Documented limitation, not a goal: the admission of no access wins, so a response that
-    admits it and then invents a feature in the same breath is not flagged. Catching it needs
-    a semantic check; the evaluation (billing-008) is what measures how often it happens."""
     assert (
         check_ungrounded_invoice_claim(
             _BILLING,
@@ -285,9 +266,6 @@ def test_known_gap_an_honest_opening_hides_an_invented_follow_up():
 
 
 def test_a_correct_answer_about_a_refunded_order_is_not_taken_for_an_unconfirmed_refund():
-    """The order data says `refunded`, so saying so is grounded. Real answers from the
-    evaluation (order-003) must pass the guard that blocks invented refund confirmations.
-    Not a guarantee: "the refund has been processed" would still match its pattern."""
     for answer in (
         (
             "Yes, your order was refunded. It was placed on 2026-09-17 and the plan starter was "
@@ -300,12 +278,6 @@ def test_a_correct_answer_about_a_refunded_order_is_not_taken_for_an_unconfirmed
     ):
         assert check_unconfirmed_refund_claim(OutputCheckContext(), answer) is None, answer
 
-
-# --- check_unbacked_order_lookup -------------------------------------------------------------
-# Real replies from the evaluation (order-010 to order-012, a logged-in customer saying "refund
-# for my order", "cancel my order", "my purchase was charged twice"). No tool reads orders on
-# these paths and the session names no order, so asking for an order number, saying one was
-# checked, or saying there is none on the account are all things the agent cannot back.
 
 _NO_ORDER = OutputCheckContext(intent=Intent.REFUND_REQUEST, order_found=False)
 
@@ -339,7 +311,6 @@ def test_blocks_saying_there_is_no_order_on_the_account_when_nothing_could_say_s
 
 
 def test_an_order_status_answer_may_say_it_could_not_find_the_order():
-    """The order_status step did read the order: "no order with that number" is a fact there."""
     context = OutputCheckContext(intent=Intent.ORDER_STATUS, order_found=False)
     for reply in (
         "I could not find an order with that number. Could you check the order number?",
@@ -361,8 +332,6 @@ def test_ordinary_replies_that_mention_orders_in_passing_are_left_alone():
         "I understand you'd like to cancel your order. A human will follow up with you.",
     ):
         assert check_unbacked_order_lookup(_NO_ORDER, reply) is None, reply
-
-
 
 
 def _ctx(**kw):
@@ -388,7 +357,6 @@ def test_saying_credits_were_added_needs_them_to_have_been_recorded():
 
     assert check_unbacked_order_action_claim(_ctx(), said).code == "unbacked_order_action_claim"
     assert check_unbacked_order_action_claim(_ctx(credits_added=True), said) is None
-    # Describing the offer is not claiming it happened.
     assert check_unbacked_order_action_claim(_ctx(), "You could take $21.00 in credits added to your account.") is None
 
 

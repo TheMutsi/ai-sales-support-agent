@@ -1,5 +1,3 @@
-"""Which cards a turn shows. They come from what the steps really produced, never from the reply."""
-
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
@@ -65,7 +63,7 @@ def test_several_orders_to_choose_from_become_cards_that_name_the_order():
         "I mean the Pro plan order of $69.99 placed Oct 01",
         "I mean the Starter plan order of $29.99 placed Oct 01",
     ]
-    assert all("A" * 20 not in (c.title + c.message) for c in cards)  # the visitor never sees an id
+    assert all("A" * 20 not in (c.title + c.message) for c in cards)
     assert cards[1].title == "Starter plan, $29.99"
 
 
@@ -110,8 +108,6 @@ def test_an_offer_without_its_order_shows_nothing():
     assert cards_for(_result(ReturnOutcome.OFFER, offer=RetentionOffer(refund_cents=1, credit_cents=1))) == []
 
 
-
-
 def test_the_last_offer_shows_the_free_gift_then_a_plus_then_the_same_choices():
     cards = cards_for(
         _result(ReturnOutcome.FINAL_OFFER, order=_order(), offer=RetentionOffer(refund_cents=1400, credit_cents=2100))
@@ -148,4 +144,4 @@ def test_an_order_for_an_item_shows_its_name_and_its_pictures_stacked():
     assert card.name == "Leggings x2"
     assert card.image.url == "https://cdn.test/front.jpg"
     assert [i.url for i in card.more_images] == ["https://cdn.test/back.jpg"]
-    assert cards_for({"customer_orders": [_order()]})[0].more_images == []  # a plan has one picture
+    assert cards_for({"customer_orders": [_order()]})[0].more_images == []

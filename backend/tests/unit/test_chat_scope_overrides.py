@@ -1,5 +1,3 @@
-"""The chat reads the tenant's scope overrides from the configuration cache, not the database."""
-
 import uuid
 
 from app.core.tenant_config import TenantConfig, TenantConfigCache
@@ -31,11 +29,10 @@ def test_the_chat_reads_scope_overrides_from_the_cache_not_the_database(monkeypa
 
     assert chat_module._scope_overrides(session) == {"order_lookup": ["kb:read"]}
     assert chat_module._scope_overrides(session) == {"order_lookup": ["kb:read"]}
-    assert cache._loader.calls == 1  # two turns, one read of the configuration
+    assert cache._loader.calls == 1
     unknown = SessionClaims(
         tenant_id=uuid.uuid4(), conversation_id=uuid.uuid4(), customer_id=None,
         level=IdentityLevel.ANONYMOUS,
     )
     assert chat_module._scope_overrides(unknown) is None
-
 

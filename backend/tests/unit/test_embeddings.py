@@ -1,9 +1,3 @@
-"""Unit tests for the embeddings factory.
-
-Same isolation approach as test_llm.py: constructing GoogleGenerativeAIEmbeddings
-makes no network call, so this only checks provider selection and error handling.
-"""
-
 import pytest
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_ollama import OllamaEmbeddings

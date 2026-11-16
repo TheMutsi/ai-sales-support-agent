@@ -1,5 +1,3 @@
-"""Unit tests for upgrade price quoting."""
-
 import pytest
 
 from app.business.pricing import calculate_upgrade_price

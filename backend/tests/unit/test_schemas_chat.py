@@ -1,5 +1,3 @@
-"""Unit tests for the `/api/chat` request contract (`app/schemas/chat.py`)."""
-
 import uuid
 
 import pytest
@@ -21,7 +19,6 @@ def test_rejects_a_blank_message_or_a_missing_message_id(body):
 
 
 def test_the_customer_and_conversation_in_the_body_are_not_part_of_the_request():
-    """Both come from the session; a client-supplied one must never reach the graph."""
     request = ChatRequest.model_validate(
         {
             "message": "hi",
