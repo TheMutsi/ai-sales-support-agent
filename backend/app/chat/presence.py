@@ -1,10 +1,3 @@
-"""Which back-office agents are there to answer a live escalation.
-
-An agent is "available" while their back office keeps asking for the inbox: each poll of it records
-a sighting, and one not seen for `AVAILABLE_FOR` stops counting. No separate "I'm online" button to
-forget to switch off, and a closed tab leaves by itself.
-"""
-
 import uuid
 from datetime import datetime, timedelta
 
@@ -14,8 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.db.models import AgentPresence
 
-# The inbox polls every few seconds (see the back office's EscalationsPage), so this tolerates a
-# few missed polls and a brief network gap without calling the agent gone.
 AVAILABLE_FOR = timedelta(seconds=45)
 
 

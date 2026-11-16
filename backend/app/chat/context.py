@@ -1,12 +1,3 @@
-"""Properties and tags on a conversation: small public hints (`device: iphone`, a
-`landing-sale` tag) that the agent, the rules and the analysis can read.
-
-They are set from the browser, so anyone can claim anything; they are never a reason to allow
-something. Whatever needs a real check (a plan, an order) is decided by code that validates it,
-and a property only changes how we talk or what we offer. The limits keep them small: they
-travel on every trace and sit in the conversation row.
-"""
-
 import re
 import uuid
 
@@ -24,8 +15,6 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class ContextError(Exception):
-    """The update breaks a rule. `code` is what the API reports."""
-
     def __init__(self, code: str):
         super().__init__(code)
         self.code = code
@@ -39,8 +28,6 @@ def update_context(
     add_tags: list[str],
     remove_tags: list[str],
 ) -> tuple[dict[str, str], list[str]]:
-    """Merges the change into the conversation, under its row lock. A property set to `None`
-    is removed. Returns what the conversation holds afterwards."""
     for key, value in properties.items():
         if not PROPERTY_KEY.match(key):
             raise ContextError("invalid_property_key")

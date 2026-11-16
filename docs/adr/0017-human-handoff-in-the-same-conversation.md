@@ -15,6 +15,8 @@ chat"), with polling being enough. Zendesk may later be another destination.
 - **Three speakers in one conversation:** the visitor (`user`), the assistant (`assistant`) and a
   person from the back office (`human`, shown under their display name). Notices such as "an agent
   joined" are `system` messages (kind `system`), which are not anyone's speech.
+  Closing a conversation nobody joined adds no "left" notice, and an offline escalation has no
+  chat to join: `resolve` only marks it done, with a note.
 - **The conversation has a handoff state**, not a new table: `none` (the assistant answers),
   `waiting` (a ticket was opened and no agent has joined), `active` (an agent is in), plus the
   agent's display name, when it was requested and the ticket that started it.

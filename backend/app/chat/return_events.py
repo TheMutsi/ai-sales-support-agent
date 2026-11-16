@@ -1,9 +1,3 @@
-"""The record of one turn of a return, built from the state the graph ended with.
-
-Only what a step really did is recorded (its outcome, what it offered, what was recorded), never
-what a model said, and no free text: the visitor's words stay in `messages`. See `ReturnEvent`.
-"""
-
 from app.chat.turns import TurnStart
 from app.schemas.orders import ReturnResult
 
@@ -20,7 +14,6 @@ def build_return_event(
     app_version: str,
     duration_ms: int,
 ) -> dict | None:
-    """The columns of a `ReturnEvent`, or None when this turn did not go through `order_return`."""
     result: ReturnResult | None = final_state.get("return_result")
     if result is None:
         return None
