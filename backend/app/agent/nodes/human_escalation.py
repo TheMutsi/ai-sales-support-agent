@@ -11,8 +11,6 @@ from app.schemas.agent import Intent
 from app.schemas.tools import EscalationCategory, EscalationReceipt
 from app.tools.escalation import new_reference
 
-# Deterministic lookup, no LLM call needed since `intent` is already
-# classified by this point in the graph.
 _INTENT_CATEGORY = {
     Intent.REFUND_REQUEST: EscalationCategory.REFUND,
     Intent.TECHNICAL_SUPPORT: EscalationCategory.TECHNICAL,
@@ -22,14 +20,7 @@ _INTENT_CATEGORY = {
 
 
 def human_escalation_node(state: AgentState) -> dict:
-    """Escalates the conversation to a person, and decides which kind: one who joins the chat now
-    or one who follows up later (`app.business.escalation`). There is no summary to write: whoever
-    takes it reads the conversation, which is short. The follow-up number is kept on the
-    conversation when the turn is saved.
-
-    A conversation keeps one open escalation and its number. An open offline one becomes live, with
-    the same number, once someone can join; a live one stays as it is."""
-    require_customer_id(state)  # without a customer there is nothing to follow up
+    require_customer_id(state)
     existing = state.get("open_escalation")
     if existing is not None and existing.route is EscalationRoute.LIVE:
         return {"escalation_receipt": existing, "escalated": True}

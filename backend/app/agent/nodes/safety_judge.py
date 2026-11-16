@@ -1,13 +1,3 @@
-"""Second-tier safety check — only reached when `intent_router`'s own
-`safety_confidence` came back below the threshold in `app/agent/routing.py`.
-
-This is the expensive path: a dedicated LLM call with a prompt focused only
-on this one decision, instead of the cheap confidence score `intent_router`
-already produces in its single classification call. Most conversations never
-reach this node at all, which is the point of the cascade — pay for a closer
-look only when the cheap signal is genuinely unsure, not on every message.
-"""
-
 import logging
 
 from langchain_core.messages import AIMessage, SystemMessage

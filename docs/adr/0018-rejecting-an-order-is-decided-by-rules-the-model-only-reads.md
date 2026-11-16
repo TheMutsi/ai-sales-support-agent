@@ -77,6 +77,15 @@ are, or whether something happened.
   now only happen with typed text (ADR-0019). Each turn is recorded in `return_events` (ADR-0020).
 - The free gift of the last offer is the Shapermint Essentials Everyday Wireless Jelly Bra
   (`GIFT_NAME`).
+- **What the step trusts.** An order id read by the model is used only when it is one of the
+  orders listed to it (`_without_unlisted_order`). Each click is valid only in the stages listed in
+  `_ACTIONS_BY_STAGE`; a button from an older question is read as "not understood", never applied,
+  and a misunderstood answer asks again at the same stage. An order is taken as meant only when the
+  customer named it; a single order is still shown and asked about.
+- **Pushing back after a "no"** (`_REPLIES_THAT_SAY_NO`) means writing, not clicking an old button,
+  straight after one of those replies. Naming another order starts a new request instead. Otherwise
+  the step hands over to `human_escalation`, and the order goes along only when every order the
+  "no" could be about is on its way (ADR-0021).
 
 ## Alternatives
 

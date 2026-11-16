@@ -21,6 +21,11 @@ Three tiers, each paid for only when the previous one is unsure:
    refuses legitimate customers.
 2. **`intent_router`'s `safety_confidence` (free).** Scored in the same structured
    call that classifies intent, so it adds no round trip.
+   A `small_talk` label is trusted only for a short message with no question
+   (`_looks_like_small_talk`): the 7B model sometimes filed an off-topic request as small talk,
+   which would skip the second look `unsupported` gets. Structured output is retried whole
+   (`with_retry`), because small local models sometimes emit invalid values such as
+   `Infinity`.
 3. **`safety_judge` (one extra LLM call).** Runs when `safety_confidence` is below
    `_SAFETY_CONFIDENCE_THRESHOLD`, and **always for `unsupported`**, with a prompt
    focused on that one decision, before any customer data or retrieval is touched.
@@ -31,6 +36,8 @@ Three tiers, each paid for only when the previous one is unsure:
 
 Tiers 2 and 3 share one `MISUSE_DEFINITION` (`app/agent/prompts/safety_policy.py`),
 so the cheap score and the careful check cannot drift apart on what they look for.
+Tier 1 and tier 3 refuse with the same `REFUSAL_MESSAGE`, so the visitor reads the same
+answer whichever evidence stopped the request.
 
 The threshold is **0.95, set from data**. It started as an untuned 0.7. The
 evaluation dev set showed the real problem was the definition, not the number: both
