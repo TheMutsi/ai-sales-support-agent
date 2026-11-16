@@ -62,6 +62,9 @@ as the fallback.
   checked on 10 phrasings, not proved), so the typed path keeps the limits of ADR-0018.
 - Adding a button is a member of `CardAction`, the card that carries it and a row in the table of
   the step that handles it; the type system and `test_card_actions` fail if one is forgotten.
+- Cards stored before `action` existed carry none: they are still drawn but cannot be clicked,
+  and a stored card of a type that no longer exists is dropped when the messages are read, rather
+  than breaking the whole list.
 - The 422 body lists the allowed actions (FastAPI's message). They are not secret: they are in the
   widget.
 - A "not understood" reply to a stale click is not stored, so it disappears on reload. That is

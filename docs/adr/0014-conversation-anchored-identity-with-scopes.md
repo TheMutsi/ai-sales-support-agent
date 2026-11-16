@@ -52,6 +52,11 @@ decides what a visitor may see or do: a prompt is not an access control.
   digits, valid for ten minutes, five wrong guesses kill it, five sends per email per
   hour, and only an HMAC of it is stored. A malformed email or code is a 422 (its shape
   reveals nothing about accounts).
+- Identity inputs are validated strictly, with no validator library, because they come from
+  strangers and end up in a query and a log line: an email is a plain local part and a dotted
+  domain, an order id is 20 ASCII letters or digits, matched with `fullmatch` (`$` lets a trailing
+  newline by) and `[0-9]` (`\d` accepts other scripts' digits). The order's email is compared by
+  our code, never by the order source, so the rule holds whoever provides the orders.
 - The email and the code never go through the chat: the widget renders a form for the
   methods in the `done` event and calls these endpoints directly, so they stay out of the
   model, the history and the traces.
