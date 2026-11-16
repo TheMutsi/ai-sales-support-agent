@@ -1,12 +1,3 @@
-"""The back office's session: a signed token naming a role (and, except for the operator, the
-one tenant it is bound to).
-
-While the login is a placeholder (ADR-0016) anyone can ask for any role, which is why the admin
-API is mounted only in local environments. The token shares the signing key with the chat's
-sessions and cannot be mistaken for one: it carries `kind: admin` and none of the `tid`/`conv`/`lvl`
-claims a chat session requires, and the other way round.
-"""
-
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -17,8 +8,6 @@ from app.admin.permissions import Role
 
 
 class AdminSessionError(Exception):
-    """`session_expired`: log in again. `invalid_session`: cannot be fixed by retrying."""
-
     def __init__(self, code: str):
         super().__init__(code)
         self.code = code
@@ -28,7 +17,7 @@ class AdminSessionError(Exception):
 class AdminSession:
     role: Role
     tenant_id: uuid.UUID | None
-    name: str  # what a visitor sees when this person joins a chat
+    name: str
 
 
 def issue_admin_token(

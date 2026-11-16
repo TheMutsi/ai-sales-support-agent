@@ -66,6 +66,16 @@ the back office.
   inbox of escalations (list, assign, close, reply) behind an interface so Zendesk can be one
   more destination later.
 
+- **Details the routes rely on.** Admin routes are mounted one by one, not nested with
+  `include_router`, so `test_admin_routes` can read each route's dependencies and fails when one
+  declares no permission. Another tenant's conversation or escalation answers 404, not 403: its
+  existence is not ours to say. The admin token shares the signing key with chat sessions but
+  carries `kind: admin` and none of a chat session's claims, so neither can pass for the other.
+  The login page lists tenants before there is a session (it goes away with the placeholder).
+  `allowed_origins` cannot be cleared, only replaced, unlike `scope_overrides: null`. Reading a
+  conversation's messages needs its own permission (`conversations:read`), and the customer is
+  shown by name and masked email.
+
 ## Consequences
 
 - Adding an admin endpoint means choosing its permission, and a test asserts every route under

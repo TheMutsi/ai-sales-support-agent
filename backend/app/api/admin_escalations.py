@@ -1,13 +1,3 @@
-"""The back office's escalations: conversations a person has, or is asked to take, or will follow up.
-
-There are two kinds (`app.business.escalation` decides which): a *live* one, where the visitor waits
-in the chat for an agent to join, talk to them one to one and close it; and an *offline* one, where
-the visitor was given a follow-up number and a person writes back later, then marks it resolved.
-Both live on the conversation: whoever takes one reads the conversation, there is no ticket with a
-summary. The list can be searched by status, kind, tag, the visitor's public properties, customer
-and text. Reading needs `escalations:read`, acting `escalations:reply`.
-"""
-
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
@@ -38,10 +28,10 @@ _ACT = require_tenant_permission(Permission.ESCALATIONS_REPLY)
 class EscalationItem(BaseModel):
     id: uuid.UUID
     reference: str
-    route: str  # live | offline
+    route: Literal["live", "offline"]
     reason: str | None
     category: str | None
-    status: str  # open | resolved
+    status: Literal["open", "resolved"]
     handoff_status: str
     agent_name: str | None
     escalated_at: datetime | None
@@ -51,7 +41,7 @@ class EscalationItem(BaseModel):
     customer: CustomerView | None
     tags: list[str]
     properties: dict[str, str]
-    last_message: str | None  # what the visitor said last
+    last_message: str | None
 
 
 class ReplyRequest(BaseModel):
@@ -63,7 +53,6 @@ class CloseRequest(BaseModel):
 
 
 def _conversation_of(db: Session, tenant_id: uuid.UUID, conversation_id: uuid.UUID) -> None:
-    """Another tenant's conversation is 'not found', not 'forbidden'."""
     conversation = db.get(Conversation, conversation_id)
     if conversation is None or conversation.tenant_id != tenant_id:
         raise error(404, "conversation_not_found")
@@ -78,7 +67,6 @@ def _act(db: Session, tenant_id: uuid.UUID, conversation_id: uuid.UUID, do):
 
 
 def _like(text: str) -> str:
-    """`text` as a contains-pattern, with LIKE's own wildcards taken literally."""
     escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
 
@@ -86,7 +74,7 @@ def _like(text: str) -> str:
 def _property_filter(raw: str):
     key, separator, value = raw.partition(":")
     if not separator or not key.strip():
-        raise error(422, "bad_property_filter")  # `key:value`
+        raise error(422, "bad_property_filter")
     return cast(Conversation.properties, JSONB).contains({key.strip(): value.strip()})
 
 
@@ -106,12 +94,7 @@ def list_escalations(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> list[EscalationItem]:
-    """Open first (a visitor waiting for a person, longest wait first, then the ones with an agent,
-    then the offline ones, oldest first), then the resolved, newest first. Every filter narrows: a
-    conversation must match all of them. `q` looks in the follow-up number, the customer's name and
-    email and the visitor's messages; `tag` (repeat it) needs every tag; `property` is `key:value`."""
     if ROLE_PERMISSIONS[session.role] & {Permission.ESCALATIONS_REPLY}:
-        # Someone who can answer is looking at the inbox: the live route may be taken (see `app.chat.presence`).
         presence.touch(db, tenant_id=tenant_id, agent_name=session.name, now=datetime.now(UTC))
 
     last_message = (
@@ -248,7 +231,6 @@ def resolve_escalation(
     session: Annotated[AdminSession, Depends(_ACT)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
-    """Marks an offline escalation as done (a live one is closed instead)."""
     _act(
         db, tenant_id, conversation_id,
         lambda: handoff.resolve(

@@ -1,10 +1,3 @@
-"""The back office's view of conversations: who talked, what was said, how they identified.
-
-Reading messages is access to personal data, so it needs its own permission
-(`conversations:read`) and a conversation is only ever shown under its own tenant. The customer is
-shown by name and a masked email, like the identification audit.
-"""
-
 import uuid
 from datetime import datetime
 from typing import Annotated
@@ -23,7 +16,7 @@ from app.db.session import get_db
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 _PREVIEW_CHARS = 120
-_MAX_MESSAGES = 500  # a conversation is about ten messages; this is a ceiling, not a page
+_MAX_MESSAGES = 500
 
 
 class CustomerView(BaseModel):
@@ -65,12 +58,10 @@ class ConversationDetail(BaseModel):
     linked_via: str | None
     handoff_status: str
     handoff_agent_name: str | None
-    # The escalation to a person this conversation has, if any (see `app.api.admin_escalations`).
     escalation_reference: str | None
     escalation_route: str | None
     escalation_status: str | None
     escalation_notes: str | None
-    # The public hints the visitor's page set (see `app.chat.context`): not verified facts.
     properties: dict[str, str]
     tags: list[str]
     customer: CustomerView | None
@@ -92,7 +83,6 @@ def list_conversations(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     before: datetime | None = None,
 ) -> list[ConversationSummary]:
-    """Newest activity first; pass the last item's `last_activity_at` as `before` for the next page."""
     query = (
         select(Conversation, Customer, Message.content)
         .outerjoin(Customer, Customer.id == Conversation.customer_id)
@@ -128,7 +118,6 @@ def read_conversation(
     db: Annotated[Session, Depends(get_db)],
 ) -> ConversationDetail:
     conversation = db.get(Conversation, conversation_id)
-    # Another tenant's conversation is "not found", not "forbidden": its existence is not ours to say.
     if conversation is None or conversation.tenant_id != tenant_id:
         raise error(404, "conversation_not_found")
     customer = db.get(Customer, conversation.customer_id) if conversation.customer_id else None
