@@ -1,5 +1,3 @@
-"""A button click against a real conversation: offered or not, what is stored, and retries."""
-
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -41,7 +39,6 @@ def setup(tenant_wipe):
 
 
 def _offer(conversation_id, *cards):
-    """A reply that offered these buttons, as the chat stores it."""
     with SessionLocal() as db:
         turn = _open_turn_text(db, conversation_id)
         finish_turn(db, conversation_id=conversation_id, turn=turn, content="Which?", now=NOW, cards=list(cards))
@@ -112,7 +109,7 @@ def test_retrying_a_stored_click_replays_its_reply_instead_of_saying_it_was_not_
     with SessionLocal() as db:
         finish_turn(db, conversation_id=conversation_id, turn=first, content="Your order stays.", now=NOW)
 
-    retry = _open_turn(claims, request)  # the latest reply no longer holds the button
+    retry = _open_turn(claims, request)
 
     assert retry.action is TurnAction.REPLAY and retry.reply == "Your order stays."
 
@@ -130,7 +127,7 @@ def test_the_event_of_a_return_turn_is_saved_with_the_reply_and_only_then(setup)
         "app_version": "v", "duration_ms": 5,
     }
     with SessionLocal() as db:
-        assert db.query(ReturnEvent).count() == 0  # the click alone records nothing
+        assert db.query(ReturnEvent).count() == 0
         finish_turn(db, conversation_id=conversation_id, turn=turn, content="Your order stays.", now=NOW, return_event=event)
         saved = db.query(ReturnEvent).one()
         assert (saved.action, saved.outcome, saved.user_seq) == ("keep_order", "kept_as_is", turn.user_seq)

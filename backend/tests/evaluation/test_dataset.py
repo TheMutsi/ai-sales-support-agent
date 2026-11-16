@@ -1,5 +1,3 @@
-"""Unit tests for dataset loading and validation."""
-
 import json
 from pathlib import Path
 
@@ -59,8 +57,6 @@ def test_heldout_set_does_not_overlap_the_dev_set():
 
 
 def test_a_case_must_end_with_a_user_message():
-    """The runner sends the last message as the user's turn; an assistant one would be sent
-    as if the user had said it, with no error."""
     with pytest.raises(ValidationError, match="last message must be from the user"):
         EvalCase(
             id="c",

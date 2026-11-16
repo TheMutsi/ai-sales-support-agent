@@ -1,7 +1,3 @@
-"""A conversation is the anchor for who is talking: it starts anonymous and gets a
-customer when the visitor identifies. A customer already attached is never
-overwritten; the newcomer gets a conversation of their own."""
-
 import threading
 import time
 import uuid
@@ -95,7 +91,6 @@ def test_a_second_customer_never_takes_over_an_attached_conversation(db):
 
 @pytest.mark.parametrize("known", [False, True])
 def test_a_conversation_that_isnt_usable_starts_a_new_one(db, known):
-    """Unknown id, or one that belongs to another tenant: never attached to."""
     tenant, other = _tenant(db), _tenant(db, "Other")
     ana = _customer(db, tenant, "ana@shop.test")
     foreign = create_anonymous(db, tenant_id=other.id, now=NOW)
@@ -120,7 +115,7 @@ def test_two_customers_identifying_at_once_cannot_both_take_the_same_conversatio
         with SessionLocal() as other:
             done["bea"] = _login(other, tenant, bea, anonymous.id).id
 
-    with SessionLocal() as holder:  # Ana is mid-login: she holds the row lock
+    with SessionLocal() as holder:
         locked = holder.query(Conversation).filter_by(id=anonymous.id).with_for_update().one()
         thread = threading.Thread(target=bea_logs_in)
         thread.start()
@@ -134,24 +129,20 @@ def test_two_customers_identifying_at_once_cannot_both_take_the_same_conversatio
 
 
 def test_a_login_never_discards_what_the_caller_had_pending(db):
-    """The caller may have marked a one-time code as used and not committed yet; a
-    stale conversation id must not roll that back."""
     tenant = _tenant(db)
     ana = _customer(db, tenant, "ana@shop.test")
     db.add(SecurityEvent(tenant_id=tenant.id, kind="pending_work", email=ana.email))
 
-    _login(db, tenant, ana, uuid.uuid4())  # an id that doesn't exist
+    _login(db, tenant, ana, uuid.uuid4())
 
     assert db.query(SecurityEvent).filter_by(kind="pending_work").count() == 1
 
 
 def test_a_conversation_already_loaded_in_the_session_is_checked_against_the_database(db):
-    """Without refreshing, the cached row still says 'no customer' after another
-    transaction attached one, and the second customer would overwrite the first."""
     tenant = _tenant(db)
     ana, bea = _customer(db, tenant, "ana@shop.test"), _customer(db, tenant, "bea@shop.test")
     anonymous = create_anonymous(db, tenant_id=tenant.id, now=NOW)
-    cached = db.get(Conversation, anonymous.id)  # loaded here, never expired
+    cached = db.get(Conversation, anonymous.id)
     assert cached.customer_id is None
     with SessionLocal() as other:
         _login(other, tenant, ana, anonymous.id)

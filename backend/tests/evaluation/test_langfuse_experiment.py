@@ -1,7 +1,3 @@
-"""Unit tests for the Langfuse experiment backend. The Langfuse client is a
-fake that calls the task and evaluators the way the SDK does, and the chat
-endpoint is an `httpx.MockTransport`, so no server is needed."""
-
 import json
 import uuid
 from contextlib import contextmanager
@@ -36,9 +32,6 @@ def _case(case_id: str, **overrides) -> EvalCase:
 
 
 class _FakeLangfuse:
-    """Mimics the parts of `Langfuse` the runner uses: dataset upserts and a
-    sequential `run_experiment` that feeds each task output to the evaluators."""
-
     def __init__(self) -> None:
         self.items: dict[str, dict] = {}
         self.run_kwargs: dict = {}
@@ -72,8 +65,6 @@ class _FakeLangfuse:
 
 
 class _FakeSessions:
-    """Opens a fresh made-up conversation per case, as the real `CaseSessions` does."""
-
     def __init__(self):
         self.opened: list[uuid.UUID] = []
 
@@ -89,7 +80,6 @@ def _chat_server(requests: list[dict], fail_on: str | None = None) -> httpx.Clie
         requests.append(payload)
         if fail_on and fail_on in payload["message"]:
             return httpx.Response(500)
-        # The fake session's token is its conversation id.
         done = {
             "conversation_id": request.headers["authorization"].removeprefix("Bearer "),
             "intent": "billing_question",
@@ -159,10 +149,8 @@ def test_run_scores_every_case_and_links_the_session(monkeypatch):
     assert run_url == "http://langfuse.test/run/1"
     assert len(client.items) == 2
     assert client.run_kwargs["run_name"] == "abc123 run"
-    # The conversation belongs to the session the runner opened, so each item's Langfuse
-    # session is that conversation: the same one the API uses for the agent's own trace.
     assert propagated == [str(conversation_id) for conversation_id in sessions.opened]
-    assert len(set(propagated)) == 2  # one conversation per case
+    assert len(set(propagated)) == 2
     scores = {(s.name, s.value) for s in client.item_scores}
     assert ("intent_accuracy", 1.0) in scores
     assert ("intent_accuracy", 0.0) in scores

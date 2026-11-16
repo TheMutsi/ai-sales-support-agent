@@ -1,5 +1,3 @@
-"""Properties and tags on a conversation: public hints, set by the session's own visitor."""
-
 import pytest
 from fastapi.testclient import TestClient
 

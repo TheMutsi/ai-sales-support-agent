@@ -1,6 +1,3 @@
-"""`POST /api/conversations` starts an anonymous conversation, and logging in from it
-attaches the customer to the same conversation (history carries over)."""
-
 import time
 import uuid
 from datetime import timedelta
@@ -132,8 +129,6 @@ def test_a_session_from_another_tenant_is_never_attached_to(shop):
 
 
 def test_an_anonymous_session_can_chat(shop, monkeypatch):
-    """What it may ask about is decided inside the graph, by scope; the endpoint only
-    needs a valid session for the conversation."""
     from app.api import chat as chat_module
 
     class _Silent:

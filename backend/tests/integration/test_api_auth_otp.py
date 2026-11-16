@@ -1,7 +1,3 @@
-"""`POST /api/auth/otp/request` and `/verify` through the real app: a visitor gets a
-session by proving they own a customer's email. The code is read from the sender,
-never from a response."""
-
 import uuid
 
 import jwt

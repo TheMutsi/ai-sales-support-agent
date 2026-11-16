@@ -1,7 +1,3 @@
-"""`POST /api/auth/login` against a real Postgres: a shop's signed token in,
-our session out. The tenant is resolved from the public API key first, so a
-token can only be checked against its own tenant's secrets."""
-
 import time
 import uuid
 
@@ -20,7 +16,6 @@ client = TestClient(app)
 
 @pytest.fixture
 def shop(tenant_wipe):
-    """A tenant with one active secret and one customer ('cust-42')."""
     with SessionLocal() as db:
         tenant = Tenant(name="Test shop", api_key=generate_api_key())
         secret = generate_secret()
@@ -95,7 +90,6 @@ def test_subject_with_no_matching_customer_is_rejected(shop):
 
 
 def test_a_customer_of_another_tenant_cannot_be_reached(shop):
-    """Same external id under a different tenant must not resolve."""
     with SessionLocal() as db:
         other = Tenant(name="Other shop", api_key=generate_api_key())
         other_secret = generate_secret()

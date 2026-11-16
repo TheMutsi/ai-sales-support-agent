@@ -1,12 +1,3 @@
-"""Integration test for `POST /api/chat` through the real FastAPI app.
-
-The compiled agent graph is swapped for a stub (same approach as
-`tests/unit/test_api_chat.py`) so this exercises real HTTP request handling —
-validation, routing, the SSE response — without a live LLM call. A full,
-real run against the compiled graph + Ollama is verified manually (see the
-Stage 8 PR description), per CLAUDE.md's "no fabricated results" rule.
-"""
-
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -30,7 +21,6 @@ client = TestClient(app)
 
 @pytest.fixture
 def shop(tenant_wipe):
-    """A tenant, a customer and the conversation they are logged in to."""
     with SessionLocal() as db:
         tenant = Tenant(name="Shop", api_key=generate_api_key())
         db.add(tenant)
@@ -46,7 +36,6 @@ def shop(tenant_wipe):
 
 
 def _auth(shop=None, ttl: timedelta = timedelta(hours=1)) -> dict:
-    """A session for the shop's conversation, or for made-up ids when `shop` is None."""
     token, _ = issue_session_token(
         tenant_id=shop["tenant"].id if shop else uuid.uuid4(),
         conversation_id=shop["conversation"].id if shop else uuid.uuid4(),
@@ -159,7 +148,6 @@ def test_chat_runs_the_graph_as_the_sessions_customer_not_a_body_customer(shop, 
 
 
 def test_a_malformed_body_without_a_session_still_gets_the_401():
-    """Clients key off the auth code, so it must win over body validation."""
     response = client.post("/api/chat", json={"messages": []})
 
     assert response.status_code == 401
@@ -167,7 +155,6 @@ def test_a_malformed_body_without_a_session_still_gets_the_401():
 
 
 def test_a_completed_turn_leaves_the_conversation_free_and_its_reply_stored(shop, monkeypatch):
-    """The cleanup that runs after the response must be a no-op once the turn finished."""
     final_state = {
         "messages": [HumanMessage(content="hi"), AIMessage(content="Hello there")],
         "guardrail_flags": [],
@@ -186,8 +173,6 @@ def test_a_completed_turn_leaves_the_conversation_free_and_its_reply_stored(shop
 
 @pytest.mark.asyncio
 async def test_a_store_whose_save_fails_frees_the_conversation_by_itself(shop, monkeypatch):
-    """Not left to the caller: after a disconnect the save runs detached, and if it then
-    fails nobody else would free the turn."""
     with SessionLocal() as db:
         turn = begin_turn(
             db, conversation_id=shop["conversation"].id, client_message_id=uuid.uuid4(),
@@ -280,7 +265,6 @@ def test_messages_need_a_session():
 
 
 def test_another_conversations_messages_are_not_readable_with_this_session(shop):
-    """Same answer as for a conversation that does not exist: no way to probe ids."""
     other = uuid.uuid4()
 
     response = client.get(f"/api/conversations/{other}/messages", headers=_auth(shop))
@@ -315,8 +299,6 @@ def test_the_messages_endpoint_says_which_message_is_a_form(shop):
 
 
 class _RecordingGraph:
-    """Ends each run with a plain answer and remembers what it was started with."""
-
     def __init__(self):
         self.runs: list[dict] = []
 

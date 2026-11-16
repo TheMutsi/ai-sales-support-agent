@@ -1,6 +1,3 @@
-"""Unit tests for the LLM-judge evaluator, with the chat model replaced by a
-fake (same pattern as tests/unit/test_agent_nodes_safety_judge.py)."""
-
 import uuid
 
 from langchain_core.messages import HumanMessage, SystemMessage

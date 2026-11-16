@@ -1,5 +1,3 @@
-"""The conversation viewer against a real Postgres: what is shown, and to whom."""
-
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -111,7 +109,6 @@ def test_the_detail_has_messages_in_order_and_the_identification_timeline(world)
 
 
 def test_another_tenants_conversation_is_not_found_even_for_its_neighbour(world):
-    # Asking for B's conversation under A's id must not reveal it, whoever asks.
     for headers in (_login("viewer", world["a"]), _login("operator")):
         response = client.get(f"/api/admin/tenants/{world['a']}/conversations/{world['other']}", headers=headers)
         assert (response.status_code, response.json()["detail"]["code"]) == (404, "conversation_not_found")
