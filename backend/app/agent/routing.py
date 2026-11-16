@@ -17,7 +17,7 @@ _MAX_TOOL_CALL_ROUNDS = 2
 _RETURN_FOLLOW_UPS = frozenset({Intent.ORDER_RETURN, Intent.SMALL_TALK})
 
 
-_KNOWLEDGE_BASE_INTENTS = frozenset(
+_ANSWERED_BY_THE_WRITER_INTENTS = frozenset(
     {Intent.PRODUCT_QUESTION, Intent.TECHNICAL_SUPPORT, Intent.SMALL_TALK}
 )
 _ACCOUNT_CONTEXT_INTENTS = frozenset(
@@ -125,7 +125,7 @@ def _dispatch_by_intent(
         return Node.GET_CUSTOMER_CONTEXT
     if state["intent"] == Intent.PRICING_QUESTION:
         return Node.GET_PLAN_CATALOG
-    if state["intent"] in _KNOWLEDGE_BASE_INTENTS:
+    if state["intent"] in _ANSWERED_BY_THE_WRITER_INTENTS:
         return Node.RESPONSE_WRITER
     return Node.HUMAN_ESCALATION
 
