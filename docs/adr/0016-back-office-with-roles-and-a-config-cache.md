@@ -87,6 +87,12 @@ the back office.
 
 Everything above. See the roadmap in `CLAUDE.md`.
 
+Stored credentials (a tenant's SMTP password) are encrypted with Fernet (`app.core.secrets`), whose
+key lives only in the environment: a database dump alone is ciphertext, and a tampered or foreign
+value fails to decrypt instead of yielding garbage. Whoever holds both reads everything, and
+replacing the key makes every stored value unreadable until it is entered again; rotating it
+without that would need a re-encryption step, not built.
+
 ## Alternatives
 
 - **Add the pages to the widget bundle.** Ships admin code to every visitor of every shop.

@@ -33,6 +33,10 @@ services: web, worker, Postgres, ClickHouse, Redis, MinIO).
   langfuse`), whose items link to the same sessions as the agent's own traces
   (ADR-0012).
 
+- Langfuse's client reads its keys from the process environment, not from our `Settings`, so
+  `configure_langfuse()` copies them into `os.environ` once at startup; without it tracing would
+  stay off silently.
+
 ## Consequences
 
 - Full traces with no account, no cost, and no data leaving the machine.

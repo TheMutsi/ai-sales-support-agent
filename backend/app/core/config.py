@@ -3,29 +3,18 @@ from pathlib import Path
 from typing import Literal
 
 from cryptography.fernet import Fernet
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Repo root, not backend/ — this file lives at backend/app/core/config.py, and the
-# .env file is checked out one level above `backend/`. Resolved from this file's own
-# path (not the process cwd) so `.env` loads the same way whether you run `pytest`
-# from `backend/`, the app from the repo root, or Docker (which doesn't use this at
-# all — it injects .env as real process env vars via docker-compose's `env_file`).
-_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_ENV_FILE = _REPO_ROOT / ".env"
 
 
-# The chat-model providers `app.core.llm` can build. A typo in LLM_PROVIDER
-# fails when settings load, not on the first chat request.
 LLMProvider = Literal["anthropic", "google", "ollama"]
 
 
 _DEV_SESSION_KEY = "dev-only-session-signing-key-change-me"
-# A valid Fernet key, public like the one above: it only exists so a local database can hold
-# encrypted values without setup. `_require_a_real_encryption_key` refuses it elsewhere.
 _DEV_ENCRYPTION_KEY = "QfxUoq4U_nd0a17NgubcRMPK2uxUNiGw0KzvtDQrXe4="
-# The only environments allowed to run on the (public) development key. An
-# allowlist rather than `!= "production"`: an environment named "prod" or
-# "staging" must not fall through to a key anyone can read in the repo.
 LOCAL_ENVIRONMENTS = {"development", "local", "test"}
 _MIN_SESSION_KEY_LENGTH = 32
 
@@ -36,60 +25,52 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_version: str = "0.1.0"
 
-    # Port 5433: the docker-compose `db` service maps to 5433 on the host to avoid
-    # colliding with a native Postgres install that may already own 5432.
-    database_url: str = "postgresql+psycopg://mewflow:mewflow@localhost:5433/mewflow"
-
-    # Origins the browser frontend is served from (Vite dev server by default).
-    # An explicit allow-list, never "*": the API will carry customer-scoped
-    # data. Env override is a JSON list: CORS_ALLOW_ORIGINS='["https://app.example.com"]'.
-    cors_allow_origins: list[str] = ["http://localhost:5173"]
-
-    # Signs the sessions `POST /api/auth/login` issues. The default is a local-dev
-    # convenience only; `_require_real_session_key` refuses it outside local envs.
-    session_signing_key: str = _DEV_SESSION_KEY
-    # Keys the email and order hashes of `identification_events`, so rotating the session key does
-    # not change every hash and a leaked session key does not make them guessable. Empty means
-    # "use the session key", allowed in local environments only.
-    audit_hmac_key: str = ""
-    # Encrypts credentials kept in the database (a tenant's SMTP password). A Fernet key, kept
-    # outside the database: a dump alone then reads as noise. See `app.core.secrets`.
-    secrets_encryption_key: str = _DEV_ENCRYPTION_KEY
+    database_url: str = Field(
+        default="postgresql+psycopg://mewflow:mewflow@localhost:5433/mewflow",
+        description="Host port 5433, so the compose database never collides with a native 5432.",
+    )
+    cors_allow_origins: list[str] = Field(
+        default=["http://localhost:5173"],
+        description="An explicit allow-list, never '*'. Set it as a JSON list.",
+    )
+    session_signing_key: str = Field(
+        default=_DEV_SESSION_KEY, description="Signs our sessions; refused outside local envs."
+    )
+    audit_hmac_key: str = Field(
+        default="",
+        description=(
+            "Keys the audit hashes apart from the session key, so rotating or leaking that one "
+            "leaves them intact. Empty means the session key, in local environments only."
+        ),
+    )
+    secrets_encryption_key: str = Field(
+        default=_DEV_ENCRYPTION_KEY,
+        description="Fernet key for credentials stored in the database; never kept there.",
+    )
     session_ttl_seconds: int = 24 * 3600
-    # How long tenant configuration (origins, scope overrides) may be served from memory before it
-    # is read again; a write from the back office invalidates it at once on that instance.
-    tenant_config_ttl_seconds: int = 60
-    # The back office's placeholder login lets anyone ask for any role, so its API exists only when
-    # this is switched on explicitly AND the environment is local (`admin_api_is_mounted`). An
-    # opt-in, because `app_env` defaults to "development": a deployment that forgot APP_ENV must
-    # not get an admin API.
-    admin_api_enabled: bool = False
-    # How many reverse proxies sit in front of the API and append to X-Forwarded-For. 0 means
-    # the header is ignored (anyone can send it) and the socket peer is the client.
-    trusted_proxy_count: int = 0
+    tenant_config_ttl_seconds: int = Field(
+        default=60, description="How long tenant configuration may be served from memory."
+    )
+    admin_api_enabled: bool = Field(
+        default=False,
+        description="Opt-in, and only honoured in a local environment (`admin_api_is_mounted`).",
+    )
+    trusted_proxy_count: int = Field(
+        default=0, description="Proxies appending to X-Forwarded-For; 0 ignores the header."
+    )
 
     llm_provider: LLMProvider = "anthropic"
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
     google_api_key: str | None = None
     google_model: str = "gemini-2.5-pro"
-    # Free local option, no API key: requires `ollama pull qwen2.5:7b-instruct` and
-    # `ollama serve` running on the host — see CLAUDE.md.
     ollama_model: str = "qwen2.5:7b-instruct"
     ollama_base_url: str = "http://localhost:11434"
 
     embedding_provider: str = "google"
     embedding_model: str = "text-embedding-004"
-    # Ollama's nomic-embed-text outputs 768-dim vectors — matches EMBEDDING_DIM in
-    # app/db/models.py, verified against a real local call, not assumed.
     ollama_embedding_model: str = "nomic-embed-text"
 
-    # Self-hosted Langfuse (see `docker-compose.yml`'s `langfuse-*` services) —
-    # not LangSmith: self-hosting LangSmith is an Enterprise-only, paid add-on,
-    # not something you can run locally for free. Public/secret key defaults
-    # here match the local-dev-only bootstrap values `docker-compose.yml`
-    # seeds the Langfuse project with, so tracing works out of the box with no
-    # manual key-copying — they're meaningless outside this local stack.
     langfuse_tracing_enabled: bool = False
     langfuse_public_key: str = "pk-lf-mewflow-local"
     langfuse_secret_key: str = "sk-lf-mewflow-local-dev-only"

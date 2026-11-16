@@ -1,34 +1,3 @@
-"""The configuration of every tenant, cached: read on every request, changed rarely.
-
-One snapshot of all tenants (their origins, scope overrides and API key) serves the lookups by id
-and by API key and the union of origins the CORS layer needs, so a request costs a dictionary
-lookup instead of a query. The snapshot is reloaded:
-
-- when it is older than the TTL, so a change made anywhere reaches every instance within a bounded
-  time (the cache is in-process: with several API instances a change shows up on the others after
-  the TTL, not at once);
-- when asked to (`invalidate`), which the back office does after it writes, so the instance that
-  wrote sees its own change at once, even if the invalidation lands while a reload is running;
-- when something is not found, but at most once every few seconds: a tenant created a moment ago
-  must not be mistaken for an unknown one, and someone guessing API keys must not turn every guess
-  into a query.
-
-**When the database cannot be read** the previous snapshot keeps serving what it knows, and the
-database is tried again after a short pause, not on every request. But a lookup that finds nothing
-cannot then be called "unknown": an unknown tenant skips the origin check, so mistaking a real one
-for it would open that check. It raises `TenantConfigUnavailable` instead, and the caller fails
-closed. Only `all_origins`, for the CORS layer, never raises and never waits for *another thread's*
-reload, but it is not free of I/O: it runs on the event loop, and if the snapshot is cold, stale
-or invalidated and no one else is loading, it loads it itself, so an unreachable database can stall
-the loop for the connection timeout, once per retry pause (the previous registry did the same).
-A tenant created in the last few seconds can look unknown, and so skip the origin check, until the
-throttle on misses expires. After `invalidate` with the database down, the old snapshot (a revoked
-origin included) keeps serving.
-
-Reloads are single-flight: threads that find the snapshot out of date at the same moment cause one
-query. Callers must treat what they get as read-only.
-"""
-
 import logging
 import threading
 import time
@@ -66,8 +35,6 @@ class _Snapshot:
 
 
 def _support_hours_of(tenant: Tenant) -> SupportHours | None:
-    """A bad schedule must not stop every tenant from loading: that one is taken as always open,
-    which only means live escalations are tried (an agent still has to be there), and it is logged."""
     try:
         return SupportHours.from_config(tenant.support_hours)
     except (KeyError, ValueError, TypeError):
@@ -92,8 +59,7 @@ def load_all_tenant_configs() -> list[TenantConfig]:
 
 
 class TenantConfigUnavailable(Exception):
-    """The configuration could not be read, and what was asked cannot be answered from what is
-    cached (never loaded, or a lookup that found nothing and could not be confirmed)."""
+    pass
 
 
 class TenantConfigCache:
@@ -113,9 +79,9 @@ class TenantConfigCache:
         self._clock = clock
         self._lock = threading.Lock()
         self._snapshot: _Snapshot | None = None
-        self._generation = 0  # bumped by invalidate(); a snapshot older than it is out of date
+        self._generation = 0
         self._last_attempt = float("-inf")
-        self._failed_at: float | None = None  # when the last attempt failed, if it did
+        self._failed_at: float | None = None
 
     def _out_of_date(self) -> bool:
         snapshot = self._snapshot
@@ -126,10 +92,6 @@ class TenantConfigCache:
         )
 
     def _attempt(self, still_needed: Callable[[], bool], *, blocking: bool = True) -> None:
-        """Tries to load a new snapshot. `still_needed` is asked again once the lock is held: if
-        another thread reloaded while this one waited, there is nothing left to do (single-flight:
-        threads that find the snapshot out of date together cause one query). A recent failure is
-        not retried until the retry pause has passed."""
         if not self._lock.acquire(blocking=blocking):
             return
         try:
@@ -139,8 +101,6 @@ class TenantConfigCache:
             if self._failed_at is not None and now - self._failed_at < self._retry:
                 return
             self._last_attempt = now
-            # Read before the query: an invalidation that lands while it runs leaves this
-            # snapshot already out of date, and the next lookup reloads it.
             generation = self._generation
             try:
                 configs = self._loader()
@@ -168,10 +128,6 @@ class TenantConfigCache:
         return snapshot
 
     def _confirm_a_miss(self) -> _Snapshot:
-        """A lookup found nothing. Reload, but only if the last attempt is old enough that a new
-        tenant may exist; otherwise a burst of unknown keys would be a burst of queries. If the
-        database cannot be read, a miss is not an answer."""
-
         def may_exist_now() -> bool:
             return self._failed_at is not None or self._clock() - self._last_attempt > self._miss_refresh
 
@@ -190,18 +146,15 @@ class TenantConfigCache:
         return config if config is not None else self._confirm_a_miss().by_api_key.get(api_key)
 
     def all_origins(self) -> frozenset[str]:
-        """For the CORS layer, which runs on the event loop: never raises, never waits."""
         try:
             return self._current(blocking=False).origins
         except TenantConfigUnavailable:
             return frozenset()
 
     def invalidate(self) -> None:
-        """Reload at the next lookup. The back office calls this after changing a tenant."""
         self._generation += 1
 
     def clear(self) -> None:
-        """Forget everything (tests)."""
         with self._lock:
             self._snapshot, self._failed_at = None, None
             self._last_attempt = float("-inf")
