@@ -171,7 +171,7 @@ sets are stored as plain strings; the enums that produce them live in `app/schem
   hold an unfinished return. The escalation lives here too: `escalation_route` (`live`,
   `offline`), `escalation_reason`, `escalation_category` (`escalation`, `refund`, `technical`,
   `billing`, `other`), `escalation_status` (`open`, `resolved`), and resolved ones move to
-  `escalation_history`. `properties` and `tags` are public hints, never a reason to allow anything.
+  `escalation_history` when a new escalation replaces them. `properties` and `tags` are public hints, never a reason to allow anything.
 - **messages**: stored on the server so the client cannot forge the history. `role` is `user`,
   `assistant`, `human` (a person from the back office) or `system`; `kind` is `text`,
   `identity_request` or `system`, and anything but text is kept out of the model's history. A reply
