@@ -14,7 +14,8 @@ did.
 
 ## Decision
 
-- **No ticket table.** The conversation is the record. It gets `escalation_reference` (a follow-up
+- **No ticket table.** The conversation is the record; old tickets are kept as `tickets_archive`,
+  with no model and no foreign key to customers, out of the code's way. It gets `escalation_reference` (a follow-up
   number such as `MF-7K3Q9X2A`, unique), `route`, `reason`, `category`, `status` (`open` or
   `resolved`), when it was escalated and resolved, who resolved it and a note. Whoever takes it reads
   the conversation. This also removes one model call per escalation.
@@ -28,16 +29,27 @@ did.
   role that can answer records a sighting in `agent_presence`, and one not seen for 45 seconds stops
   counting. There is no "online" switch to forget.
 - **The schedule is per tenant** (`tenants.support_hours`: time zone, opening and closing time,
-  weekdays); empty means always open. A malformed one is logged and taken as always open.
+  weekdays); empty means always open. A closing time earlier than the opening one is a night shift
+  that ends the next morning, counted on the weekday it started. A malformed one (including one that
+  opens and closes at once) is logged and taken as always open.
 - **One open escalation per conversation.** A customer who insists is shown the same number again
-  (`TurnStart.open_escalation`); a resolved one is replaced by the new request.
+  (`TurnStart.open_escalation`). An open offline one becomes live, with the same number, once someone
+  can join; a live one stays as it is. A resolved one is replaced by the new request and moves to
+  `escalation_history`, so its number can still be searched and its note is not lost.
+- **A reply may quote only the conversation's own number**, the one opened this turn or still open;
+  any other `MF-` number is blocked as invented (`fabricated_ticket_claim`).
+- **The order goes along only when it is certain.** When a customer pushes back after a "no" in the
+  return flow, an order on its way decides "not urgent" only if the customer has nothing they could
+  still cancel; any doubt leaves it out, so the customer gets a person rather than a wrong wait.
 - **The inbox is a search** over escalated conversations: status, kind, category, tags (all of them),
   the visitor's public properties (`key:value`), dates, and text (number, customer, messages).
 
 ## Consequences
 
-- The migration backfills conversations that had a ticket (its id becomes the number) and drops the
-  table; `downgrade` recreates it empty of its descriptions.
+- The migration backfills conversations that had a ticket (its id becomes the number, the reason
+  `agent_available`) and renames `tickets` to `tickets_archive`, recording each ticket's
+  conversation, so nothing is lost; `downgrade` renames it back and links the conversations again.
+  `alembic/env.py` keeps autogenerate from proposing to drop the archive.
 - The model no longer writes anything for an escalation, so the writer can only repeat the number
   and what happens next that the context states.
 - The public `ticket_created` field of a turn and the evaluation's `expected_ticket_created` keep

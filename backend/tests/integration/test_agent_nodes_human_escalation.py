@@ -132,3 +132,21 @@ def test_the_references_are_distinct_and_use_no_look_alike_characters():
     references = {new_reference() for _ in range(200)}
     assert len(references) == 200
     assert not any(set("01OIL") & set(ref[3:]) for ref in references)
+
+
+def test_an_open_offline_escalation_becomes_live_with_its_number_once_someone_is_there(shop):
+    _an_agent_is_there(shop)
+    existing = EscalationReceipt(
+        reference="MF-KEEPTHIS", route="offline", reason="outside_support_hours", category="refund"
+    )
+    receipt = human_escalation_module.human_escalation_node(_state(shop, open_escalation=existing))["escalation_receipt"]
+    assert (receipt.reference, receipt.route, receipt.reason) == (
+        "MF-KEEPTHIS", EscalationRoute.LIVE, RouteReason.AGENT_AVAILABLE
+    )
+    assert receipt.category is EscalationCategory.REFUND
+
+
+def test_an_open_live_escalation_is_kept_as_it_is(shop):
+    existing = EscalationReceipt(reference="MF-KEEPTHIS", route="live", reason="agent_available", category="refund")
+    result = human_escalation_module.human_escalation_node(_state(shop, open_escalation=existing))
+    assert result["escalation_receipt"] is existing

@@ -14,7 +14,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import case, cast, exists, or_, select
+from sqlalchemy import String, case, cast, exists, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
@@ -150,6 +150,7 @@ def list_escalations(
         query = query.where(
             or_(
                 Conversation.escalation_reference.ilike(pattern, escape="\\"),
+                cast(Conversation.escalation_history, String).ilike(pattern, escape="\\"),
                 Customer.name.ilike(pattern, escape="\\"),
                 Customer.email.ilike(pattern, escape="\\"),
                 said,

@@ -71,6 +71,7 @@ def world(tenant_wipe):
         resolved = _conversation(
             db, a, ana, status="none", minutes_waiting=300, route="offline", escalation="resolved", said="refund please",
         )
+        resolved.escalation_history = [{"reference": "MF-EARLIER2", "notes": "sent a replacement"}]
         other = _conversation(db, b, bob, status="waiting", minutes_waiting=5)
         db.commit()
         yield {
@@ -141,6 +142,7 @@ def test_the_search_text_looks_in_the_number_the_customer_and_what_they_said(wor
     assert _ids(world, q="parcel") == [str(world["new"])]
     assert len(_ids(world, q="ana@a.test")) == 4  # every open one of that customer
     assert _ids(world, q="refund", status="all") == [str(world["resolved"])]
+    assert _ids(world, q="MF-EARLIER2", status="all") == [str(world["resolved"])]  # an earlier number
     assert _ids(world, q="no such thing") == []
     assert _ids(world, q="%") == []  # a wildcard is just a character
     assert _ids(world, q="parcel", route="offline") == []  # filters narrow together

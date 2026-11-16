@@ -495,3 +495,18 @@ async def test_the_same_words_without_a_no_before_them_start_the_return_as_usual
     update = await order_return_node(state)
 
     assert update["return_result"].outcome is ReturnOutcome.CONFIRM_ORDER
+
+
+@pytest.mark.asyncio
+async def test_pushing_back_with_only_orders_on_their_way_takes_one_along_as_not_urgent(setup):
+    setup(SHIPPED30, SHIPPED70, reading=ReturnReading(choice=ReturnChoice.REJECT, order_id=None))
+    update = await order_return_node(_after_no())
+    assert update["return_result"].order.status is OrderStatus.IN_DELIVERY
+
+
+@pytest.mark.asyncio
+async def test_pushing_back_with_an_order_that_can_be_cancelled_takes_no_order_along(setup):
+    setup(SHIPPED30, OPEN30, reading=ReturnReading(choice=ReturnChoice.REJECT, order_id=None))
+    update = await order_return_node(_after_no())
+    assert update["return_result"].outcome is ReturnOutcome.ESCALATED
+    assert update["return_result"].order is None

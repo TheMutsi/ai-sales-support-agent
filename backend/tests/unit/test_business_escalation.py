@@ -61,3 +61,21 @@ def test_hours_are_read_in_the_shops_time_zone():
     # 22:00 UTC is 19:00 there: closed. 15:00 UTC is 12:00 there: open.
     assert not buenos_aires.is_open(TUESDAY_NIGHT)
     assert buenos_aires.is_open(datetime(2026, 11, 3, 15, 0, tzinfo=UTC))
+
+
+def test_a_night_shift_runs_past_midnight_from_the_day_it_started():
+    night = SupportHours("UTC", time(22), time(6), frozenset({0}))  # Monday 22:00 to Tuesday 06:00
+    monday_late = datetime(2026, 11, 2, 23, 0, tzinfo=UTC)
+    tuesday_early = datetime(2026, 11, 3, 5, 0, tzinfo=UTC)
+    tuesday_late = datetime(2026, 11, 3, 23, 0, tzinfo=UTC)
+    sunday_early = datetime(2026, 11, 1, 5, 0, tzinfo=UTC)
+    assert night.is_open(monday_late) and night.is_open(tuesday_early)
+    assert not night.is_open(tuesday_late) and not night.is_open(sunday_early)
+    assert not night.is_open(datetime(2026, 11, 3, 12, 0, tzinfo=UTC))
+
+
+def test_a_schedule_that_opens_and_closes_at_once_is_rejected():
+    import pytest
+
+    with pytest.raises(ValueError):
+        SupportHours.from_config({"timezone": "UTC", "opens": "09:00", "closes": "09:00", "weekdays": [0]})

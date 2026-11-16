@@ -164,6 +164,9 @@ class Conversation(Base):
     escalation_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     escalation_resolved_by: Mapped[str | None]
     escalation_notes: Mapped[str | None] = mapped_column(Text)
+    # Earlier escalations of this conversation, resolved and then replaced by a new one: kept so an
+    # old follow-up number can still be found and its notes are not lost.
+    escalation_history: Mapped[list[dict]] = mapped_column(JSON, default=list, server_default="[]")
     # Public hints about the conversation (`device: iphone`, a `landing-sale` tag), set by the
     # widget or the shop's page; see `app.chat.context`. Never a reason to allow anything.
     properties: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, server_default="{}")

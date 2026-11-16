@@ -30,7 +30,8 @@ class RouteReason(StrEnum):
 @dataclass(frozen=True)
 class SupportHours:
     """When the shop's team answers: the weekdays (Monday is 0) between `opens` and `closes`, in
-    the shop's own time zone."""
+    the shop's own time zone. A `closes` earlier than `opens` is a night shift: it ends the next
+    morning, and the weekday is the one it started on."""
 
     timezone: str
     opens: time
@@ -49,11 +50,18 @@ class SupportHours:
             weekdays=frozenset(int(day) for day in raw["weekdays"]),
         )
         ZoneInfo(hours.timezone)  # an unknown zone fails here, not on a customer's turn
+        if hours.opens == hours.closes:
+            raise ValueError("support hours open and close at the same time")
         return hours
 
     def is_open(self, now: datetime) -> bool:
         local = now.astimezone(ZoneInfo(self.timezone))
-        return local.weekday() in self.weekdays and self.opens <= local.time() < self.closes
+        day, moment = local.weekday(), local.time()
+        if self.opens < self.closes:
+            return day in self.weekdays and self.opens <= moment < self.closes
+        if moment >= self.opens:
+            return day in self.weekdays
+        return moment < self.closes and (day - 1) % 7 in self.weekdays
 
 
 @dataclass(frozen=True)

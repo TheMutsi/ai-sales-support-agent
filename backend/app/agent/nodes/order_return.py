@@ -197,13 +197,18 @@ _DEAD_ENDS = frozenset(
 
 
 def _escalate(orders: list[OrderDetails]) -> dict:
-    """No reply here: `human_escalation` escalates and the writer tells the customer. The order on
-    its way, if there is one, goes along: that is what the dead end was about, and it decides
-    whether a person is needed right now (see `app.business.escalation`)."""
-    on_its_way = next((o for o in orders if o.status is OrderStatus.IN_DELIVERY), None)
+    """No reply here: `human_escalation` escalates and the writer tells the customer. An order on
+    its way goes along when the dead end can only have been about orders on their way (nothing the
+    customer could still cancel): it decides whether a person is needed right now (see
+    `app.business.escalation`). Any doubt leaves it out, so the customer gets a person rather than
+    a wrong "not urgent"."""
+    on_its_way = [o for o in orders if o.status is OrderStatus.IN_DELIVERY]
+    unambiguous = bool(on_its_way) and not any(return_options(o).can_cancel for o in orders)
     return {
         "pending_return": None,
-        "return_result": ReturnResult(outcome=ReturnOutcome.ESCALATED, order=on_its_way),
+        "return_result": ReturnResult(
+            outcome=ReturnOutcome.ESCALATED, order=on_its_way[0] if unambiguous else None
+        ),
         "intent": Intent.HUMAN_ESCALATION,
         "return_reading": None,
     }

@@ -75,10 +75,16 @@ def _confirmed_return_actions(state: AgentState) -> dict[str, bool]:
     }
 
 
+def _escalation_reference(state: AgentState) -> str | None:
+    escalation = state.get("escalation_receipt") or state.get("open_escalation")
+    return escalation.reference if escalation else None
+
+
 def _output_check_context(state: AgentState) -> OutputCheckContext:
     return OutputCheckContext(
         intent=state.get("intent"),
         ticket_created=state.get("escalation_receipt") is not None,
+        escalation_reference=_escalation_reference(state),
         checkout_created=state.get("checkout_session") is not None,
         tool_call_rounds=state.get("tool_call_rounds", 0),
         order_found=state.get("order_details") is not None or bool(state.get("customer_orders")),

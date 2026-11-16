@@ -23,6 +23,13 @@ config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 target_metadata = Base.metadata
 
+# Tables kept in the database on purpose with no model: autogenerate must not drop them.
+_UNMAPPED_TABLES = frozenset({"tickets_archive"})
+
+
+def include_object(obj, name, type_, reflected, compare_to) -> bool:
+    return not (type_ == "table" and reflected and compare_to is None and name in _UNMAPPED_TABLES)
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -40,6 +47,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -63,7 +71,7 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection, target_metadata=target_metadata, include_object=include_object
         )
 
         with context.begin_transaction():

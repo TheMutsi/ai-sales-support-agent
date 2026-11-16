@@ -283,21 +283,8 @@ def finish_turn(
     _append(db, conversation, "assistant", content, now, reply_to_seq=reply_to, kind=kind, cards=cards)
     if return_event is not None:
         db.add(ReturnEvent(**return_event))  # with the reply, in one transaction
-    if escalation is not None and conversation.escalation_status != "open":
-        # One open escalation per conversation: a customer who insists again keeps the number they
-        # were given. A resolved one is replaced by the new request.
-        conversation.escalation_reference = escalation.reference
-        conversation.escalation_route = escalation.route
-        conversation.escalation_reason = escalation.reason
-        conversation.escalation_category = escalation.category
-        conversation.escalation_status = "open"
-        conversation.escalated_at = now
-        conversation.escalation_resolved_at = conversation.escalation_resolved_by = None
-        conversation.escalation_notes = None
-        if escalation.route is EscalationRoute.LIVE and conversation.handoff_status == HandoffStatus.NONE:
-            conversation.handoff_status = HandoffStatus.WAITING
-            conversation.handoff_requested_at = now
-            _append(db, conversation, "system", ESCALATION_NOTICE, now, kind=MessageKind.SYSTEM)
+    if escalation is not None:
+        _record_escalation(db, conversation, escalation, now)
     if not isinstance(pending_return, Keep):
         order_id = pending_return.order_id if pending_return else None
         stage = pending_return.stage.value if pending_return else None
@@ -309,6 +296,54 @@ def finish_turn(
         conversation.pending_return_order_id, conversation.pending_return_stage = order_id, stage
     conversation.turn_started_at = conversation.turn_id = None
     db.commit()
+
+
+def _record_escalation(
+    db: Session, conversation: Conversation, escalation: EscalationReceipt, now: datetime
+) -> None:
+    """One open escalation per conversation: a customer who insists again keeps the number they
+    were given, and an offline one that became live (see `human_escalation_node`) keeps it too. A
+    resolved one moves to `escalation_history` and the new request takes its place."""
+    if conversation.escalation_status == "open":
+        upgraded = (
+            escalation.reference == conversation.escalation_reference
+            and escalation.route is EscalationRoute.LIVE
+            and conversation.escalation_route != EscalationRoute.LIVE
+        )
+        if not upgraded:
+            return
+        conversation.escalation_route, conversation.escalation_reason = escalation.route, escalation.reason
+    else:
+        if conversation.escalation_reference is not None:
+            conversation.escalation_history = [*conversation.escalation_history, _past_escalation(conversation)]
+        conversation.escalation_reference = escalation.reference
+        conversation.escalation_route = escalation.route
+        conversation.escalation_reason = escalation.reason
+        conversation.escalation_category = escalation.category
+        conversation.escalation_status = "open"
+        conversation.escalated_at = now
+        conversation.escalation_resolved_at = conversation.escalation_resolved_by = None
+        conversation.escalation_notes = None
+    if escalation.route is EscalationRoute.LIVE and conversation.handoff_status == HandoffStatus.NONE:
+        conversation.handoff_status = HandoffStatus.WAITING
+        conversation.handoff_requested_at = now
+        _append(db, conversation, "system", ESCALATION_NOTICE, now, kind=MessageKind.SYSTEM)
+
+
+def _past_escalation(conversation: Conversation) -> dict:
+    def iso(moment: datetime | None) -> str | None:
+        return moment.isoformat() if moment else None
+
+    return {
+        "reference": conversation.escalation_reference,
+        "route": conversation.escalation_route,
+        "reason": conversation.escalation_reason,
+        "category": conversation.escalation_category,
+        "escalated_at": iso(conversation.escalated_at),
+        "resolved_at": iso(conversation.escalation_resolved_at),
+        "resolved_by": conversation.escalation_resolved_by,
+        "notes": conversation.escalation_notes,
+    }
 
 
 def abandon_turn(db: Session, *, conversation_id: uuid.UUID, turn: TurnStart) -> None:

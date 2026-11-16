@@ -217,5 +217,3 @@ Known and deliberately left for later; none of it matters for the portfolio demo
 - Widget polish: store the identity methods with the identity request, keep old messages off screen after a 401 retry, upload for image attachments, visual design.
 
 Update this checklist as stages complete.
-
-@AGENTS.md

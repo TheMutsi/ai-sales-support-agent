@@ -117,6 +117,19 @@ def test_insisting_keeps_the_open_number_and_a_resolved_one_is_replaced(shop):
     _escalate(shop, receipt=_receipt("offline", "MF-THIRD444"))
     conversation = _state(shop)
     assert (conversation.escalation_reference, conversation.escalation_status) == ("MF-THIRD444", "open")
+    assert [past["reference"] for past in conversation.escalation_history] == ["MF-FIRST222"]
+
+
+def test_an_offline_escalation_that_becomes_live_keeps_its_number_and_waits_for_a_person(shop):
+    _escalate(shop, receipt=_receipt("offline", "MF-FIRST222"))
+    assert _state(shop).handoff_status == HandoffStatus.NONE
+
+    _escalate(shop, receipt=_receipt("live", "MF-FIRST222"))
+
+    conversation = _state(shop)
+    assert (conversation.escalation_reference, conversation.escalation_route) == ("MF-FIRST222", "live")
+    assert conversation.escalation_reason == "agent_available"
+    assert conversation.handoff_status == HandoffStatus.WAITING
 
 
 def test_while_a_person_has_the_conversation_a_message_is_stored_and_not_answered(shop):
