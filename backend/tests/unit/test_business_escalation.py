@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, time
 
+import pytest
+
 from app.business.escalation import (
     EscalationRoute,
     RouteReason,
@@ -79,3 +81,8 @@ def test_a_schedule_that_opens_and_closes_at_once_is_rejected():
 
     with pytest.raises(ValueError):
         SupportHours.from_config({"timezone": "UTC", "opens": "09:00", "closes": "09:00", "weekdays": [0]})
+
+
+def test_routing_facts_refuse_a_naive_time():
+    with pytest.raises(ValueError):
+        _facts(now=TUESDAY_NOON.replace(tzinfo=None))

@@ -1,16 +1,9 @@
-"""What cards a turn shows, decided from the state the graph ended with.
-
-Deterministic like the rest of the facts: a card appears because a step really produced what it
-shows (an offer the rules made, an order that was read), so the model cannot invent one or
-leave out a number. The text of the reply and the cards come from the same state.
-"""
-
 from app.business.returns import (
     CREDIT_PERCENT,
+    GIFT_COMPARE_PRICE,
     GIFT_DESCRIPTION,
     GIFT_IMAGE,
     GIFT_NAME,
-    GIFT_VALUE,
     REFUND_PERCENT,
 )
 from app.schemas.cards import ActionCard, Card, CardAction, CardImage, DividerCard, ProductCard
@@ -37,12 +30,10 @@ def _dollars(cents: int) -> str:
 
 
 def _name(order: OrderDetails) -> str:
-    """What the order is for: the item when it says so, else its plan."""
     return order.item_name or f"{order.plan_slug.capitalize()} plan"
 
 
 def product_card(order: OrderDetails) -> ProductCard:
-    """The order as a product: what was bought when the order says so, else its plan."""
     name = _name(order)
     if order.item_images:
         pictures = [CardImage(url=url, alt=name) for url in order.item_images]
@@ -60,7 +51,6 @@ def product_card(order: OrderDetails) -> ProductCard:
 
 
 def _option_cards(offer: RetentionOffer) -> list[Card]:
-    """The two things a customer can take to keep an order, each with its amount and its share."""
     return [
         ActionCard(
             id="offer-refund",
@@ -87,7 +77,7 @@ def gift_card(badge: str = "Free gift") -> ProductCard:
         name=GIFT_NAME,
         subtitle=GIFT_DESCRIPTION,
         price="GIFT",
-        compare_price=GIFT_VALUE,
+        compare_price=GIFT_COMPARE_PRICE,
         badge=badge,
         image=CardImage(url=GIFT_IMAGE, alt=GIFT_NAME),
     )
@@ -113,7 +103,6 @@ def _return_cards(result: ReturnResult) -> list[Card]:
                 ),
             ]
         case ReturnOutcome.FINAL_OFFER if order is not None and offer is not None:
-            # The gift and, below a "+", the same three options: both things at once.
             return [
                 gift_card(),
                 DividerCard(id="gift-plus", label="+"),
@@ -126,7 +115,6 @@ def _return_cards(result: ReturnResult) -> list[Card]:
                 ),
             ]
         case ReturnOutcome.KEPT_WITH_REFUND | ReturnOutcome.KEPT_WITH_CREDITS:
-            # What was taken is stated in the reply; the gift, if it came with it, is shown again.
             return [gift_card("Your gift")] if result.receipt and result.receipt.gift else []
         case ReturnOutcome.CONFIRM_ORDER if order is not None:
             return [
@@ -168,8 +156,6 @@ def _return_cards(result: ReturnResult) -> list[Card]:
 
 
 def cards_for(final_state: dict) -> list[Card]:
-    """Cards for the reply this state produced. They come from what the steps did, so they stand
-    even if a guardrail rewrote the text around them."""
     if final_state.get("return_result") is not None:
         return _return_cards(final_state["return_result"])
     if final_state.get("customer_orders"):

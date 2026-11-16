@@ -1,12 +1,3 @@
-"""Upgrade price quoting.
-
-Quotes the plain price difference between a customer's current plan and a
-target plan. No proration: MewFlow's simulated billing has no mid-cycle
-invoicing engine, so the honest answer this layer can give is the full
-new-plan price, not a prorated partial-period estimate that would need
-billing-cycle state this project doesn't model.
-"""
-
 from app.db.models import Plan
 from app.schemas.business import PriceQuote
 

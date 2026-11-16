@@ -22,6 +22,8 @@ did.
 - **Two routes, decided by `app.business.escalation.decide_route`**, a pure function of facts the
   node collects. In order: an order already in delivery is `offline` (not urgent); outside the
   tenant's support hours is `offline`; no agent available is `offline`; otherwise `live`.
+  Its facts carry a timezone-aware `now` (a naive one is refused), and a stored schedule with an
+  unknown time zone fails when the tenant's configuration is read, not on a customer's turn.
 - **`live`** is the handoff of ADR-0017 (the visitor waits in the chat). **`offline`** gives the
   visitor the number and leaves the assistant answering: nobody is coming to the chat. A person
   later marks it resolved from the back office.
