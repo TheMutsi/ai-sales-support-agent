@@ -38,6 +38,10 @@ LLM tiers scored every regex-evading attempt as safe because "unsafe" was define
 too narrowly. With the shared, broader definition, the threshold sweep moved it to
 0.95. Numbers and caveats are in `backend/evaluation/README.md`.
 
+Production clients never receive `safety_confidence`: it would be an oracle for someone
+probing the input filter (rephrase until it goes up). It stays in the traces, and outside
+production the evaluation suite reads it from the turn summary.
+
 ## Consequences
 
 - Most legitimate messages pay nothing extra.

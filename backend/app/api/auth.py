@@ -44,7 +44,6 @@ router = APIRouter()
 def new_conversation(
     request: ConversationRequest, http: Request, db: Annotated[Session, Depends(get_db)]
 ) -> SessionResponse:
-    """Starts an anonymous conversation and returns a session for it."""
     check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     try:
@@ -69,8 +68,6 @@ def login(
     db: Annotated[Session, Depends(get_db)],
     current: Annotated[SessionClaims | None, Depends(optional_session)],
 ) -> SessionResponse:
-    """`current` is the caller's present session, if any. Its conversation is continued
-    when usable; an expired or invalid one is simply ignored."""
     check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     try:
@@ -97,8 +94,6 @@ def otp_request(
     db: Annotated[Session, Depends(get_db)],
     current: Annotated[SessionClaims | None, Depends(optional_session)],
 ) -> None:
-    """Emails a code when the address belongs to a customer. Always the same empty 202. The
-    caller's session, if it sends one, only ties the audit record to its conversation."""
     check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     send_otp(
@@ -122,8 +117,6 @@ def otp_verify(
     db: Annotated[Session, Depends(get_db)],
     current: Annotated[SessionClaims | None, Depends(optional_session)],
 ) -> SessionResponse:
-    """The code is checked here, never by the chat agent: it must not pass through the
-    model or its traces. The caller's anonymous conversation, if any, is continued."""
     check_origin_for_api_key(http, request.api_key)
     settings = get_settings()
     try:
@@ -152,13 +145,9 @@ async def order_lookup(
     current: Annotated[SessionClaims | None, Depends(optional_session)],
     orders: Annotated[OrderSource, Depends(get_order_source)],
 ) -> SessionResponse:
-    """A weaker way to identify than a one-time code: an email and the id of one of its orders.
-    The session it gives can read that one order and nothing about the customer."""
     await run_in_threadpool(check_origin_for_api_key, http, request.api_key)
     settings = get_settings()
     tenant_id = await run_in_threadpool(find_tenant_id, db, request.api_key)
-    # The lookup opened a transaction on this request's session. The shop's orders will be a
-    # network call, so end it now: a slow shop must not leave a pooled connection held.
     await run_in_threadpool(db.rollback)
     order = (
         await orders.get_order(tenant_id=tenant_id, order_id=request.order_id)

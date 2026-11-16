@@ -1,16 +1,3 @@
-"""Per-tenant allowed origins.
-
-Two parts. `TenantCORSMiddleware` decides the CORS headers, which a browser needs before
-it sends the real request. A preflight carries neither the API key nor a token, so the
-tenant is not known yet: an origin gets headers if the app lists it or any tenant does. The real
-request is then checked against *its own* tenant's list (`check_origin`), so shop B's page cannot
-use shop A's key. Both read tenant configuration from `app.core.tenant_config`, a cache.
-
-Only requests that carry an `Origin` header are checked, i.e. a browser calling cross-origin.
-Anyone can leave the header off or forge it from a script, so this keeps one shop's page from
-using another's key in a visitor's browser; it is not authentication.
-"""
-
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -29,9 +16,6 @@ class TenantCORSMiddleware(CORSMiddleware):
 
 
 def check_origin(request: Request, tenant: TenantConfig | None) -> None:
-    """Refuses a browser request whose origin is not one of this tenant's. A request without
-    an origin, from the app's own frontend, or for an unknown tenant (which fails on its own)
-    passes."""
     origin = request.headers.get("origin")
     if origin is None or tenant is None or origin in get_settings().cors_allow_origins:
         return
@@ -40,16 +24,11 @@ def check_origin(request: Request, tenant: TenantConfig | None) -> None:
 
 
 def _needs_a_check(request: Request) -> bool:
-    """Only a browser calling cross-origin is checked, so only then is the tenant looked up: a
-    request without an `Origin` (or from the app's own frontend) neither needs the configuration
-    nor fails when it cannot be read."""
     origin = request.headers.get("origin")
     return origin is not None and origin not in get_settings().cors_allow_origins
 
 
 def check_origin_for_api_key(request: Request, api_key: str) -> None:
-    """Raises `TenantConfigUnavailable` (a 503) if the tenant cannot be looked up: an unknown
-    tenant skips the check, so "cannot tell" must not be answered as "unknown"."""
     if _needs_a_check(request):
         check_origin(request, tenant_configs.get_by_api_key(api_key))
 
