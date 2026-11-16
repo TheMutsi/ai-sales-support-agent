@@ -1,23 +1,3 @@
-"""One-time-code (OTP) login: a visitor proves they own the email of one of a
-tenant's customers, which gives the same standing as the shop vouching for them
-(`otp_login`, a passwordless login).
-
-What the *responses* say is flattened on purpose (timing still differs, and a limit
-per IP, in `app.api.rate_limit`, is the real defence against probing):
-- `request_otp` returns nothing whether or not the email belongs to a customer,
-  and whether or not it was rate limited.
-- `verify_otp` raises the same `invalid_code` for a wrong code, an expired one, a
-  spent one, no challenge at all, and an unknown email.
-
-Limits: valid 10 minutes, 5 wrong guesses kill a code, 5 sends per email per
-hour. Tripping them is recorded as a `SecurityEvent` for review.
-
-The code is stored only as an HMAC keyed with the server's secret: six digits are
-a million possibilities, so a plain hash would be reversed instantly if the table leaked.
-
-Not here yet: flagging codes requested but never used.
-"""
-
 import hashlib
 import hmac
 import logging
@@ -58,24 +38,17 @@ def _find_customer(db: Session, tenant: Tenant, email: str) -> Customer | None:
         .limit(2)
         .all()
     )
-    # Two customers whose emails differ only by case are ambiguous: better to send
-    # nothing than to guess who gets the code (or to fail with a 500 that gives it away).
     return matches[0] if len(matches) == 1 else None
 
 
 def _record(db: Session, tenant: Tenant, kind: str, email: str) -> None:
     db.add(SecurityEvent(tenant_id=tenant.id, kind=kind, email=email))
-    # The log gets the masked address: the SecurityEvent row keeps what a reviewer needs, the log
-    # is read by more people and for longer.
     logger.warning("security event %s for %s (tenant %s)", kind, mask_email(email), tenant.id)
 
 
 def request_otp(
     db: Session, *, tenant: Tenant, email: str, sender: OtpSender, key: str, now: datetime
 ) -> str:
-    """Sends a code when the email is a customer's. Returns what happened (`sent`,
-    `unknown_customer` or `rate_limited`) for the audit record only: the caller must never
-    pass it on to the visitor, who is told the same in every case."""
     email = normalize_email(email)
     if _find_customer(db, tenant, email) is None:
         return "unknown_customer"
@@ -94,7 +67,6 @@ def request_otp(
         db.commit()
         return "rate_limited"
 
-    # A new code replaces any open one, so only the latest can be used.
     db.query(OtpChallenge).filter(
         OtpChallenge.tenant_id == tenant.id,
         OtpChallenge.email == email,
@@ -135,8 +107,6 @@ def verify_otp(
             OtpChallenge.attempts < MAX_ATTEMPTS,
         )
         .order_by(OtpChallenge.created_at.desc())
-        # Locks the row until commit: parallel guesses are counted one at a time, and
-        # a correct code can only be consumed by one of them.
         .with_for_update()
         .first()
     )
@@ -152,8 +122,6 @@ def verify_otp(
 
     customer = _find_customer(db, tenant, email)
     if customer is None:
-        # Commit, not rollback: it frees the row lock, and the session is the caller's, so
-        # their pending work is not ours to discard.
         db.commit()
         raise OtpError
     challenge.consumed_at = now
