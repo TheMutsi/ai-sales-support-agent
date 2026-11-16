@@ -1,16 +1,6 @@
-"""What an intent needs from the visitor's identity, as data.
-
-The check is a table lookup in `routing.py`, never the model's judgment: whether
-someone may see an account or open a ticket is not something to leave to a prompt.
-Which way of identifying to offer follows from the scope that is missing: the levels
-that grant it.
-"""
-
 from app.auth.scopes import IdentityLevel, Scope, scopes_for
 from app.schemas.agent import Intent
 
-# `unsupported` is absent on purpose: it needs no identity to be answered, and routing
-# opens a ticket for it only when the visitor could open one.
 REQUIRED_SCOPE: dict[Intent, Scope] = {
     Intent.PRODUCT_QUESTION: Scope.KB_READ,
     Intent.PRICING_QUESTION: Scope.KB_READ,
@@ -21,12 +11,9 @@ REQUIRED_SCOPE: dict[Intent, Scope] = {
     Intent.REFUND_REQUEST: Scope.REFUND_REQUEST,
     Intent.HUMAN_ESCALATION: Scope.TICKET_CREATE,
     Intent.ORDER_STATUS: Scope.ORDER_READ,
-    # Rejecting an order changes what the customer owns: only a verified customer may.
     Intent.ORDER_RETURN: Scope.REFUND_REQUEST,
 }
 
-# The ways the widget can identify someone in the chat. `store_login` is not one: it
-# happens on the shop's page, before any form.
 _CHAT_METHODS = ((IdentityLevel.OTP_LOGIN, "otp"), (IdentityLevel.ORDER_LOOKUP, "order_id"))
 
 

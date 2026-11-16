@@ -39,12 +39,14 @@ decides what a visitor may see or do: a prompt is not an access control.
   A tenant can override the scopes of a level. The session does not carry scopes: they
   are resolved on each request from the level and the tenant's overrides, so changing a
   tenant's configuration takes effect without re-issuing tokens.
-- Every intent needs a scope (`agent/permissions.py`), checked in routing as a table
-  lookup. When the visitor lacks it, the graph goes to `request_identity`: a fixed text,
-  no model call, plus the methods to offer (the levels whose scopes include the missing
-  one). A missing list of scopes means none. Nodes that act on an account also refuse to
-  run without a customer. An off-topic message from someone who cannot open a ticket is
-  answered, not escalated.
+- Every intent but `unsupported` needs a scope (`agent/permissions.py`), checked in routing as
+  a table lookup. When the visitor lacks it, the graph goes to `request_identity`: a fixed text,
+  no model call, plus the methods to offer (the levels whose scopes include the missing one). A
+  missing list of scopes means none. Rejecting an order needs `refund_request`, a verified
+  customer, because it changes what the customer owns. The chat offers `otp` and `order_id`;
+  `store_login` is never offered there, because it happens on the shop's page before any form.
+  Nodes that act on an account also refuse to run without a customer. An off-topic
+  (`unsupported`) message from someone who cannot open a ticket is answered, not escalated.
 
 **One-time codes.**
 - `POST /api/auth/otp/request` always answers an empty 202. `POST /api/auth/otp/verify`

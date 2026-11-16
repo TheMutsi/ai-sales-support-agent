@@ -1,22 +1,3 @@
-"""Shared state for the LangGraph agent graph.
-
-Each node returns only the keys it changes; LangGraph merges that partial
-dict onto the accumulated state between steps. `messages` needs the
-`add_messages` reducer so a turn appends to the conversation instead of
-replacing it — every other field is a plain overwrite, since within a single
-run only one node is ever responsible for setting it.
-
-Field values reuse the Pydantic contracts from `app/schemas/` (`CustomerContext`,
-`UpsellDecision`, ...) instead of redefining shapes the tools and business
-layers already return.
-
-`guardrail_flags` needs the same kind of reducer as `messages`, for the same
-reason: more than one node can contribute to it in a single run
-(`input_guardrail_node` tags/blocks prompt-injection signals, `guardrail_node`
-tags output violations), so a plain overwrite would silently drop whichever
-ran first.
-"""
-
 from operator import add
 from typing import Annotated, TypedDict
 
@@ -34,16 +15,10 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
     customer_id: str | None
-    # Hints the visitor's browser sent (`device: iphone`, a tag). Unverified: they change how we
-    # talk or what we offer, never what is allowed (see `app.chat.context`).
     conversation_properties: dict[str, str]
     conversation_tags: list[str]
-    # Who is asking, as the session proves it: the shop, and (only for an order lookup) the one
-    # order they named. Never taken from the message.
     tenant_id: str | None
     order_id: str | None
-    # What this visitor may do (`Scope` values, resolved with the tenant's overrides) and
-    # those overrides, so a missing scope can be turned into the methods that grant it.
     scopes: list[str]
     scope_overrides: dict | None
     identity_required: bool
@@ -56,17 +31,11 @@ class AgentState(TypedDict):
     customer_context: CustomerContext | None
     plan_catalog: list[PlanSummary] | None
     order_details: OrderDetails | None
-    # All of a verified customer's own orders (newest first), when the session names none.
     customer_orders: list[OrderDetails] | None
-    # A return the customer is in the middle of (stored on the conversation between turns) and
-    # what the `order_return` step did this turn.
     pending_return: PendingReturn | None
-    # Set when the visitor clicked a button instead of writing: the turn is decided by rules from
-    # this (see `route_start`), and no model reads the message.
     action: CardAction | None
     action_order_id: str | None
     return_result: ReturnResult | None
-    # What the customer's message was read as this turn (a click or the model), for the record.
     return_reading: ReturnChoice | None
 
     eligibility_result: EligibilityResult | None
@@ -74,7 +43,6 @@ class AgentState(TypedDict):
 
     checkout_session: CheckoutSession | None
     escalation_receipt: EscalationReceipt | None
-    # The escalation the conversation already has open (see `TurnStart.open_escalation`).
     open_escalation: EscalationReceipt | None
 
     escalated: bool
@@ -83,7 +51,4 @@ class AgentState(TypedDict):
     errors: list[str]
     guardrail_flags: Annotated[list[str], add]
 
-    # How many LLM↔tool round trips `response_writer`/`knowledge_tool` have
-    # done for this turn — `route_after_response_writer` uses it to cap the
-    # loop instead of relying only on LangGraph's generic recursion limit.
     tool_call_rounds: int

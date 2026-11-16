@@ -24,6 +24,9 @@ public product documentation.
   it guessing the category wrong (SSO under `integrations`, API limits under
   `billing`), and the filter then excluded the one document holding the answer.
   Unfiltered, the right chunk ranked first for every one of those queries.
+- **The model reads only the text.** The sources travel as the `ToolMessage` artifact, one
+  citation per document however many of its chunks matched. The tool's description is
+  `SEARCH_KNOWLEDGE_BASE_DESCRIPTION`, passed explicitly, not taken from a docstring.
 - **The loop is bounded**: at most `_MAX_TOOL_CALL_ROUNDS` (2) search rounds per
   turn, enforced by routing.
 - **Bad arguments are the model's mistake, not a crash.** A `ValidationError` goes

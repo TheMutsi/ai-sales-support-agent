@@ -29,14 +29,6 @@ from app.agent.state import AgentState
 
 
 def build_graph(checkpointer: Checkpointer = None):
-    """Assemble and compile the agent graph.
-
-    A function rather than module-level wiring so tests can build a fresh graph
-    (with a checkpointer, say) and importing this module has no side effects
-    beyond the one `graph` below. Destinations of the conditional edges come
-    from the `Literal` return types in `routing.py`, so LangGraph validates
-    them at compile time and `get_graph().draw_mermaid()` shows every edge.
-    """
     builder = StateGraph(AgentState)
     builder.add_node(Node.INPUT_GUARDRAIL, input_guardrail_node)
     builder.add_node(Node.INTENT_ROUTER, intent_router)
@@ -63,8 +55,6 @@ def build_graph(checkpointer: Checkpointer = None):
     builder.add_edge(Node.GET_PLAN_CATALOG, Node.RESPONSE_WRITER)
     builder.add_edge(Node.GET_ORDER_STATUS, Node.RESPONSE_WRITER)
     builder.add_edge(Node.GET_CUSTOMER_ORDERS, Node.RESPONSE_WRITER)
-    # The step writes its own reply (fixed text), so no model words it and nothing is checked after.
-    # The exception is a customer pushing back on a "no": a ticket is opened and the writer words it.
     builder.add_conditional_edges(Node.ORDER_RETURN, route_after_order_return)
     builder.add_edge(Node.ASK_CASE, END)
     builder.add_edge(Node.HUMAN_ESCALATION, Node.RESPONSE_WRITER)
