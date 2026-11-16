@@ -30,15 +30,13 @@ def _uuid_pk() -> Mapped[uuid.UUID]:
 
 
 class Plan(Base):
-    """A subscription tier customers can be placed on (e.g. starter/pro/enterprise)."""
-
     __tablename__ = "plans"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     slug: Mapped[str] = mapped_column(unique=True, index=True)
     name: Mapped[str]
     price_cents: Mapped[int]
-    billing_period: Mapped[str]  # "monthly" | "annual"
+    billing_period: Mapped[str]
     seat_limit: Mapped[int | None]
     api_call_limit: Mapped[int | None]
     features: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -48,30 +46,18 @@ class Plan(Base):
 
 
 class Tenant(Base):
-    """A shop that embeds the chat widget. `api_key` is public (it ships in the
-    widget's script URL) and only identifies the tenant; proving a visitor is who
-    they claim takes a token signed with one of the tenant's `TenantSecret`s."""
-
     __tablename__ = "tenants"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     name: Mapped[str]
     api_key: Mapped[str] = mapped_column(unique=True, index=True)
-    # Per-identity-level scope overrides, e.g. {"order_lookup": ["kb:read"]};
-    # absent levels keep `app.auth.scopes.DEFAULT_LEVEL_SCOPES`.
     scope_overrides: Mapped[dict | None] = mapped_column(JSON)
-    # The pages (origins) the shop's widget runs on. A browser request carrying another
-    # origin is refused; see `app.api.origins`.
     allowed_origins: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
-    # When the team answers live: {"timezone": "America/Argentina/Buenos_Aires", "opens": "09:00",
-    # "closes": "18:00", "weekdays": [0, 1, 2, 3, 4]}. Empty means always (see `app.business.escalation`).
     support_hours: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     @validates("allowed_origins")
     def _normalize_origins(self, _key: str, origins: list[str]) -> list[str]:
-        """Normalized on the way in, and a wildcard or sloppy entry is an error, not a
-        silent widening of who may use the key."""
         normalized = []
         for origin in origins:
             clean = normalize_origin(origin)
@@ -85,16 +71,13 @@ class Tenant(Base):
 
 
 class TenantSmtp(Base):
-    """The mail server a tenant's one-time codes go out through. The password is stored
-    encrypted (`app.core.secrets`) and is write-only: nothing reads it back except the sender."""
-
     __tablename__ = "tenant_smtp"
     __table_args__ = (CheckConstraint("security in ('starttls', 'ssl', 'none')", name="ck_tenant_smtp_security"),)
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
     host: Mapped[str]
     port: Mapped[int]
-    security: Mapped[str] = mapped_column(default="starttls")  # starttls | ssl | none
+    security: Mapped[str] = mapped_column(default="starttls")
     username: Mapped[str | None]
     password_encrypted: Mapped[str | None]
     from_address: Mapped[str]
@@ -102,17 +85,12 @@ class TenantSmtp(Base):
 
 
 class TenantSecret(Base):
-    """A signing secret we issued to a tenant. Several can be active at once so
-    a shop can rotate without downtime; `kid` (in the token header) picks one."""
-
     __tablename__ = "tenant_secrets"
     __table_args__ = (UniqueConstraint("tenant_id", "kid"),)
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"))
     kid: Mapped[str]
-    # Stored in the clear: HS256 verification needs the raw key, so it can't be
-    # hashed like a password. Encrypting it at rest is a follow-up.
     secret: Mapped[str]
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -121,100 +99,68 @@ class TenantSecret(Base):
 
 
 class Conversation(Base):
-    """Who is talking, anchored server-side. Starts anonymous (no customer) and gets
-    one when the visitor identifies; a customer already attached is never replaced
-    (see `app.auth.conversations`). Sessions point at a conversation, and traces and
-    security events use its id, instead of anything the client picks."""
-
     __tablename__ = "conversations"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
     customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id"), index=True)
     identity_level: Mapped[str] = mapped_column(default="anonymous")
-    linked_via: Mapped[str | None]  # how the customer was identified: store_login | otp_login
+    linked_via: Mapped[str | None]
     customer_linked_at: Mapped[datetime | None]
     created_at: Mapped[datetime]
-    # What the retention job reads to decide which conversations are old.
     last_activity_at: Mapped[datetime]
-    last_seq: Mapped[int] = mapped_column(default=0, server_default="0")  # last message number
-    # While an agent turn runs: when it started and a token unique to that run, so a second
-    # message can't start another and a turn that lost the conversation can't write.
+    last_seq: Mapped[int] = mapped_column(default=0, server_default="0")
     turn_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     turn_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    # A person takes over from the assistant (see `app.chat.handoff`): `none` (the assistant
-    # answers), `waiting` (a ticket was opened, no agent has joined) or `active` (an agent is in).
     handoff_status: Mapped[str] = mapped_column(default="none", server_default="none")
-    # A return the customer is in the middle of (see `app.agent.nodes.order_return`): which order
-    # and whether they were offered to keep it or asked to confirm cancelling it.
     pending_return_order_id: Mapped[str | None]
     pending_return_stage: Mapped[str | None]
     pending_return_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    handoff_agent_name: Mapped[str | None]  # the name the visitor sees, while `active`
+    handoff_agent_name: Mapped[str | None]
     handoff_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # An escalation to a person, live (the handoff above) or offline (somebody writes back later).
-    # `escalation_reference` is the follow-up number the customer is given; there is no separate
-    # ticket: what happened is the conversation itself.
     escalation_reference: Mapped[str | None] = mapped_column(unique=True)
-    escalation_route: Mapped[str | None]  # live | offline
-    escalation_reason: Mapped[str | None]  # why that route, see `app.business.escalation`
-    escalation_category: Mapped[str | None]  # escalation | refund | technical | billing | other
-    escalation_status: Mapped[str | None]  # open | resolved
+    escalation_route: Mapped[str | None]
+    escalation_reason: Mapped[str | None]
+    escalation_category: Mapped[str | None]
+    escalation_status: Mapped[str | None]
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     escalation_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     escalation_resolved_by: Mapped[str | None]
     escalation_notes: Mapped[str | None] = mapped_column(Text)
-    # Earlier escalations of this conversation, resolved and then replaced by a new one: kept so an
-    # old follow-up number can still be found and its notes are not lost.
     escalation_history: Mapped[list[dict]] = mapped_column(JSON, default=list, server_default="[]")
-    # Public hints about the conversation (`device: iphone`, a `landing-sale` tag), set by the
-    # widget or the shop's page; see `app.chat.context`. Never a reason to allow anything.
     properties: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, server_default="{}")
     tags: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
 
 
 class Message(Base):
-    """One message of a conversation, stored server-side so the client can't forge the
-    history. `client_message_id` (user messages) makes a retry idempotent."""
-
     __tablename__ = "messages"
     __table_args__ = (
         UniqueConstraint("conversation_id", "seq", name="uq_messages_conversation_seq"),
         UniqueConstraint(
             "conversation_id", "client_message_id", name="uq_messages_conversation_client_id"
         ),
-        # One reply per user message (NULLs, i.e. user messages, never collide).
         UniqueConstraint("conversation_id", "reply_to_seq", name="uq_messages_conversation_reply"),
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    # No separate index: the unique (conversation_id, seq) one serves lookups by conversation.
     conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id"))
     seq: Mapped[int]
-    role: Mapped[str]  # user | assistant | human (a person from the back office) | system
-    # The name a person's message is shown under; null for the assistant and the visitor.
+    role: Mapped[str]
     author_name: Mapped[str | None]
-    # Cards shown with a reply (see `app.schemas.cards`), stored so a reload shows them again.
     cards: Mapped[list | None] = mapped_column(JSON)
-    # text | identity_request | system. Anything but text is a form the widget shows (and an audit
-    # record), not conversation: it is kept out of the history the model receives.
     kind: Mapped[str] = mapped_column(server_default="text", default="text")
     content: Mapped[str] = mapped_column(Text)
     client_message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    # On a reply: the seq of the user message it answers (found by this link, not position).
     reply_to_seq: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class OtpChallenge(Base):
-    """A one-time code sent to a customer's email (passwordless login). Only an HMAC
-    of the code is stored. Dies when consumed, expired, superseded or out of attempts."""
-
     __tablename__ = "otp_challenges"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
-    email: Mapped[str] = mapped_column(index=True)  # normalized: stripped, lowercased
+    email: Mapped[str] = mapped_column(index=True)
     code_hash: Mapped[str]
     created_at: Mapped[datetime]
     expires_at: Mapped[datetime]
@@ -223,9 +169,6 @@ class OtpChallenge(Base):
 
 
 class SecurityEvent(Base):
-    """Something worth a human's review (too many wrong codes, requests over the
-    limit). A signal, not a verdict: nothing is blocked by it."""
-
     __tablename__ = "security_events"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
@@ -237,14 +180,6 @@ class SecurityEvent(Base):
 
 
 class IdentificationEvent(Base):
-    """One attempt to identify, for a person to read later: how (a code, an order, the shop's
-    login), what came of it and, for a failure, why. The reason stays in this table: the visitor
-    is always told the same generic thing.
-
-    Holds nothing that could be used to get in: no code, no token, no full email and no full order
-    id. The email is masked so a person can recognise it, and an HMAC of it (and of an order id)
-    lets attempts by the same address be grouped without keeping it. See `app.auth.audit`."""
-
     __tablename__ = "identification_events"
     __table_args__ = (Index("ix_identification_events_tenant_created", "tenant_id", "created_at"),)
 
@@ -255,12 +190,11 @@ class IdentificationEvent(Base):
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("conversations.id", ondelete="SET NULL"), index=True
     )
-    # Set when the attempt proved a customer (a code, the shop's login); never for an order.
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("customers.id", ondelete="SET NULL")
     )
-    method: Mapped[str]  # otp | order_id | store_login
-    outcome: Mapped[str]  # code_sent | succeeded | failed
+    method: Mapped[str]
+    outcome: Mapped[str]
     reason: Mapped[str | None]
     email_masked: Mapped[str | None]
     email_hmac: Mapped[str | None] = mapped_column(index=True)
@@ -269,16 +203,6 @@ class IdentificationEvent(Base):
 
 
 class ReturnEvent(Base):
-    """One turn of a customer rejecting or returning an order, for analysis: where they were, what
-    they did (a button or words, and what was decided from it), what the step answered and what it
-    offered or gave. One row per turn that went through `order_return`, written in the same
-    transaction as the reply, so the two cannot disagree.
-
-    A funnel is these rows grouped by (conversation, order) in time order; a customer who just
-    leaves has no row for it, so abandoning is "the last row is not final". It holds no free text
-    (what they wrote is in `messages`, found by `user_seq` while that message is kept), so it can
-    outlive the messages and their retention."""
-
     __tablename__ = "return_events"
     __table_args__ = (
         Index("ix_return_events_tenant_created", "tenant_id", "created_at"),
@@ -293,40 +217,35 @@ class ReturnEvent(Base):
     )
     customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id", ondelete="SET NULL"))
     identity_level: Mapped[str]
-    user_seq: Mapped[int]  # the visitor's message of this turn
-    # How it was read: `action` is a button (rules), `text` is words (the model reads them).
+    user_seq: Mapped[int]
     input_type: Mapped[str]
-    action: Mapped[str | None]  # the button, for `action`
-    action_order_id: Mapped[str | None]  # the order a "choose this one" button named
-    reading: Mapped[str | None]  # the decision taken: reject | refund | credits | keep | unclear
-    stage_before: Mapped[str | None]  # the step the customer was in (null: just asked)
-    stage_after: Mapped[str | None]  # the step they are in now (null: finished)
-    outcome: Mapped[str]  # a `ReturnOutcome`
-    order_id: Mapped[str | None]  # null while they have not picked one
+    action: Mapped[str | None]
+    action_order_id: Mapped[str | None]
+    reading: Mapped[str | None]
+    stage_before: Mapped[str | None]
+    stage_after: Mapped[str | None]
+    outcome: Mapped[str]
+    order_id: Mapped[str | None]
     order_status: Mapped[str | None]
     order_amount_cents: Mapped[int | None]
-    candidates: Mapped[int]  # orders shown to choose from (0 when none were)
-    offer_refund_cents: Mapped[int | None]  # what the step offered
+    candidates: Mapped[int]
+    offer_refund_cents: Mapped[int | None]
     offer_credit_cents: Mapped[int | None]
-    taken_refund_cents: Mapped[int | None]  # what was recorded when they took it
+    taken_refund_cents: Mapped[int | None]
     taken_credit_cents: Mapped[int | None]
     gift: Mapped[str | None]
-    model: Mapped[str]  # what would have read a written message (kept for a click too)
+    model: Mapped[str]
     app_version: Mapped[str]
-    duration_ms: Mapped[int]  # from receiving the message to having the reply
+    duration_ms: Mapped[int]
 
 
 class RateLimitCounter(Base):
-    """How many requests a key (an address, a conversation) made in one fixed time
-    window. In Postgres rather than memory so every server instance shares the count."""
-
     __tablename__ = "rate_limit_counters"
 
     key: Mapped[str] = mapped_column(primary_key=True)
     window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     count: Mapped[int] = mapped_column(default=0)
 
-    # Indexed for the cleanup of windows that ended long ago.
     __table_args__ = (Index("ix_rate_limit_counters_window_start", "window_start"),)
 
 
@@ -339,31 +258,23 @@ class Customer(Base):
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     name: Mapped[str]
-    # `tenant_id`/`external_id` link a customer to the shop that vouches for them:
-    # `external_id` is the `sub` in that shop's login token. Both are null for
-    # customers that predate multi-tenancy.
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
     external_id: Mapped[str | None]
-    # Unique per tenant (see `uq_customers_tenant_email`), not globally: two shops
-    # can each have a customer with the same email.
     email: Mapped[str] = mapped_column(index=True)
     company: Mapped[str | None]
-    status: Mapped[str] = mapped_column(default="trial")  # trial | active | churned
+    status: Mapped[str] = mapped_column(default="trial")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="customer")
 
 
 class Subscription(Base):
-    """A customer's commercial state over time, kept separate from `Customer` identity
-    so plan changes, cancellations, and renewals have their own history."""
-
     __tablename__ = "subscriptions"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"))
     plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id"))
-    status: Mapped[str] = mapped_column(default="active")  # active | canceled | past_due
+    status: Mapped[str] = mapped_column(default="active")
     started_at: Mapped[datetime] = mapped_column(server_default=func.now())
     current_period_end: Mapped[datetime]
     canceled_at: Mapped[datetime | None]
@@ -373,22 +284,16 @@ class Subscription(Base):
 
 
 class Order(Base):
-    """A purchase of a plan. In the real product these come from the shop's own orders API
-    (`app.orders.source`); this table is the simulated stand-in."""
-
     __tablename__ = "orders"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    # What a customer is given and quotes: 20 alphanumeric characters, unique across tenants.
     order_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)
     customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
     plan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("plans.id"))
     amount_cents: Mapped[int]
     currency: Mapped[str] = mapped_column(String(3), default="usd")
-    status: Mapped[str] = mapped_column(default="paid")  # app.schemas.orders.OrderStatus
+    status: Mapped[str] = mapped_column(default="paid")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    # What was bought, when the shop sells something other than a plan: its name and its pictures
-    # (the first is the main one). Null for an order that is just a plan.
     item_name: Mapped[str | None]
     item_images: Mapped[list | None] = mapped_column(JSON)
 
@@ -398,14 +303,11 @@ class Order(Base):
 
 
 class OrderAdjustment(Base):
-    """What a customer took to keep an order they wanted to reject. Simulated like `Order`: the
-    shop's own system would hold it, and nothing here moves money. One per order."""
-
     __tablename__ = "order_adjustments"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), unique=True)
-    kind: Mapped[str]  # refund_to_card | credits
+    kind: Mapped[str]
     refund_cents: Mapped[int | None]
     credit_cents: Mapped[int | None]
     gift: Mapped[str | None]
@@ -413,21 +315,14 @@ class OrderAdjustment(Base):
 
 
 class Document(Base):
-    """A knowledge-base source document. Content is populated by the RAG ingestion
-    pipeline (Stage 3), not seeded here."""
-
     __tablename__ = "documents"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     title: Mapped[str]
-    doc_type: Mapped[str]  # features | billing | policy | faq | security | integrations
+    doc_type: Mapped[str]
     product_area: Mapped[str | None]
-    plan_scope: Mapped[str | None]  # plan slug this doc applies to, null = all plans
+    plan_scope: Mapped[str | None]
     version: Mapped[str] = mapped_column(default="1.0")
-    # Unique: the RAG ingestion pipeline (app/rag/ingestion.py) matches on this
-    # to replace a document's rows on re-ingest instead of duplicating them —
-    # the DB rejects a race between two ingestion runs instead of silently
-    # allowing duplicate documents for the same source file.
     source: Mapped[str] = mapped_column(unique=True)
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -453,9 +348,6 @@ class DocumentChunk(Base):
 
 
 class AgentPresence(Base):
-    """A back-office agent seen recently: the live escalation route is only taken when someone is
-    there to answer (see `app.chat.presence`)."""
-
     __tablename__ = "agent_presence"
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
@@ -464,8 +356,6 @@ class AgentPresence(Base):
 
 
 class EvaluationRun(Base):
-    """One execution of the evaluation suite (Stage 9) against the fixed dataset."""
-
     __tablename__ = "evaluation_runs"
 
     id: Mapped[uuid.UUID] = _uuid_pk()

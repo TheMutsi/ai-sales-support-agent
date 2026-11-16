@@ -12,7 +12,6 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 def get_db() -> Generator[Session, None, None]:
-    """FastAPI dependency: yields a session and always closes it."""
     db = SessionLocal()
     try:
         yield db

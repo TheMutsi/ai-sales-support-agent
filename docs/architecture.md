@@ -142,3 +142,62 @@ Dependencies only point down this table, towards `schemas`
 
 The evaluation suite is just another client of this flow
 ([ADR-0012](adr/0012-evaluation-against-the-real-api.md)).
+
+## Data model
+
+What the columns hold when the name alone does not say it (`backend/app/db/models.py`). Value
+sets are stored as plain strings; the enums that produce them live in `app/schemas/` and
+`app/business/`.
+
+- **plans**: `billing_period` is `monthly` or `annual`.
+- **tenants**: a shop that embeds the widget. `api_key` is public (it ships in the script URL) and
+  only identifies the shop; proving a visitor takes a token signed with one of its
+  `tenant_secrets`, several active at once so a shop can rotate, picked by `kid`. Those secrets are
+  stored in the clear because HS256 needs the raw key (encrypting them is on the before-production
+  list). `scope_overrides` maps an identity level to its scopes (levels left out keep the
+  defaults), `allowed_origins` lists the pages the widget runs on (normalized, no wildcards), and
+  `support_hours` is `{"timezone", "opens", "closes", "weekdays"}`, empty meaning always open.
+- **tenant_smtp**: the mail server one-time codes go through; `security` is `starttls`, `ssl` or
+  `none`, and the password is encrypted and write-only.
+- **customers**: `tenant_id` and `external_id` (the `sub` of the shop's login token) link a customer
+  to the shop that vouches for them; both are null for customers older than tenants. Emails are
+  unique per tenant, not globally. `status` is `trial`, `active` or `churned`.
+- **subscriptions**: a customer's commercial state over time, so plan changes keep their history;
+  `status` is `active`, `canceled` or `past_due`.
+- **conversations**: who is talking, anchored on the server; sessions, traces and security events
+  use its id. `linked_via` is `store_login` or `otp_login`. `last_activity_at` is what a retention
+  job will read; `turn_started_at` and `turn_id` mark a running turn. `handoff_status` is `none`,
+  `waiting` or `active` (with `handoff_agent_name`, what the visitor sees). `pending_return_*`
+  hold an unfinished return. The escalation lives here too: `escalation_route` (`live`,
+  `offline`), `escalation_reason`, `escalation_category` (`escalation`, `refund`, `technical`,
+  `billing`, `other`), `escalation_status` (`open`, `resolved`), and resolved ones move to
+  `escalation_history`. `properties` and `tags` are public hints, never a reason to allow anything.
+- **messages**: stored on the server so the client cannot forge the history. `role` is `user`,
+  `assistant`, `human` (a person from the back office) or `system`; `kind` is `text`,
+  `identity_request` or `system`, and anything but text is kept out of the model's history. A reply
+  points at the message it answers with `reply_to_seq` (unique, so one reply per message);
+  `author_name` is set only for a person; `cards` are stored so a reload shows them.
+- **otp_challenges**: only an HMAC of the code, and the email normalized (stripped, lowercased).
+- **security_events**: something for a person to review (too many wrong codes, too many requests);
+  a signal, nothing is blocked by it.
+- **identification_events**: one attempt to identify, with `method` (`otp`, `order_id`,
+  `store_login`) and `outcome` (`code_sent`, `succeeded`, `failed`). No code, token, full email or
+  full order id; `customer_id` only when a customer was proved.
+- **return_events**: one row per turn through `order_return`, in the same transaction as the reply
+  (ADR-0020). `input_type` is `action` (a button) or `text`; `stage_before` null means just asked,
+  `stage_after` null means finished; `offer_*` is what was offered and `taken_*` what was recorded;
+  `model` is what would have read a written message, kept for clicks too.
+- **rate_limit_counters**: requests per key and fixed window, shared by every instance.
+- **orders** and **order_adjustments**: the simulated stand-ins for the shop's orders API. An
+  `order_id` is 20 alphanumeric characters, unique across tenants; `item_name` and `item_images`
+  are set when the order is for a product rather than a plan. An adjustment (`refund_to_card` or
+  `credits`) is what a customer took to keep an order, at most one per order; no money moves.
+- **documents**: `source` is unique, so re-ingesting replaces a document and two concurrent runs
+  cannot duplicate it; `plan_scope` null means every plan.
+- **agent_presence**: back-office agents seen recently (ADR-0021).
+
+`python -m app.db.seed` writes the dev tenant (a public key and secret, so local environments
+only), restores its dev secret on every run in case a rotation test removed it, and allows the
+example page's local origins (a page opened as a file has origin `null`, which is never allowed).
+The demo customers each get one order, with amounts as charged, which are not always list prices;
+their order ids are deterministic so docs and tests can name them.
