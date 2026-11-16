@@ -1,14 +1,3 @@
-"""Typed contracts for the agent-facing tools layer (`app/tools/`).
-
-Tool *inputs* are plain typed function parameters, not Pydantic models — these
-functions are meant to be wrapped by LangChain's `@tool` decorator (Stage 6),
-which derives its own args schema from type hints and docstrings, so a
-parallel Input model here would just duplicate that. Tool *outputs* are
-Pydantic models: each one is a multi-field result the agent, the frontend,
-and observability all need a stable shape for, which a bare tuple or dict
-wouldn't give them (Core Principle #3).
-"""
-
 import uuid
 from datetime import datetime
 from enum import StrEnum
@@ -37,10 +26,6 @@ class SubscriptionSummary(BaseModel):
 
 
 class CustomerContext(BaseModel):
-    """The customer-scoped facts a tool call needs but the LLM should never
-    invent: identity, status, and current commercial state. `subscription` is
-    `None` for a customer with no subscription row yet."""
-
     customer_id: uuid.UUID
     name: str
     email: str
@@ -50,11 +35,6 @@ class CustomerContext(BaseModel):
 
 
 class CustomerListItem(BaseModel):
-    """One row of the customer selector. Deliberately thinner than
-    `CustomerContext`: a picker needs enough to tell customers apart, not
-    their email or billing dates. `plan_*` are `None` for a customer with no
-    subscription row yet."""
-
     customer_id: uuid.UUID
     name: str
     company: str | None
@@ -64,9 +44,6 @@ class CustomerListItem(BaseModel):
 
 
 class CheckoutSession(BaseModel):
-    """A simulated checkout — MewFlow has no real payment processor, so
-    `checkout_url` is a fake link, not something that should ever be followed."""
-
     checkout_url: str
     target_plan_slug: str
     price_quote: PriceQuote
@@ -81,10 +58,6 @@ class EscalationCategory(StrEnum):
 
 
 class EscalationReceipt(BaseModel):
-    """What the customer is given when a conversation is escalated to a person: `reference` is the
-    follow-up number, kept on the conversation. `route` says whether someone joins the chat now
-    (`live`) or writes back later (`offline`)."""
-
     reference: str
     route: EscalationRoute
     reason: RouteReason
