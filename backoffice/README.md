@@ -17,6 +17,8 @@ session's permissions, but the API is what enforces them.
 
 ## Behaviour the code relies on
 
+- There is one theme, dark. The sidebar takes 15rem, so the two-column pages stack below 70rem,
+  sooner than the shell does.
 - The session lives in `sessionStorage`: per tab and gone when it closes, since the placeholder
   login is not worth remembering longer. When storage is blocked it lasts until a reload, and the
   remembered tenant is simply forgotten.
