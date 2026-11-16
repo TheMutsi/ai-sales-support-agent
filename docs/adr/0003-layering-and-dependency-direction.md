@@ -49,6 +49,13 @@ This is the import graph on `main`, checked package by package, not an aspiratio
 - Tools open their own DB session (`SessionLocal`), because `AgentState` has no place
   for a live session between nodes. The RAG retriever, one level lower, takes the
   session as an argument instead.
+- A missing customer or plan is the caller passing a bad key, so it raises `ToolLookupError`
+  (a request rejected for a reason the customer can be told, not a crash), and the customer is
+  looked up before their subscription so the error says which one is missing. The current
+  subscription is the most recently started row, loaded with its plan, since every caller reads
+  it. A knowledge-base search for an unknown customer, or one with no subscription, still runs,
+  only without the plan filter. The customer list for the demo selector does one query per
+  customer, fine at demo scale; it needs a join and pagination before real traffic.
 - The direction is a convention, not enforced by a lint rule. A reviewer has to catch
   a violation.
 

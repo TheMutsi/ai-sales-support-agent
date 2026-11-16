@@ -29,6 +29,8 @@ with no LLM, no I/O and no framework imports:
 `app/tools/` wraps these with database access, and enforces the invariants that must
 hold no matter who calls them: `create_upgrade_checkout` re-checks eligibility itself
 and raises `UpgradeNotEligibleError` rather than trusting the caller to have checked.
+Its links point at `mewflow.example`, a domain reserved by RFC 2606, so a simulated
+checkout can never resolve to a real site.
 
 In the graph, the LLM only writes text around these results:
 
