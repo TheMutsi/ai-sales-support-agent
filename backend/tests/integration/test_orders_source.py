@@ -1,9 +1,3 @@
-"""The simulated order source: what the shop's orders API will be, backed by a table.
-
-Needs a migrated Postgres (see CLAUDE.md). The source is async and takes the tenant on every
-call, so an order id from one shop can never be resolved for another.
-"""
-
 import asyncio
 import uuid
 
@@ -41,7 +35,7 @@ def test_the_simulated_source_satisfies_the_interface():
 
 
 def test_seed_gives_every_customer_one_order_and_is_idempotent(db: Session):
-    assert db.query(Order).count() == 10  # the six customers' and the four demo shop ones
+    assert db.query(Order).count() == 10
     seed(db)
     assert db.query(Order).count() == 10
 
@@ -77,8 +71,8 @@ def test_unknown_and_malformed_ids_are_none_not_errors(db: Session):
 
 def test_statuses_follow_the_customer_s_situation(db: Session):
     by_email = {o.customer.email: o.status for o in db.query(Order)}
-    assert by_email["helena.ostrowski@ridgeportlegal.com"] == "pending"  # past_due
-    assert by_email["tom.baxter@baxterandco.com"] == "refunded"  # canceled
+    assert by_email["helena.ostrowski@ridgeportlegal.com"] == "pending"
+    assert by_email["tom.baxter@baxterandco.com"] == "refunded"
     assert by_email["priya.anand@bluecrestlogistics.com"] == "paid"
 
 
@@ -178,14 +172,14 @@ def test_keeping_an_order_with_the_offer_is_recorded_once_per_order(db: Session)
         )
 
     first = keep(RetentionChoice.CREDITS)
-    second = keep(RetentionChoice.REFUND)  # a second one must not stack
+    second = keep(RetentionChoice.REFUND)
 
     assert first is not None and (first.credit_cents, first.refund_cents) == (2100, None)
     assert second is None
     db.expire_all()
     [adjustment] = db.query(OrderAdjustment).filter_by(order_id=order.id).all()
     assert (adjustment.kind, adjustment.credit_cents) == ("credits", 2100)
-    assert order.status == "open"  # kept: nothing is cancelled
+    assert order.status == "open"
 
 
 def test_a_cancelled_order_cannot_be_kept_with_an_offer(db: Session):
@@ -219,7 +213,7 @@ def test_an_order_kept_with_the_offer_cannot_be_cancelled_afterwards(db: Session
 
 def test_an_order_below_the_threshold_cannot_be_kept_with_an_offer(db: Session):
     source = SimulatedOrderSource(SessionLocal)
-    customer, order = _customer_and_order(db, "mail1@gmail.com")  # $29.99
+    customer, order = _customer_and_order(db, "mail1@gmail.com")
 
     kept = asyncio.run(
         source.keep_order_with_retention(
@@ -256,8 +250,6 @@ def test_an_order_kept_with_the_offer_says_so_when_read_again(db: Session):
         RetentionChoice.CREDITS,
         2100,
     )
-
-
 
 
 def test_a_gift_is_recorded_only_when_asked_for_and_read_back(db: Session):

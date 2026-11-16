@@ -1,5 +1,3 @@
-"""Integration tests for the plan tools."""
-
 import pytest
 from sqlalchemy.orm import Session
 

@@ -1,7 +1,3 @@
-"""Each shop lists the origins its widget runs on. CORS headers are decided before the
-tenant is known (a preflight carries neither key nor token), so an origin any tenant lists
-gets them; the real request is then checked against its own tenant's list."""
-
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -21,7 +17,7 @@ from app.main import app
 client = TestClient(app)
 SHOP_A = "https://shop-a.example"
 SHOP_B = "https://shop-b.example"
-FIRST_PARTY = "http://localhost:5173"  # the app's own frontend, from CORS_ALLOW_ORIGINS
+FIRST_PARTY = "http://localhost:5173"
 
 
 def _tenant(db, origins):
@@ -83,7 +79,6 @@ def test_a_tenants_own_origin_may_use_its_key(shops):
 
 
 def test_another_tenants_origin_may_not_use_this_key(shops):
-    """Shop B's page must not be able to start conversations on shop A's key."""
     response = _start(shops["a"].api_key, SHOP_B)
 
     assert response.status_code == 403
@@ -131,7 +126,7 @@ def test_a_new_origin_is_accepted_once_the_cache_expires_or_is_invalidated(tenan
     with SessionLocal() as db:
         _tenant(db, [SHOP_A])
         db.commit()
-    assert "access-control-allow-origin" not in _preflight(SHOP_A).headers  # still cached
+    assert "access-control-allow-origin" not in _preflight(SHOP_A).headers
     now[0] += get_settings().tenant_config_ttl_seconds + 1
 
     assert _preflight(SHOP_A).headers["access-control-allow-origin"] == SHOP_A
@@ -147,7 +142,7 @@ def test_an_origin_change_applies_at_once_when_the_cache_is_invalidated(tenant_w
     with SessionLocal() as db:
         db.get(Tenant, tenant_id).allowed_origins = [SHOP_B]
         db.commit()
-    assert _preflight(SHOP_A).headers.get("access-control-allow-origin") == SHOP_A  # cached
+    assert _preflight(SHOP_A).headers.get("access-control-allow-origin") == SHOP_A
     tenant_configs.invalidate()
 
     assert "access-control-allow-origin" not in _preflight(SHOP_A).headers
@@ -155,23 +150,21 @@ def test_an_origin_change_applies_at_once_when_the_cache_is_invalidated(tenant_w
 
 
 def test_a_tenant_created_a_moment_ago_is_not_treated_as_unknown(tenant_wipe, monkeypatch):
-    """An unknown tenant skips the origin check, so a stale snapshot must not make a real one look
-    unknown: a miss reloads (throttled), and the new tenant's origin check applies."""
     now = [1000.0]
     monkeypatch.setattr(tenant_configs, "_clock", lambda: now[0])
     client.get("/api/health")
-    assert tenant_configs.all_origins() == frozenset()  # snapshot loaded, no tenants yet
+    assert tenant_configs.all_origins() == frozenset()
     with SessionLocal() as db:
         tenant = _tenant(db, [SHOP_A])
         db.commit()
         api_key = tenant.api_key
 
-    now[0] += 6  # past the throttle for reloading on a miss
+    now[0] += 6
     response = client.post(
         "/api/conversations", json={"api_key": api_key}, headers={"Origin": SHOP_B}
     )
 
-    assert response.status_code == 403  # the new tenant's origin list was applied, not skipped
+    assert response.status_code == 403
 
 
 def test_a_database_failure_leaves_the_apps_own_origins_working(shops, monkeypatch):
@@ -198,9 +191,6 @@ def test_origins_are_stored_normalized(tenant_wipe):
     assert tenant.allowed_origins == ["https://shop.example"]
 
 
-# --- when the configuration cannot be read ---------------------------------------------------------
-
-
 @pytest.fixture
 def config_unavailable(monkeypatch):
     def broken():
@@ -211,7 +201,6 @@ def config_unavailable(monkeypatch):
 
 
 def test_the_origin_check_fails_closed_when_the_tenant_cannot_be_looked_up(config_unavailable):
-    """An unknown tenant skips the origin check, so "I cannot tell" must not look like "unknown"."""
     response = client.post(
         "/api/conversations", json={"api_key": "pk_any"}, headers={"Origin": SHOP_A}
     )
@@ -223,8 +212,6 @@ def test_the_origin_check_fails_closed_when_the_tenant_cannot_be_looked_up(confi
 def test_a_request_with_no_origin_does_not_need_the_configuration_to_pass_the_guard(
     config_unavailable,
 ):
-    """No `Origin` means no browser cross-origin call, which the guard never checked: it must not
-    start failing just because the cache cannot answer."""
     response = client.post("/api/conversations", json={"api_key": "pk_any"})
 
     assert response.status_code != 503
@@ -233,8 +220,6 @@ def test_a_request_with_no_origin_does_not_need_the_configuration_to_pass_the_gu
 def test_a_chat_turn_fails_closed_and_leaves_no_turn_open_when_the_scopes_cannot_be_read(
     shops, config_unavailable
 ):
-    """The scope overrides can restrict what a visitor may do: ignoring them would widen it. And
-    the failure must come before the turn is opened, or the conversation stays locked."""
     from app.db.models import Conversation
 
     headers = _session_headers(shops, None)

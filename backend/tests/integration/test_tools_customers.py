@@ -1,9 +1,3 @@
-"""Integration tests for the get_customer_context tool.
-
-Requires a real Postgres (`alembic upgrade head`) — the `seeded_db` fixture
-(conftest.py) loads plans/customers/subscriptions from `data/seed/`.
-"""
-
 import uuid
 
 import pytest

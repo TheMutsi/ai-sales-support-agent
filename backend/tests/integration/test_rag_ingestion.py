@@ -1,15 +1,3 @@
-"""Integration tests for the RAG ingestion pipeline.
-
-Require a real Postgres with the schema already migrated (`alembic upgrade head`)
-against DATABASE_URL — pgvector's column type has no SQLite equivalent, so these
-can't run against an in-memory database. Embeddings are stubbed with a fixed
-768-dim vector per chunk so these tests don't depend on a live LLM/embeddings
-provider being configured — real embedding *quality* is a concern for the
-evaluation suite, not this test, which only checks that ingestion persists the
-right rows with the right relationships. The `rag_db` fixture (shared with
-`test_retriever.py`) lives in `conftest.py`.
-"""
-
 import pytest
 from sqlalchemy.orm import Session
 
@@ -31,7 +19,7 @@ def test_ingest_persists_documents_and_chunks(rag_db: Session):
     written = ingestion.ingest(rag_db)
 
     assert written == rag_db.query(DocumentChunk).count()
-    assert rag_db.query(Document).count() == 7  # all files under data/seed/kb/
+    assert rag_db.query(Document).count() == 7
 
 
 def test_ingest_links_chunks_to_their_document(rag_db: Session):

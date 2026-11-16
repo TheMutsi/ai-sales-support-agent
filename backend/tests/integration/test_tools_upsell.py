@@ -1,14 +1,3 @@
-"""Integration tests for the upgrade-path tools: which feature justifies an
-upgrade, eligibility, pricing, checkout.
-
-The underlying decision logic (does this plan have the feature, is the
-subscription eligible, what's the price delta) is already unit-tested in
-`tests/unit/test_eligibility.py`, `test_pricing.py`, and
-`test_upsell_rules.py` against synthetic data — these tests only prove that
-the tool layer resolves a customer_id into the right DB rows and wires them
-into that logic correctly.
-"""
-
 import uuid
 
 import pytest
@@ -25,7 +14,7 @@ from tests.integration.conftest import customer_by_email
 
 
 def test_recommends_a_real_plan_for_a_missing_feature(seeded_db: Session):
-    customer = customer_by_email(seeded_db, "ava.chen@northlightstudio.com")  # starter, active
+    customer = customer_by_email(seeded_db, "ava.chen@northlightstudio.com")
 
     decision = evaluate_upsell(customer.id, "advanced_reporting")
 
@@ -34,7 +23,7 @@ def test_recommends_a_real_plan_for_a_missing_feature(seeded_db: Session):
 
 
 def test_no_upsell_when_the_current_plan_already_has_the_feature(seeded_db: Session):
-    customer = customer_by_email(seeded_db, "priya.anand@bluecrestlogistics.com")  # pro
+    customer = customer_by_email(seeded_db, "priya.anand@bluecrestlogistics.com")
 
     decision = evaluate_upsell(customer.id, "advanced_reporting")
 
@@ -65,7 +54,7 @@ def test_raises_for_unknown_customer_id_on_eligibility(seeded_db: Session):
 
 
 def test_calculates_price_delta_between_real_plans(seeded_db: Session):
-    customer = customer_by_email(seeded_db, "priya.anand@bluecrestlogistics.com")  # pro
+    customer = customer_by_email(seeded_db, "priya.anand@bluecrestlogistics.com")
 
     quote = calculate_upgrade_price(customer.id, "enterprise")
 
@@ -75,7 +64,7 @@ def test_calculates_price_delta_between_real_plans(seeded_db: Session):
 
 
 def test_creates_checkout_for_eligible_customer(seeded_db: Session):
-    customer = customer_by_email(seeded_db, "ava.chen@northlightstudio.com")  # starter, active
+    customer = customer_by_email(seeded_db, "ava.chen@northlightstudio.com")
 
     checkout = create_upgrade_checkout(customer.id, "pro")
 
@@ -85,14 +74,14 @@ def test_creates_checkout_for_eligible_customer(seeded_db: Session):
 
 
 def test_refuses_checkout_when_not_eligible(seeded_db: Session):
-    customer = customer_by_email(seeded_db, "helena.ostrowski@ridgeportlegal.com")  # past_due
+    customer = customer_by_email(seeded_db, "helena.ostrowski@ridgeportlegal.com")
 
     with pytest.raises(UpgradeNotEligibleError, match="past_due"):
         create_upgrade_checkout(customer.id, "enterprise")
 
 
 def test_refuses_checkout_for_the_customers_current_plan(seeded_db: Session):
-    customer = customer_by_email(seeded_db, "priya.anand@bluecrestlogistics.com")  # already pro
+    customer = customer_by_email(seeded_db, "priya.anand@bluecrestlogistics.com")
 
     with pytest.raises(UpgradeNotEligibleError, match="Already on"):
         create_upgrade_checkout(customer.id, "pro")

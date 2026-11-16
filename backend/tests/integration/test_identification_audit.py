@@ -1,8 +1,3 @@
-"""Every attempt to identify leaves a record a person can read: how (a code, an order, the shop's
-login), what came of it and, for a failure, why. The reason stays in our database: the response
-to the visitor is the same generic one as ever. Nothing in a record lets someone use it to get in:
-no code, no full email, no order id, no token."""
-
 import time
 
 import jwt
@@ -93,9 +88,6 @@ def _store_token(secret, **claims):
     return jwt.encode({"sub": "c1", "exp": int(time.time()) + 300, **claims}, secret, algorithm="HS256")
 
 
-# --- one-time codes ----------------------------------------------------------------------------
-
-
 def test_asking_for_a_code_is_recorded_with_the_email_masked_and_hashed(shop, sender):
     _request_code(shop["api_key"])
 
@@ -151,9 +143,6 @@ def test_a_wrong_code_is_recorded_with_its_reason_and_the_visitor_only_gets_the_
     assert (event.method, event.outcome, event.reason) == ("otp", "failed", "invalid_code")
 
 
-# --- an order -----------------------------------------------------------------------------------
-
-
 def test_a_matching_order_is_recorded_without_the_order_id(shop):
     started = client.post("/api/conversations", json={"api_key": shop["api_key"]}).json()
 
@@ -179,9 +168,6 @@ def test_a_failed_order_lookup_records_why_but_answers_with_one_generic_401(shop
     assert (event.method, event.outcome, event.reason) == ("order_id", "failed", reason)
 
 
-# --- the shop's own login -------------------------------------------------------------------------
-
-
 def test_the_shops_login_is_recorded_as_a_success_and_as_failures_with_their_reasons(shop):
     assert _store_login(shop["api_key"], _store_token(shop["secret"])).status_code == 200
     assert _store_login(shop["api_key"], _store_token(shop["secret"], sub="ghost")).status_code == 403
@@ -200,12 +186,7 @@ def test_an_unknown_api_key_leaves_no_record_because_there_is_no_shop_to_attribu
     assert _events() == []
 
 
-# --- what a record must never hold ------------------------------------------------------------
-
-
 def test_no_record_holds_a_code_the_email_an_order_id_or_a_token(shop, sender):
-    """Every outcome of every method, successes and failures: a failure path that stored what the
-    visitor typed would otherwise go unnoticed."""
     _request_code(shop["api_key"])
     _verify(shop["api_key"], sender.sent[0][1])
     _verify(shop["api_key"], "000000")
@@ -235,8 +216,6 @@ def test_no_record_holds_a_code_the_email_an_order_id_or_a_token(shop, sender):
 
 
 def test_an_order_is_grouped_by_what_the_visitor_typed_whatever_the_shop_calls_it(shop):
-    """The shop may return its own spelling of an id (case, a prefix); the failure path can only
-    hash what was typed, so the success path must too or one order would get two hashes."""
     from datetime import UTC, datetime, timedelta
 
     from app.auth.login import login_with_order
@@ -256,9 +235,6 @@ def test_an_order_is_grouped_by_what_the_visitor_typed_whatever_the_shop_calls_i
     assert _only_event().order_hmac == audit.hmac_value(
         get_settings().audit_key, "order", "a" * 20
     )
-
-
-# --- the audit never decides ---------------------------------------------------------------------
 
 
 def test_a_failure_to_write_the_record_does_not_stop_a_login_and_is_logged(shop, monkeypatch, caplog):

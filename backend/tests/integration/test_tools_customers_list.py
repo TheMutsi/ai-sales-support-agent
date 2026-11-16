@@ -1,10 +1,3 @@
-"""Integration tests for `list_customers` (the data behind the frontend's
-customer selector) and `GET /api/customers`.
-
-Requires a real Postgres (`alembic upgrade head`) — the `seeded_db` fixture
-(conftest.py) loads the sample customers from `data/seed/`.
-"""
-
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -40,5 +33,4 @@ def test_endpoint_returns_the_same_list(seeded_db: Session):
     body = response.json()
     assert [c["name"] for c in body] == [c.name for c in list_customers()]
     assert set(body[0]) == {"customer_id", "name", "company", "status", "plan_slug", "plan_name"}
-    # The selector is not a data export: no email, no billing detail.
     assert "email" not in body[0]

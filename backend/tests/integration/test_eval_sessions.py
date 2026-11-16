@@ -1,6 +1,3 @@
-"""The evaluation runner logs in as a client would, in a conversation of its own per case and
-per repetition, so one run never sees another's messages as history."""
-
 import pytest
 
 from app.auth.scopes import IdentityLevel
@@ -61,7 +58,7 @@ def test_the_messages_before_the_last_one_are_stored_as_the_history(seeded_db):
     assert [(m.seq, m.role, m.content, m.reply_to_seq) for m in stored] == [
         (1, "user", "hello", None),
         (2, "assistant", "Hi there", 1),
-    ]  # the last message is the one the runner sends
+    ]
     assert seeded_db.get(Conversation, session.conversation_id).last_seq == 2
 
 
@@ -158,12 +155,10 @@ def test_a_customer_with_no_order_fails_an_order_lookup_run_before_it_starts(see
 
     with pytest.raises(ValueError, match="no order to look up"):
         CaseSessions(seeded_db, [EMAIL], order_lookup_emails=[EMAIL])
-    CaseSessions(seeded_db, [EMAIL])  # a logged-in case needs no order
+    CaseSessions(seeded_db, [EMAIL])
 
 
 def test_a_run_refuses_to_start_against_an_empty_knowledge_base(rag_db):
-    """The integration tests clear the knowledge base; an evaluation run after them would look
-    like a regression (answers missing facts) when nothing changed."""
     with pytest.raises(ValueError, match="ingestion"):
         require_knowledge_base(rag_db)
 
@@ -172,5 +167,5 @@ def test_a_run_refuses_to_start_against_an_empty_knowledge_base(rag_db):
     rag_db.add(document)
     rag_db.commit()
 
-    require_knowledge_base(rag_db)  # no error once something is loaded
+    require_knowledge_base(rag_db)
 

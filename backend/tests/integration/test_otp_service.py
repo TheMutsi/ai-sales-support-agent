@@ -1,6 +1,3 @@
-"""One-time-code login (`otp_login`): the code is never stored, dies after a few
-wrong guesses, and an unknown email is indistinguishable from a wrong code."""
-
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -113,7 +110,7 @@ def test_the_code_dies_after_too_many_wrong_guesses_and_the_event_is_recorded(db
             _verify(db, tenant, wrong)
 
     with pytest.raises(OtpError):
-        _verify(db, tenant, sender.last_code)  # even the right one is dead now
+        _verify(db, tenant, sender.last_code)
     events = db.query(SecurityEvent).filter_by(kind="otp_max_attempts").all()
     assert len(events) == 1 and events[0].email == EMAIL
 
@@ -141,7 +138,7 @@ def test_requesting_a_new_code_invalidates_the_previous_one(db, tenant):
 def test_an_unknown_email_sends_nothing_and_fails_like_a_wrong_code(db, tenant):
     sender = FakeSender()
 
-    _request(db, tenant, sender, email="nobody@shop.test")  # no error either way
+    _request(db, tenant, sender, email="nobody@shop.test")
 
     assert sender.sent == []
     with pytest.raises(OtpError) as error:
@@ -175,8 +172,6 @@ def test_a_code_cannot_be_used_against_another_tenant(db, tenant):
 
 @pytest.fixture
 def slow_compare(monkeypatch):
-    """Widens the race window: every parallel request reads the challenge before
-    any of them writes, so a missing lock fails the test every time, not 1 run in 6."""
     real = otp_module.hmac.compare_digest
 
     def slow(a, b):
@@ -187,7 +182,6 @@ def slow_compare(monkeypatch):
 
 
 def _verify_in_its_own_session(tenant_id, code):
-    """What a parallel request does: its own DB session, no shared state."""
     with SessionLocal() as session:
         try:
             verify_otp(
@@ -210,7 +204,6 @@ def test_parallel_requests_with_the_right_code_cannot_all_succeed(db, tenant, sl
 
 
 def test_parallel_wrong_guesses_are_all_counted(db, tenant, slow_compare):
-    """Without a lock, parallel guesses read the same attempt count and slip past the limit."""
     sender = FakeSender()
     _request(db, tenant, sender)
     wrong = "000000" if sender.last_code != "000000" else "111111"
@@ -226,7 +219,7 @@ def test_two_customers_whose_emails_differ_only_by_case_are_ambiguous_not_an_err
     db.commit()
     sender = FakeSender()
 
-    _request(db, tenant, sender)  # must not raise
+    _request(db, tenant, sender)
 
     assert sender.sent == []
 
@@ -240,7 +233,6 @@ def test_a_customer_deleted_after_the_request_fails_without_holding_the_lock(db,
     with pytest.raises(OtpError):
         _verify(db, tenant, sender.last_code)
 
-    # The challenge row must be free for others, not left locked by the failed call.
     with SessionLocal() as other:
         other.execute(
             text("SELECT id FROM otp_challenges FOR UPDATE NOWAIT")
@@ -248,7 +240,6 @@ def test_a_customer_deleted_after_the_request_fails_without_holding_the_lock(db,
 
 
 def test_a_failed_verification_does_not_discard_the_callers_pending_work(db, tenant):
-    """The session belongs to the caller: rolling it back would silently drop their writes."""
     sender = FakeSender()
     _request(db, tenant, sender)
     db.query(Customer).delete()
