@@ -62,6 +62,8 @@ public product documentation.
   providers, and wrong for greetings and follow-ups.
 - **Expose all tools to the model.** Rejected by ADR-0001 and ADR-0002.
 
+The tool is bound before `with_retry`: the object `with_retry` returns has no `bind_tools`.
+
 ## References
 
 - `backend/app/agent/llm_tools/knowledge_base.py`
