@@ -20,6 +20,7 @@ from app.admin.session import (
 from app.api.admin_conversations import router as conversations_router
 from app.api.admin_deps import error, require_permission, require_tenant_permission
 from app.api.admin_escalations import router as escalations_router
+from app.api.admin_kb import router as kb_router
 from app.api.admin_plans import router as plans_router
 from app.auth.scopes import scope_override_problems
 from app.core.config import get_settings
@@ -175,4 +176,4 @@ def update_config(
     return tenant
 
 
-ADMIN_ROUTERS = [router, conversations_router, escalations_router, plans_router]
+ADMIN_ROUTERS = [router, conversations_router, escalations_router, kb_router, plans_router]

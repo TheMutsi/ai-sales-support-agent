@@ -47,7 +47,15 @@ EXPECTED = {
     ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/messages"): Permission.ESCALATIONS_REPLY,
     ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/close"): Permission.ESCALATIONS_REPLY,
     ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/resolve"): Permission.ESCALATIONS_REPLY,
+    ("GET", "/admin/tenants/{tenant_id}/kb/documents"): Permission.KB_READ,
     ("GET", "/admin/tenants/{tenant_id}/plans"): Permission.KB_READ,
+    ("GET", "/admin/tenants/{tenant_id}/kb/documents/{document_id}"): Permission.KB_READ,
+    ("POST", "/admin/tenants/{tenant_id}/kb/documents"): Permission.KB_WRITE,
+    ("PATCH", "/admin/tenants/{tenant_id}/kb/documents/{document_id}"): Permission.KB_WRITE,
+    ("PUT", "/admin/tenants/{tenant_id}/kb/documents/{document_id}/draft"): Permission.KB_WRITE,
+    ("POST", "/admin/tenants/{tenant_id}/kb/documents/{document_id}/draft/publish"): Permission.KB_WRITE,
+    ("POST", "/admin/tenants/{tenant_id}/kb/documents/{document_id}/versions/{version_id}/publish"): Permission.KB_WRITE,
+    ("POST", "/admin/tenants/{tenant_id}/kb/documents/{document_id}/archive"): Permission.KB_WRITE,
 }
 
 
