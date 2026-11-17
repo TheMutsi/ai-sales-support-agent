@@ -1,10 +1,3 @@
-"""Integration tests for the DB schema and seed fixtures.
-
-Require a real Postgres with the schema already migrated (`alembic upgrade head`)
-against DATABASE_URL — pgvector's column type has no SQLite equivalent, so these
-can't run against an in-memory database.
-"""
-
 import pytest
 from sqlalchemy.orm import Session
 
@@ -68,7 +61,6 @@ def test_seed_creates_a_dev_tenant_with_a_secret_and_links_every_customer(db: Se
     assert [(s.kid, s.active) for s in tenant.secrets] == [(DEV_TENANT_KID, True)]
     customers = db.query(Customer).all()
     assert customers and all(c.tenant_id == tenant.id for c in customers)
-    # The shop's id for a seeded customer is their email, so a dev token's `sub` is readable.
     assert all(c.external_id == c.email for c in customers)
 
 
@@ -84,7 +76,6 @@ def test_seed_backfills_customers_that_predate_the_dev_tenant(db: Session):
 
 
 def test_seed_skips_the_dev_tenant_outside_local_environments(db: Session, monkeypatch):
-    """A well-known secret must never be written to a real deployment's database."""
     from app.db import seed as seed_module
 
     production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
@@ -122,7 +113,7 @@ def test_seed_restores_a_dev_secret_that_was_deactivated(db: Session):
 
 def test_seed_creates_the_demo_shop_customers_with_one_order_each(db: Session):
     seed(db)
-    seed(db)  # idempotent
+    seed(db)
 
     orders = {
         (o.customer.email, o.status, o.amount_cents)
@@ -190,8 +181,8 @@ def test_resetting_the_demo_shop_leaves_other_tenants_and_other_environments_alo
     reset_demo_shop(db)
 
     db.expire_all()
-    assert conversation.pending_return_order_id == "A" * 20  # not the demo shop's
-    db.query(Conversation).delete()  # the next test's fixture deletes customers
+    assert conversation.pending_return_order_id == "A" * 20
+    db.query(Conversation).delete()
     db.commit()
 
     production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")

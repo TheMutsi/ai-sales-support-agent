@@ -1,6 +1,3 @@
-"""A person takes over from the assistant: an escalation puts the conversation in a waiting state,
-and from then on the visitor's messages are stored and the assistant does not answer them."""
-
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -57,7 +54,6 @@ def _receipt(route="live", reference="MF-ABCD2345") -> EscalationReceipt:
 
 
 def _escalate(shop, text="I want a person", receipt=None):
-    """A turn whose reply escalated the conversation, as the agent's escalation does."""
     db, conversation = shop["db"], shop["conversation"]
     turn = begin_turn(db, conversation_id=conversation.id, client_message_id=uuid.uuid4(), content=text, now=NOW)
     finish_turn(
@@ -81,7 +77,7 @@ def test_an_escalation_puts_the_conversation_in_the_waiting_state_with_a_notice(
     assert conversation.handoff_requested_at is not None
     stored = list_messages(shop["db"], conversation_id=conversation.id)
     assert [(m.role, m.kind) for m in stored] == [("user", "text"), ("assistant", "text"), ("system", "system")]
-    assert stored[1].reply_to_seq == 1  # the reply still answers the message
+    assert stored[1].reply_to_seq == 1
     assert stored[2].content == ESCALATION_NOTICE
 
 
@@ -103,7 +99,7 @@ def test_an_offline_escalation_keeps_the_number_and_leaves_the_assistant_answeri
     assert [m.role for m in list_messages(shop["db"], conversation_id=conversation.id)] == ["user", "assistant"]
     db = shop["db"]
     next_turn = begin_turn(db, conversation_id=conversation.id, client_message_id=uuid.uuid4(), content="and?", now=NOW)
-    assert next_turn.action is TurnAction.RUN  # nobody is coming to the chat
+    assert next_turn.action is TurnAction.RUN
     assert next_turn.open_escalation.reference == "MF-ABCD2345"
 
 
@@ -140,7 +136,7 @@ def test_while_a_person_has_the_conversation_a_message_is_stored_and_not_answere
 
     assert (turn.action, turn.handoff) == (TurnAction.HANDOFF, HandoffStatus.WAITING)
     fresh = _state(shop)
-    assert fresh.turn_id is None and fresh.turn_started_at is None  # no agent turn is running
+    assert fresh.turn_id is None and fresh.turn_started_at is None
     assert list_messages(db, conversation_id=conversation.id)[-1].content == "hello?"
 
 
@@ -174,9 +170,6 @@ def test_what_a_person_said_is_not_in_the_history_the_assistant_continues_from(s
     second = begin_turn(db, conversation_id=conversation.id, client_message_id=uuid.uuid4(), content="two", now=NOW)
 
     assert [m.content for m in second.history] == ["one", "reply one"]
-
-
-# --- over HTTP ---------------------------------------------------------------------------------
 
 
 def _auth(shop) -> dict:

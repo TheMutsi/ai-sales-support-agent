@@ -1,7 +1,3 @@
-"""Fixed-window counters in Postgres: correct across server instances, which an
-in-process counter is not behind a load balancer. Applied to the endpoints a stranger
-can call (starting a conversation, login, one-time codes) and to the chat per conversation."""
-
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -19,7 +15,7 @@ from app.db.models import Customer, RateLimitCounter, Tenant
 from app.db.session import SessionLocal
 from app.main import app
 
-NOW = datetime(2026, 10, 17, 12, 0, 30, tzinfo=UTC)  # 30 s into a minute-aligned window
+NOW = datetime(2026, 10, 17, 12, 0, 30, tzinfo=UTC)
 client = TestClient(app)
 
 
@@ -38,7 +34,7 @@ def test_requests_up_to_the_limit_pass_and_the_next_one_says_when_to_retry(db):
 
     retry_after = _hit(db)
 
-    assert retry_after == 30  # the window ends 30 s from NOW
+    assert retry_after == 30
 
 
 def test_the_counter_starts_over_in_the_next_window(db):
@@ -56,8 +52,6 @@ def test_keys_are_counted_separately(db):
 
 
 def test_parallel_requests_are_counted_exactly(tenant_wipe):
-    """An update that reads then writes would let several slip past the limit."""
-
     def one(_):
         with SessionLocal() as session:
             return _hit(session, limit=5)
@@ -91,7 +85,6 @@ def test_the_client_is_the_socket_peer_unless_proxies_are_trusted(monkeypatch):
 def test_behind_one_proxy_the_address_the_proxy_appended_is_used_not_the_spoofed_one(monkeypatch):
     monkeypatch.setattr(rate_limit_module.get_settings(), "trusted_proxy_count", 1)
 
-    # "6.6.6.6" is whatever the visitor claimed; the proxy appended the real peer last.
     assert client_ip(_Request("10.0.0.1", "6.6.6.6, 1.1.1.1")) == "1.1.1.1"
 
 
@@ -140,8 +133,6 @@ def test_a_flood_of_wrong_codes_from_one_address_is_cut_off(shop):
 
 
 class _SilentGraph:
-    """Ends every run without events: only the request handling is under test."""
-
     async def astream_events(self, initial_state, config, version):
         return
         yield

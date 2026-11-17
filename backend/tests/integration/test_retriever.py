@@ -1,13 +1,3 @@
-"""Integration tests for the retriever.
-
-Require a real Postgres with pgvector (`alembic upgrade head`) — same reason as
-the other RAG integration tests: pgvector's similarity operators only exist in
-Postgres. Embeddings are stubbed with hand-picked orthogonal unit vectors so
-similarity ranking is deterministic and assertable, instead of depending on what a
-real embeddings model happens to consider "similar". The `rag_db` fixture (shared
-with `test_rag_ingestion.py`) lives in `conftest.py`.
-"""
-
 from sqlalchemy.orm import Session
 
 from app.db.models import Document, DocumentChunk
@@ -26,9 +16,6 @@ class _FakeEmbeddings:
 
 
 def _unit_vector(index: int) -> list[float]:
-    """An orthogonal unit vector: cosine distance to itself is 0, to any other
-    `_unit_vector(j != index)` is 1 — makes similarity ranking exact, not just
-    approximately closer/farther."""
     vector = [0.0] * _DIM
     vector[index] = 1.0
     return vector
@@ -104,7 +91,6 @@ def test_search_drops_results_below_min_score(rag_db: Session, monkeypatch):
     )
     monkeypatch.setattr(retriever, "get_embeddings", lambda: _FakeEmbeddings(_unit_vector(0)))
 
-    # "close" has score 1.0 (identical vector), "far" has score 0.0 (orthogonal).
     results = retriever.search(rag_db, "query", top_k=2, min_score=0.5)
 
     assert [r.content for r in results] == ["close"]
