@@ -4,7 +4,7 @@ from enum import StrEnum
 
 class OfferKind(StrEnum):
     PACK = "pack"
-    PERCENT = "percent"
+    DISCOUNT = "discount"
     BUNDLE = "bundle"
 
 
@@ -14,7 +14,7 @@ class Offer:
     percent: int = 0
     quantity: int = 1
     price_cents: int = 0
-    compare_at_cents: int = 0
+    compare_at_cents: int | None = None
     active: bool = True
 
 
@@ -32,21 +32,21 @@ def _percent_rounded_half_up(cents: int, percent: int) -> int:
 def _reject_invalid(offer: Offer) -> None:
     if offer.price_cents < 0:
         raise ValueError("offer price must not be negative")
-    if offer.kind is OfferKind.PERCENT and not 0 <= offer.percent <= 100:
+    if offer.kind is OfferKind.DISCOUNT and not 0 <= offer.percent <= 100:
         raise ValueError("offer percent must be between 0 and 100")
     if offer.kind is OfferKind.PACK and (offer.price_cents <= 0 or offer.quantity <= 0):
         raise ValueError("pack offer needs a positive price and quantity")
 
 
 def _price_and_compare_price(base_price_cents: int, offer: Offer) -> tuple[int, int]:
-    if offer.kind is OfferKind.PERCENT and offer.compare_at_cents > 0:
-        return offer.price_cents, offer.compare_at_cents
-    if offer.kind is OfferKind.PERCENT:
-        discount = _percent_rounded_half_up(base_price_cents, offer.percent)
-        return base_price_cents - discount, base_price_cents
     if offer.kind is OfferKind.PACK:
         return offer.price_cents, base_price_cents * offer.quantity
-    return offer.price_cents, offer.compare_at_cents
+    if offer.compare_at_cents is not None and offer.compare_at_cents > offer.price_cents:
+        return offer.price_cents, offer.compare_at_cents
+    if offer.kind is OfferKind.DISCOUNT and offer.percent > 0:
+        discount = _percent_rounded_half_up(base_price_cents, offer.percent)
+        return base_price_cents - discount, base_price_cents
+    return 0, 0
 
 
 def _discount_percent(price_cents: int, compare_price_cents: int) -> int:

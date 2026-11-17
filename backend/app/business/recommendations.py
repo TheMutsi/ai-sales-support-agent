@@ -12,7 +12,7 @@ class Candidate:
     complement_tags: frozenset[str] = frozenset()
     product_id: str | None = None
     pack_size: int | None = None
-    price_tier: int = 1
+    price_tier: int = 0
 
 
 @dataclass(frozen=True)
@@ -73,7 +73,7 @@ def _usable_co_purchase_scores(
     return scores
 
 
-def cross_sell(
+def item_cross_sell(
     chosen: list[Candidate],
     catalog: list[Candidate],
     already_bought: frozenset[str],
@@ -113,7 +113,7 @@ def _best_same_need_one_tier_up(current: Candidate, eligible: list[Candidate]) -
     return next((item for item in tier_up if ranked and item.item_id == ranked[0].item_id), None)
 
 
-def upsell(current: Candidate, catalog: list[Candidate], already_bought: frozenset[str]) -> str | None:
+def item_upsell(current: Candidate, catalog: list[Candidate], already_bought: frozenset[str]) -> str | None:
     _reject_duplicate_ids(catalog)
     eligible = [
         item

@@ -4,10 +4,10 @@ from app.business.recommendations import (
     MAX_RECOMMENDATIONS,
     Candidate,
     RankedItem,
-    cross_sell,
+    item_cross_sell,
+    item_upsell,
     price_tier,
     rank_by_tags,
-    upsell,
 )
 
 
@@ -84,9 +84,9 @@ def test_duplicate_item_ids_are_rejected_in_cross_sell_and_upsell():
     current = _item("a", {"t": 1.0})
     catalog = [current, _item("b"), _item("b")]
     with pytest.raises(ValueError):
-        cross_sell([current], catalog, frozenset())
+        item_cross_sell([current], catalog, frozenset())
     with pytest.raises(ValueError):
-        upsell(current, catalog, frozenset())
+        item_upsell(current, catalog, frozenset())
 
 
 def test_cross_sell_matches_the_complement_tags_of_the_chosen_items():
@@ -96,24 +96,24 @@ def test_cross_sell_matches_the_complement_tags_of_the_chosen_items():
         _item("cream", {"moisturizer": 4}),
         _item("soap", {"cleanser": 4}),
     ]
-    assert [r.item_id for r in cross_sell(chosen, catalog, frozenset())] == ["cream"]
+    assert [r.item_id for r in item_cross_sell(chosen, catalog, frozenset())] == ["cream"]
 
 
 def test_cross_sell_excludes_chosen_and_already_bought_items():
     chosen = [_item("a", {"x": 5}, complement_tags=frozenset({"x"}))]
     catalog = [chosen[0], _item("b", {"x": 5}), _item("c", {"x": 5})]
-    ranked = cross_sell(chosen, catalog, frozenset({"b"}))
+    ranked = item_cross_sell(chosen, catalog, frozenset({"b"}))
     assert [r.item_id for r in ranked] == ["c"]
 
 
 def test_cross_sell_with_nothing_chosen_recommends_nothing():
-    assert cross_sell([], [_item("a", {"x": 1})], frozenset()) == []
+    assert item_cross_sell([], [_item("a", {"x": 1})], frozenset()) == []
 
 
 def test_co_purchase_counts_override_tag_matching():
     chosen = [_item("a", complement_tags=frozenset({"x"}))]
     catalog = [chosen[0], _item("tagged", {"x": 9}), _item("popular"), _item("rare")]
-    ranked = cross_sell(
+    ranked = item_cross_sell(
         chosen, catalog, frozenset(), co_purchases={"a": {"popular": 7, "rare": 1}}
     )
     assert [r.item_id for r in ranked] == ["popular"]
@@ -122,7 +122,7 @@ def test_co_purchase_counts_override_tag_matching():
 def test_co_purchase_still_excludes_bought_and_chosen_items():
     chosen = [_item("a")]
     catalog = [chosen[0], _item("b"), _item("c")]
-    ranked = cross_sell(
+    ranked = item_cross_sell(
         chosen, catalog, frozenset({"b"}), co_purchases={"a": {"a": 9, "b": 8, "c": 2}}
     )
     assert [r.item_id for r in ranked] == ["c"]
@@ -131,14 +131,14 @@ def test_co_purchase_still_excludes_bought_and_chosen_items():
 def test_empty_co_purchases_fall_back_to_tags():
     chosen = [_item("a", complement_tags=frozenset({"x"}))]
     catalog = [chosen[0], _item("b", {"x": 2})]
-    ranked = cross_sell(chosen, catalog, frozenset(), co_purchases={})
+    ranked = item_cross_sell(chosen, catalog, frozenset(), co_purchases={})
     assert [r.item_id for r in ranked] == ["b"]
 
 
 def test_co_purchase_pointing_at_unknown_or_bought_items_falls_back_to_tags():
     chosen = [_item("a", complement_tags=frozenset({"x"}))]
     catalog = [chosen[0], _item("b", {"x": 0.5}), _item("bought")]
-    ranked = cross_sell(
+    ranked = item_cross_sell(
         chosen,
         catalog,
         frozenset({"bought"}),
@@ -150,7 +150,7 @@ def test_co_purchase_pointing_at_unknown_or_bought_items_falls_back_to_tags():
 def test_zero_co_purchase_counts_do_not_block_the_tag_path():
     chosen = [_item("a", complement_tags=frozenset({"x"}))]
     catalog = [chosen[0], _item("b", {"x": 0.5})]
-    ranked = cross_sell(chosen, catalog, frozenset(), co_purchases={"a": {"b": 0}})
+    ranked = item_cross_sell(chosen, catalog, frozenset(), co_purchases={"a": {"b": 0}})
     assert [r.item_id for r in ranked] == ["b"]
 
 
@@ -162,7 +162,7 @@ def test_upsell_prefers_the_next_bigger_pack_of_the_same_product():
         _item("s2", product_id="serum", pack_size=2),
         _item("other", product_id="mask", pack_size=5),
     ]
-    assert upsell(current, catalog, frozenset()) == "s2"
+    assert item_upsell(current, catalog, frozenset()) == "s2"
 
 
 def test_upsell_falls_back_to_the_same_need_one_tier_up():
@@ -173,7 +173,7 @@ def test_upsell_falls_back_to_the_same_need_one_tier_up():
         _item("wrong_need", {"calm": 5}, price_tier=2),
         _item("next", {"hydrate": 2}, price_tier=2),
     ]
-    assert upsell(current, catalog, frozenset()) == "next"
+    assert item_upsell(current, catalog, frozenset()) == "next"
 
 
 def test_upsell_picks_the_best_matching_item_within_the_tier():
@@ -183,18 +183,22 @@ def test_upsell_picks_the_best_matching_item_within_the_tier():
         _item("weak", {"hydrate": 1}, price_tier=2),
         _item("strong", {"hydrate": 3, "calm": 2}, price_tier=2),
     ]
-    assert upsell(current, catalog, frozenset()) == "strong"
+    assert item_upsell(current, catalog, frozenset()) == "strong"
 
 
 def test_upsell_skips_items_already_bought():
     current = _item("a", {"hydrate": 3}, price_tier=1)
     catalog = [current, _item("next", {"hydrate": 2}, price_tier=2)]
-    assert upsell(current, catalog, frozenset({"next"})) is None
+    assert item_upsell(current, catalog, frozenset({"next"})) is None
 
 
 def test_upsell_is_none_when_there_is_nothing_bigger():
     current = _item("a", {"hydrate": 3}, product_id="p", pack_size=3, price_tier=3)
-    assert upsell(current, [current], frozenset()) is None
+    assert item_upsell(current, [current], frozenset()) is None
+
+
+def test_candidate_price_tier_defaults_to_the_lowest_tier():
+    assert Candidate("a").price_tier == price_tier(0, [1_000])
 
 
 def test_price_tier_counts_the_boundaries_the_price_reaches():
@@ -225,4 +229,4 @@ def test_price_tier_rejects_a_negative_price():
 def test_upsell_ignores_packs_when_sizes_are_unknown():
     current = _item("a", product_id="p", pack_size=None, price_tier=1)
     catalog = [current, _item("b", product_id="p", pack_size=3, price_tier=1)]
-    assert upsell(current, catalog, frozenset()) is None
+    assert item_upsell(current, catalog, frozenset()) is None
