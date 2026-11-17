@@ -1,6 +1,3 @@
-// The admin API (`/api/admin`), typed. Errors carry the backend's `detail.code`, so a page can
-// react to "session_expired" or "forbidden" without parsing messages.
-
 export type Role = "viewer" | "agent" | "admin" | "operator";
 
 export interface AdminSession {
@@ -42,7 +39,6 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   const response = await fetch(`/api/admin${path}`, { ...init, headers });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    // FastAPI sends `{detail: {code}}` for ours and `{detail: [...]}` for a validation error.
     const detail = body?.detail;
     const code = Array.isArray(detail)
       ? detail.map((problem: { msg?: string }) => problem.msg).join("; ")
@@ -93,7 +89,6 @@ export interface ConversationDetail extends Omit<ConversationSummary, "message_c
   escalation_route: "live" | "offline" | null;
   escalation_status: "open" | "resolved" | null;
   escalation_notes: string | null;
-  /** Hints the visitor's page set: not verified facts. */
   properties: Record<string, string>;
   messages: {
     seq: number;
@@ -124,9 +119,7 @@ export const readConversation = (token: string, tenantId: string, conversationId
 
 export interface EscalationItem {
   id: string;
-  /** The follow-up number the visitor was given. */
   reference: string;
-  /** `live`: the visitor waits in the chat for a person. `offline`: a person writes back later. */
   route: "live" | "offline";
   reason: string | null;
   category: string | null;
@@ -143,13 +136,11 @@ export interface EscalationItem {
   last_message: string | null;
 }
 
-/** What the inbox can be narrowed by; every one that is set must match. */
 export interface EscalationFilters {
   status: "open" | "resolved" | "all";
   route?: "live" | "offline";
   q?: string;
   tags?: string[];
-  /** `key:value` pairs of the visitor's public properties. */
   properties?: string[];
 }
 

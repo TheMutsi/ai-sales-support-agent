@@ -16,7 +16,7 @@ import { messageFor } from "./config";
 import { who } from "./conversations";
 import { reasonLine, speaker, splitList, waitingLine } from "./escalations";
 
-const POLL_MS = 4000; // the visitor's widget polls too; a few seconds is enough for a chat
+const POLL_MS = 4000;
 
 interface Props {
   session: AdminSession;
@@ -31,10 +31,9 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
   const [text, setText] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // What was typed, and what was last applied: the list only reloads on "Search", not per key.
   const [form, setForm] = useState({ q: "", tags: "", properties: "", route: "", status: "open" });
   const [filters, setFilters] = useState<EscalationFilters>({ status: "open" });
-  const latest = useRef(0); // only the newest detail request may update the screen
+  const latest = useRef(0);
   const canAct = session.permissions.includes("escalations:reply");
 
   const fail = useCallback(
@@ -95,7 +94,6 @@ export function EscalationsPage({ session, tenantId, onExpired }: Props) {
   if (!items) return <p>{error ?? "Loading…"}</p>;
   const active = detail?.handoff_status === "active";
   const selectedItem = items.find((item) => item.id === selected);
-  // A conversation with an open escalation and nobody in the chat: a person follows up later.
   const offlineOpen = detail?.escalation_status === "open" && detail.handoff_status === "none";
   const waiting = detail?.handoff_status === "waiting";
 

@@ -1,6 +1,3 @@
-// What the configuration form edits, as pure functions so they can be tested without a browser.
-// The lists mirror `app.auth.scopes` in the backend, which validates them again.
-
 export const LEVELS = ["anonymous", "store_login", "otp_login", "order_lookup"] as const;
 export const SCOPES = [
   "kb:read",
@@ -20,7 +17,6 @@ export function parseOrigins(text: string): string[] {
     .filter(Boolean);
 }
 
-/** `null` when no level is customised, so saving clears the overrides instead of storing `{}`. */
 export function buildOverrides(custom: Overrides): Overrides | null {
   const entries = Object.entries(custom).filter(([level]) => (LEVELS as readonly string[]).includes(level));
   return entries.length ? Object.fromEntries(entries) : null;
@@ -40,7 +36,6 @@ const MESSAGES: Record<string, string> = {
   not_in_handoff: "This conversation was already closed.",
 };
 
-/** A known code in plain words; a validation problem (a 422) already says what is wrong. */
 export function messageFor(status: number, code: string): string {
   return MESSAGES[code] ?? (status === 422 ? code : "The change was refused.");
 }

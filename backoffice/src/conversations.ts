@@ -1,5 +1,3 @@
-// How a conversation reads in the list and the detail: plain functions, tested without a browser.
-
 import type { ConversationDetail, ConversationSummary } from "./api";
 
 export const who = (conversation: Pick<ConversationSummary, "customer">): string =>
@@ -19,11 +17,9 @@ export function identificationLine(event: ConversationDetail["identification"][n
   return event.reason ? `${base} (${event.reason})` : base;
 }
 
-/** The page after the one shown: its cursor is the last item's activity, as the API expects. */
 export const nextCursor = (shown: ConversationSummary[], pageSize = 50): string | undefined =>
   shown.length > 0 && shown.length % pageSize === 0 ? shown[shown.length - 1].last_activity_at : undefined;
 
-/** The facts of a conversation shown under "View metadata", as label/value rows. */
 export function metadataRows(c: ConversationDetail): [string, string][] {
   return [
     ["Conversation id", c.id],

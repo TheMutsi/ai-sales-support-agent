@@ -23,9 +23,7 @@ export function App() {
     setCollapsed((now) => {
       try {
         localStorage.setItem("backoffice:collapsed", now ? "0" : "1");
-      } catch {
-        /* storage unavailable: it just won't be remembered */
-      }
+      } catch {}
       return !now;
     });
 
