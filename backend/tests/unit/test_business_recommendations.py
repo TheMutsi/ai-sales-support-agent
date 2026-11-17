@@ -5,6 +5,7 @@ from app.business.recommendations import (
     Candidate,
     RankedItem,
     cross_sell,
+    price_tier,
     rank_by_tags,
     upsell,
 )
@@ -194,6 +195,31 @@ def test_upsell_skips_items_already_bought():
 def test_upsell_is_none_when_there_is_nothing_bigger():
     current = _item("a", {"hydrate": 3}, product_id="p", pack_size=3, price_tier=3)
     assert upsell(current, [current], frozenset()) is None
+
+
+def test_price_tier_counts_the_boundaries_the_price_reaches():
+    boundaries = [1_000, 3_000]
+    assert price_tier(500, boundaries) == 0
+    assert price_tier(1_000, boundaries) == 1
+    assert price_tier(2_999, boundaries) == 1
+    assert price_tier(3_000, boundaries) == 2
+    assert price_tier(99_999, boundaries) == 2
+
+
+def test_price_tier_without_boundaries_is_zero():
+    assert price_tier(1_000, []) == 0
+
+
+def test_price_tier_rejects_unsorted_or_negative_boundaries():
+    with pytest.raises(ValueError):
+        price_tier(100, [3_000, 1_000])
+    with pytest.raises(ValueError):
+        price_tier(100, [-1, 1_000])
+
+
+def test_price_tier_rejects_a_negative_price():
+    with pytest.raises(ValueError):
+        price_tier(-1, [1_000])
 
 
 def test_upsell_ignores_packs_when_sizes_are_unknown():

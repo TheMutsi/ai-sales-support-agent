@@ -76,6 +76,13 @@ def test_pack_with_a_non_positive_price_or_quantity_is_rejected():
             best_offer_display(2_000, [offer])
 
 
+def test_negative_base_price_is_rejected_with_or_without_offers():
+    with pytest.raises(ValueError):
+        best_offer_display(-5, [])
+    with pytest.raises(ValueError):
+        best_offer_display(-5, [Offer(OfferKind.PERCENT, percent=10)])
+
+
 def test_inactive_invalid_offers_are_not_validated():
     offer = Offer(OfferKind.PERCENT, percent=500, active=False)
     assert best_offer_display(2_000, [offer]).discount_percent == 0

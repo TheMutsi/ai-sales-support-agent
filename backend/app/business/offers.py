@@ -55,6 +55,8 @@ def _discount_percent(price_cents: int, compare_price_cents: int) -> int:
 
 
 def best_offer_display(base_price_cents: int, offers: list[Offer]) -> OfferDisplay:
+    if base_price_cents < 0:
+        raise ValueError("base price must not be negative")
     best: OfferDisplay | None = None
     for offer in offers:
         if not offer.active:

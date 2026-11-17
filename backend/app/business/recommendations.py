@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 MAX_RECOMMENDATIONS = 5
@@ -19,6 +19,14 @@ class Candidate:
 class RankedItem:
     item_id: str
     score: float
+
+
+def price_tier(price_cents: int, boundaries: Sequence[int]) -> int:
+    if price_cents < 0:
+        raise ValueError("price must not be negative")
+    if any(boundary < 0 for boundary in boundaries) or list(boundaries) != sorted(boundaries):
+        raise ValueError("boundaries must be sorted ascending and non-negative")
+    return sum(1 for boundary in boundaries if price_cents >= boundary)
 
 
 def _reject_duplicate_ids(candidates: list[Candidate]) -> None:
