@@ -46,6 +46,7 @@ class DividerCard(BaseModel):
     type: Literal["divider"] = "divider"
     id: str
     label: str = ""
+    variant: Literal["heading"] | None = None
 
 
 class RecommendationTemplate(StrEnum):
@@ -58,7 +59,7 @@ class RecommendationCard(BaseModel):
     template: RecommendationTemplate
     title: str
     description: str | None = None
-    image: CardImage
+    image: CardImage | None = None
     rating: float | None = Field(default=None, ge=0, le=5)
     url: str | None = None
     price: str | None = None
@@ -75,14 +76,13 @@ class RecommendationCard(BaseModel):
 
     @field_validator("image")
     @classmethod
-    def _image_is_http_https_or_relative(cls, value: CardImage) -> CardImage:
-        url = value.url
-        if not (url.lower().startswith(("http://", "https://")) or (url.startswith("/") and not url.startswith("//"))):
-            raise ValueError("a recommendation picture must be an http or https address or a relative path")
+    def _image_is_https(cls, value: CardImage | None) -> CardImage | None:
+        if value is not None and not value.url.lower().startswith("https://"):
+            raise ValueError("a recommendation picture must be an https address")
         return value
 
 
-Card =Annotated[
+Card = Annotated[
     ActionCard | ProductCard | DividerCard | RecommendationCard, Field(discriminator="type")
 ]
 

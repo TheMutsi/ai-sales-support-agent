@@ -511,7 +511,7 @@ describe("cards", () => {
     };
     mount(
       <Cards
-        cards={[{ type: "divider", id: "d", label: "Others also took" }, recommendation, { ...recommendation, id: "r2", url: null }]}
+        cards={[{ type: "divider", id: "d", label: "Others also took", variant: "heading" }, recommendation, { ...recommendation, id: "r2", url: null }]}
         active
         onPick={() => {}}
         onZoom={() => {}}
@@ -546,9 +546,10 @@ describe("cards", () => {
     ["javascript:alert(1)", null],
     ["data:text/html,<b>x</b>", null],
     ["https://shop.test/serum", "https://shop.test/serum"],
-    ["/products/serum", "/products/serum"],
+    ["http://shop.test/serum", "http://shop.test/serum"],
+    ["/products/serum", null],
     ["//evil.test/x", null],
-  ])("only links to http(s) or relative addresses: %s", async (url, expected) => {
+  ])("only links to absolute http(s) addresses: %s", async (url, expected) => {
     const { Cards } = await import("./Cards");
     const card = {
       type: "recommendation" as const, id: "r", template: "product_card" as const, title: "Serum", url,
@@ -563,13 +564,33 @@ describe("cards", () => {
     ["javascript:alert(1)", null],
     ["data:image/svg+xml,<svg/>", null],
     ["https://cdn.test/a.jpg", "https://cdn.test/a.jpg"],
-    ["/api/assets/a.svg", "/api/assets/a.svg"],
-  ])("only shows a picture from http(s) or a relative address: %s", async (src, expected) => {
+    ["http://cdn.test/a.jpg", null],
+    ["//evil.test/a.jpg", null],
+    ["/api/assets/a.svg", null],
+  ])("only shows a picture from an https address: %s", async (src, expected) => {
     const { Cards } = await import("./Cards");
     const card = { type: "recommendation" as const, id: "r", template: "product_card" as const, title: "Serum", image: { url: src, alt: "Serum" } };
     mount(<Cards cards={[card]} active onPick={() => {}} onZoom={() => {}} />);
 
     expect(container.querySelector(".mew-recommendation img")?.getAttribute("src") ?? null).toBe(expected);
+  });
+
+  it("shows a recommendation that has no picture, and rounds the rating to one decimal for readers", async () => {
+    const { Cards } = await import("./Cards");
+    const card = { type: "recommendation" as const, id: "r", template: "product_card" as const, title: "Guide", rating: 4.2999 };
+    mount(<Cards cards={[card]} active onPick={() => {}} onZoom={() => {}} />);
+
+    expect(container.querySelector(".mew-recommendation strong")?.textContent).toBe("Guide");
+    expect(container.querySelector(".mew-recommendation img")).toBeNull();
+    expect(container.querySelector(".mew-stars")?.getAttribute("aria-label")).toBe("4.3 out of 5");
+  });
+
+  it("keeps an old divider plain and styles only a heading divider as a title", async () => {
+    const { Cards } = await import("./Cards");
+    mount(<Cards cards={[{ type: "divider", id: "a", label: "Others" }, { type: "divider", id: "b", label: "Others", variant: "heading" }]} active onPick={() => {}} onZoom={() => {}} />);
+
+    const labels = Array.from(container.querySelectorAll(".mew-divider b")).map((el) => el.className);
+    expect(labels).toEqual(["", "mew-divider-title"]);
   });
 
   it("stacks a second picture behind the first, shows a struck price, and lets the large view switch pictures", async () => {

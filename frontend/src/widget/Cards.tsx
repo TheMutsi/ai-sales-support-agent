@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { safeAbsoluteUrl } from "../data/api";
 import type { Card, CardImage } from "../data/types";
 import { ChevronRight } from "./icons";
 
@@ -21,15 +22,10 @@ function groupRecommendations(cards: Card[]): CardItem[] {
   }, []);
 }
 
-export function httpOrRelativeUrl(url: string | null | undefined): string {
-  if (!url) return "";
-  return /^https?:\/\//i.test(url) || /^\/(?!\/)/.test(url) ? url : "";
-}
-
 function Stars({ rating }: { rating: number }) {
   const filled = Math.min(5, Math.max(0, rating)) * 20;
   return (
-    <span className="mew-stars" role="img" aria-label={`${rating} out of 5`}>
+    <span className="mew-stars" role="img" aria-label={`${Math.round(rating * 10) / 10} out of 5`}>
       <span className="mew-stars-fill" style={{ width: `${filled}%` }}>
         ★★★★★
       </span>
@@ -39,11 +35,11 @@ function Stars({ rating }: { rating: number }) {
 }
 
 function RecommendationView({ card }: { card: RecommendationCard }) {
-  const imageUrl = httpOrRelativeUrl(card.image.url);
-  const linkUrl = httpOrRelativeUrl(card.url);
+  const imageUrl = safeAbsoluteUrl(card.image?.url, "https");
+  const linkUrl = safeAbsoluteUrl(card.url, "http-https");
   const body = (
     <>
-      {imageUrl && <img src={imageUrl} alt={card.image.alt} loading="lazy" />}
+      {imageUrl && <img src={imageUrl} alt={card.image?.alt ?? ""} loading="lazy" />}
       {card.offer_label && <span className="mew-card-badge">{card.offer_label}</span>}
       <strong>{card.title}</strong>
       {card.rating != null && <Stars rating={card.rating} />}
@@ -98,7 +94,7 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
         ) : card.type === "divider" ? (
           <div key={card.id} className="mew-divider" role="separator">
             <span />
-            {card.label && <b className={card.label.length > 1 ? "mew-divider-title" : undefined}>{card.label}</b>}
+            {card.label && <b className={card.variant === "heading" ? "mew-divider-title" : undefined}>{card.label}</b>}
             <span />
           </div>
         ) : (

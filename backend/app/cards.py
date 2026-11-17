@@ -38,11 +38,15 @@ def _dollars(cents: int) -> str:
     return f"${cents / 100:,.2f}"
 
 
+def recommendation_heading(label: str) -> DividerCard:
+    return DividerCard(id=f"heading-{label.lower().replace(' ', '-')}", label=label, variant="heading")
+
+
 def recommendation_card(
     *,
     item_id: str,
     title: str,
-    image_url: str,
+    image_url: str | None = None,
     price_cents: int | None = None,
     compare_price_cents: int | None = None,
     description: str | None = None,
@@ -57,7 +61,7 @@ def recommendation_card(
         template=template,
         title=title,
         description=description,
-        image=CardImage(url=image_url, alt=title),
+        image=None if image_url is None else CardImage(url=image_url, alt=title),
         rating=rating,
         url=url,
         price=None if price_cents is None else _dollars(price_cents),

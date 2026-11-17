@@ -151,7 +151,7 @@ def test_a_recommendation_card_formats_its_prices_from_cents():
     from app.cards import recommendation_card
 
     card = recommendation_card(
-        item_id="serum", title="Serum", image_url="/a.svg", price_cents=1999, compare_price_cents=2599,
+        item_id="serum", title="Serum", image_url="https://cdn.test/a.svg", price_cents=1999, compare_price_cents=2599,
         rating=4.5, url="https://shop.test/serum", offer_label="Pack of 2", why="Goes with your cleanser",
     )
 
@@ -160,7 +160,7 @@ def test_a_recommendation_card_formats_its_prices_from_cents():
     assert card.image.alt == "Serum"
 
 
-def test_a_recommendation_card_refuses_a_link_or_picture_that_is_not_http_or_relative():
+def test_a_recommendation_card_refuses_a_link_that_is_not_http_or_a_picture_that_is_not_https():
     import pytest
     from pydantic import ValidationError
 
@@ -168,8 +168,10 @@ def test_a_recommendation_card_refuses_a_link_or_picture_that_is_not_http_or_rel
 
     for bad_url in ("javascript:alert(1)", "data:text/html,x", "//evil.test/x", "/relative"):
         with pytest.raises(ValidationError):
-            recommendation_card(item_id="a", title="A", image_url="/a.svg", url=bad_url)
-    for bad_image in ("javascript:alert(1)", "data:image/svg+xml,x", "//evil.test/a.jpg"):
+            recommendation_card(item_id="a", title="A", image_url="https://cdn.test/a.svg", url=bad_url)
+    for bad_image in (
+        "javascript:alert(1)", "data:image/svg+xml,x", "//evil.test/a.jpg", "http://cdn.test/a.jpg", "/a.svg"
+    ):
         with pytest.raises(ValidationError):
             recommendation_card(item_id="a", title="A", image_url=bad_image)
 
@@ -180,7 +182,7 @@ def test_a_recommendation_card_refuses_a_link_or_picture_that_is_not_http_or_rel
 def test_a_recommendation_with_a_template_that_no_longer_exists_is_dropped_on_read():
     from app.schemas.chat import StoredMessage
 
-    image = {"url": "/a.svg", "alt": "a"}
+    image = {"url": "https://cdn.test/a.svg", "alt": "a"}
     message = StoredMessage.model_validate(
         {
             "seq": 1, "role": "assistant", "kind": "text", "content": "x", "created_at": "2026-10-19T00:00:00Z",
@@ -192,3 +194,17 @@ def test_a_recommendation_with_a_template_that_no_longer_exists_is_dropped_on_re
     )
 
     assert [c.id for c in message.cards] == ["ok"]
+
+
+def test_a_recommendation_without_a_picture_is_fine():
+    from app.cards import recommendation_card
+
+    assert recommendation_card(item_id="guide", title="Guide").image is None
+
+
+def test_a_heading_divider_is_marked_and_an_old_divider_stays_plain():
+    from app.cards import recommendation_heading
+    from app.schemas.cards import DividerCard
+
+    assert recommendation_heading("Others also took").variant == "heading"
+    assert DividerCard(id="d", label="+").variant is None

@@ -24,11 +24,13 @@ const toSession = (json: SessionJson): Session => ({
   identityLevel: json.identity_level,
 });
 
+export function safeAbsoluteUrl(url: string | null | undefined, schemes: "https" | "http-https"): string {
+  const allowed = schemes === "https" ? /^https:\/\//i : /^https?:\/\//i;
+  return url && allowed.test(url) ? url : "";
+}
+
 export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch = fetch) {
-  const safeUrl = (url: string): string => {
-    const absolute = url.startsWith("/") ? `${baseUrl}${url}` : url;
-    return /^https?:\/\//i.test(absolute) ? absolute : "";
-  };
+  const safeUrl = (url: string): string => safeAbsoluteUrl(url.startsWith("/") ? `${baseUrl}${url}` : url, "http-https");
   const resolveCards = (cards: Card[] | undefined): Card[] | undefined =>
     cards?.map((card) =>
       card.type === "product"
@@ -37,9 +39,7 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
             image: { ...card.image, url: safeUrl(card.image.url) },
             more_images: card.more_images?.map((image) => ({ ...image, url: safeUrl(image.url) })),
           }
-        : card.type === "recommendation"
-          ? { ...card, image: { ...card.image, url: safeUrl(card.image.url) }, url: card.url ? safeUrl(card.url) : null }
-          : card,
+        : card,
     );
 
   async function request(path: string, init: { method?: "GET" | "POST"; body?: unknown; token?: string; signal?: AbortSignal } = {}) {
