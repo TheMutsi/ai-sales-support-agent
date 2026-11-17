@@ -34,6 +34,11 @@ carry stale tool output into a turn that never touched that node.
   per-run `turn_id`. A second message while a turn runs gets `409 turn_in_progress`.
   A turn that never finished stops blocking after 2 minutes, and a late run cannot
   free or write into the newer one.
+- An identity request (the assistant asking the visitor to identify) is stored without a
+  `reply_to_seq`: the user's message still has no answer, and sending it again with the same id
+  after identifying resumes the turn. Which message waits is derived from what is stored (the
+  latest one before an identity request that is still last), so there is no pending state to
+  expire. Only plain text is stored, never tool output.
 - `GET /api/conversations/{id}/messages` returns the session's own conversation, in
   order, so a reopened widget can show it. Any other id is a 404, as if it did not
   exist.

@@ -76,6 +76,11 @@ only for `TRUSTED_PROXY_COUNT` hops from the right). Each tenant lists the origi
 widget runs on: the CORS headers go to an origin any tenant lists (a preflight cannot say
 which), and a request is then checked against its own tenant's list.
 
+**Properties and tags are hints, never permissions.** The widget sets them from the browser
+(`device: iphone`, a `landing-sale` tag), so anyone can claim anything: they may change how the
+assistant talks or what it offers, never what is allowed, and their size is limited because they
+travel on every trace and sit in the conversation row.
+
 **Audit record.** Every attempt to identify (a code requested or checked, an order looked up, the
 shop's login) writes one row to `identification_events`: how, what came of it and, for a failure,
 why (`unknown_customer`, `email_mismatch`, `order_not_found`, `token_expired`...). The reason stays

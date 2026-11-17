@@ -1,9 +1,3 @@
-"""A stand-in for the shop's orders API, backed by the `orders` table.
-
-The call is async because the real one will be a network request; the query itself is
-synchronous, so it runs in a worker thread instead of blocking the event loop.
-"""
-
 import asyncio
 import uuid
 from collections.abc import Callable
@@ -70,7 +64,7 @@ class SimulatedOrderSource:
             if order is None or order.status != OrderStatus.OPEN:
                 return None
             if db.query(OrderAdjustment).filter_by(order_id=order.id).first() is not None:
-                return None  # kept with the offer: it is not cancelled any more
+                return None
             order.status = OrderStatus.CANCELLED
             db.commit()
             return _details(order)
@@ -122,7 +116,7 @@ class SimulatedOrderSource:
                 )
             )
             try:
-                db.commit()  # the unique order_id makes a second one fail, never double up
+                db.commit()
             except IntegrityError:
                 db.rollback()
                 return None

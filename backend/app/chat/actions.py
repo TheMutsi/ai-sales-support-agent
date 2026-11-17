@@ -1,15 +1,3 @@
-"""Checking that a clicked button was really offered.
-
-A click carries only `action` (and `order_id`). The cards that were shown are stored with the
-reply, so the answer to "was this offered?" is in the conversation itself: the latest assistant
-message must hold a card with that same action. That covers a button from an older question
-(another tab), a repeated click and an action made up by hand. The text the click says in the
-conversation is taken from that card, never from the client.
-
-This only says whether it was offered. Whether it fits the step the customer is in is decided by
-the step itself (see `order_return`).
-"""
-
 import uuid
 
 from pydantic import TypeAdapter
@@ -23,7 +11,6 @@ _CARDS = TypeAdapter(list[Card])
 
 
 def latest_cards(db: Session, conversation_id: uuid.UUID) -> list[Card]:
-    """The cards of the latest assistant reply, as they were stored."""
     last = (
         db.query(Message)
         .filter_by(conversation_id=conversation_id, role="assistant", kind=MessageKind.TEXT.value)

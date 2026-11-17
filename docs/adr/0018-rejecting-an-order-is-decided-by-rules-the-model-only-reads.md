@@ -32,9 +32,14 @@ are, or whether something happened.
   pending, a bare answer the classifier files as `small_talk` ("yes") continues it; any other
   request (a subscription cancellation, a person, an order status, a question) goes its own way
   and the pending return waits until it lapses.
+  Its timer is compared with what the turn started from, so a return offered again after it
+  lapsed is timed afresh, while one carried along through other turns keeps its original time.
 - The source enforces the invariants under a row lock: an order is cancelled only while open and
   only if it was not kept with the offer; the offer is recorded at most once per order and its
   amounts are computed from the order, not taken from the caller.
+  The tenant is part of every call, so an id from one shop never resolves for another, a
+  malformed id is simply not found, and orders are read only for a customer the session proved.
+  The simulated source is async like the real API will be, and runs its query in a worker thread.
 - Everything this step says is fixed text it writes itself from the result (`reply_for`), and the
   graph ends there: no model words a question or reports what happened, so a reply cannot invent
   an amount, an order number or a cancellation. The offers are **cards** (see `app/cards.py`), the

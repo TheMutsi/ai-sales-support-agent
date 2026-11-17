@@ -1,11 +1,3 @@
-"""What a person from the back office does to a conversation that was escalated to them.
-
-`claim` (a person joins), `reply` (they speak) and `close` (the assistant takes over again) change
-the conversation's handoff state and add the messages the visitor reads, under the conversation's
-row lock like every other write to it (`app.chat.turns`). An offline escalation has no chat to
-join: `resolve` only marks it done, with a note of what was done.
-"""
-
 import uuid
 from datetime import datetime
 
@@ -16,8 +8,6 @@ from app.db.models import Conversation, Message
 
 
 class HandoffError(Exception):
-    """The conversation is not in the state this needs. `code` is what the API reports."""
-
     def __init__(self, code: str):
         super().__init__(code)
         self.code = code
@@ -63,13 +53,11 @@ def close(
     now: datetime,
     notes: str | None = None,
 ) -> None:
-    """Gives the conversation back to the assistant and resolves the escalation that started it."""
     conversation = _lock(db, conversation_id)
     if conversation.handoff_status == HandoffStatus.NONE:
         db.commit()
         raise HandoffError("not_in_handoff")
     _resolve(conversation, agent_name=agent_name, now=now, notes=notes)
-    # Closing while still waiting: nobody joined, so nobody "left".
     notice = (
         f"{agent_name} left the chat. The assistant is back."
         if conversation.handoff_status == HandoffStatus.ACTIVE
@@ -84,8 +72,6 @@ def close(
 def resolve(
     db: Session, *, conversation_id: uuid.UUID, agent_name: str, now: datetime, notes: str | None = None
 ) -> None:
-    """Marks an offline escalation done. A live one is closed with `close` instead, which also
-    hands the chat back to the assistant."""
     conversation = _lock(db, conversation_id)
     if conversation.escalation_status != "open" or conversation.handoff_status != HandoffStatus.NONE:
         db.commit()

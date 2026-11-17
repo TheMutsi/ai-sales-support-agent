@@ -1,18 +1,3 @@
-"""A conversation's stored history, and the rule that only one agent turn runs at a time.
-
-A turn: `begin_turn` saves the user's message and marks the conversation busy, the agent
-runs (seconds, so no DB lock is held), `finish_turn` saves the reply and clears the mark.
-
-- A message while a turn runs raises `TurnInProgress`; a mark older than `TURN_STALE_AFTER`
-  is ignored, so a crashed process can't wedge a conversation.
-- `client_message_id` makes retries safe: an id already stored replays its reply (`REPLAY`)
-  instead of running the agent twice, or runs again if it never got one.
-- Each run has its own token, and a reply records the seq it answers. A run that outlived
-  the stale limit and lost the conversation (even to a retry of its own message) is
-  *superseded*: its late `finish_turn` raises `TurnSuperseded` and writes nothing.
-- Only plain text is stored (never tool output); the reply is the final one, post-guardrail.
-"""
-
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -32,25 +17,19 @@ TURN_STALE_AFTER = timedelta(minutes=2)
 
 class MessageKind(StrEnum):
     TEXT = "text"
-    # The assistant asked the visitor to identify (a form on the widget). It carries no
-    # `reply_to_seq`: the user's message still has no answer, and re-sending it with the
-    # same id after identifying is what resumes the turn.
     IDENTITY_REQUEST = "identity_request"
-    # "An agent joined", "the assistant is back": a notice in the conversation, not something
-    # anyone said. Kept out of the history the model receives.
     SYSTEM = "system"
 
 
 class HandoffStatus(StrEnum):
     NONE = "none"
-    WAITING = "waiting"  # a ticket was opened and no agent has joined yet
-    ACTIVE = "active"  # an agent is in the conversation
+    WAITING = "waiting"
+    ACTIVE = "active"
 
 
 class TurnAction(StrEnum):
     RUN = "run"
     REPLAY = "replay"
-    # A person has the conversation: the message is stored and nobody else answers it.
     HANDOFF = "handoff"
 
 
@@ -59,20 +38,18 @@ class TurnInProgress(Exception):
 
 
 class MessageIdReused(Exception):
-    """A stored `client_message_id` came back with different text."""
+    pass
 
 
 class TurnSuperseded(Exception):
-    """The turn lost the conversation to a newer one and must not write its reply."""
+    pass
 
 
-# A return the customer does not answer within this long is dropped, so a later "yes" about
-# something else can never complete it.
 PENDING_RETURN_TTL = timedelta(minutes=15)
 
 
 class Keep:
-    """Marks "leave it as it is" where None already means "clear"."""
+    pass
 
 
 KEEP = Keep()
@@ -81,22 +58,18 @@ KEEP = Keep()
 @dataclass(frozen=True)
 class TurnStart:
     action: TurnAction
-    user_seq: int = 0  # seq of the user's message
-    turn_id: uuid.UUID | None = None  # this run's token: pass the TurnStart to finish/abandon
+    user_seq: int = 0
+    turn_id: uuid.UUID | None = None
     user_text: str = ""
-    history: list[Message] = field(default_factory=list)  # oldest first, excludes the new message
+    history: list[Message] = field(default_factory=list)
     reply: str | None = None
-    reply_cards: list | None = None  # the stored cards of that reply, as saved
-    handoff: HandoffStatus = HandoffStatus.NONE  # set with `HANDOFF`
-    pending_return: PendingReturn | None = None  # the customer's unfinished return, with `RUN`
-    # Set when the turn answers a button click: the rules decide it and no model reads it.
+    reply_cards: list | None = None
+    handoff: HandoffStatus = HandoffStatus.NONE
+    pending_return: PendingReturn | None = None
     click: CardAction | None = None
     click_order_id: str | None = None
-    # The conversation's public hints (see `app.chat.context`), read when the turn starts.
     properties: dict[str, str] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
-    # The escalation this conversation already has open, so a customer who insists is given the same
-    # follow-up number again instead of a new one.
     open_escalation: EscalationReceipt | None = None
 
 
@@ -115,7 +88,7 @@ def _lock(db: Session, conversation_id: uuid.UUID) -> Conversation:
         .one_or_none()
     )
     if conversation is None:
-        db.commit()  # end the transaction instead of leaving it open
+        db.commit()
         raise LookupError(f"no conversation {conversation_id}")
     return conversation
 
@@ -132,7 +105,6 @@ def _history_before(db: Session, conversation_id: uuid.UUID, seq: int, limit: in
             Message.conversation_id == conversation_id,
             Message.seq < seq,
             Message.kind == MessageKind.TEXT,
-            # What a person said is not the assistant's to continue from.
             Message.role.in_(("user", "assistant")),
         )
         .order_by(Message.seq.desc())
@@ -197,7 +169,7 @@ def begin_turn(
             .one_or_none()
         )
         if reply is not None:
-            db.commit()  # nothing changed; ends the transaction and frees the lock
+            db.commit()
             return TurnStart(TurnAction.REPLAY, reply=reply.content, reply_cards=reply.cards)
         if conversation.handoff_status != HandoffStatus.NONE:
             db.commit()
@@ -270,11 +242,6 @@ def finish_turn(
     cards: list[Card] | None = None,
     return_event: dict | None = None,
 ) -> None:
-    """Saves the reply. If the turn escalated the conversation, its follow-up number is kept on it;
-    when the route is live it also waits for a person, and from here on the assistant stops
-    answering it (see `begin_turn`). An offline escalation leaves the assistant answering: nobody
-    is coming to the chat. `pending_return` replaces
-    the customer's unfinished return (None clears it); left out, it is not touched."""
     conversation = _lock(db, conversation_id)
     if conversation.turn_id != turn.turn_id:
         db.commit()
@@ -282,16 +249,13 @@ def finish_turn(
     reply_to = turn.user_seq if kind is MessageKind.TEXT else None
     _append(db, conversation, "assistant", content, now, reply_to_seq=reply_to, kind=kind, cards=cards)
     if return_event is not None:
-        db.add(ReturnEvent(**return_event))  # with the reply, in one transaction
+        db.add(ReturnEvent(**return_event))
     if escalation is not None:
         _record_escalation(db, conversation, escalation, now)
     if not isinstance(pending_return, Keep):
         order_id = pending_return.order_id if pending_return else None
         stage = pending_return.stage.value if pending_return else None
         if pending_return != turn.pending_return:
-            # Compared with what this turn started from (None once it had lapsed), so a return
-            # offered again after it lapsed is timed afresh, while one merely carried along
-            # through other turns keeps its original time.
             conversation.pending_return_at = now if pending_return else None
         conversation.pending_return_order_id, conversation.pending_return_stage = order_id, stage
     conversation.turn_started_at = conversation.turn_id = None
@@ -301,9 +265,6 @@ def finish_turn(
 def _record_escalation(
     db: Session, conversation: Conversation, escalation: EscalationReceipt, now: datetime
 ) -> None:
-    """One open escalation per conversation: a customer who insists again keeps the number they
-    were given, and an offline one that became live (see `human_escalation_node`) keeps it too. A
-    resolved one moves to `escalation_history` and the new request takes its place."""
     if conversation.escalation_status == "open":
         upgraded = (
             escalation.reference == conversation.escalation_reference
@@ -347,7 +308,6 @@ def _past_escalation(conversation: Conversation) -> dict:
 
 
 def abandon_turn(db: Session, *, conversation_id: uuid.UUID, turn: TurnStart) -> None:
-    """The turn failed: free the conversation for a retry, unless a newer run took over."""
     conversation = _lock(db, conversation_id)
     if conversation.turn_id == turn.turn_id:
         conversation.turn_started_at = conversation.turn_id = None
@@ -359,9 +319,6 @@ def list_messages(db: Session, *, conversation_id: uuid.UUID) -> list[Message]:
 
 
 def pending_message(db: Session, *, conversation_id: uuid.UUID) -> Message | None:
-    """The user message waiting for the visitor to identify: the latest one before an
-    identity request that is still the last thing in the conversation. Derived from what is
-    stored, so there is no pending state to expire; once anything else is said, it is gone."""
     last = (
         db.query(Message)
         .filter_by(conversation_id=conversation_id)
