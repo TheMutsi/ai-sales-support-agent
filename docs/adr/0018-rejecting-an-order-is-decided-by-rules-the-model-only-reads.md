@@ -47,6 +47,11 @@ are, or whether something happened.
   in the replies of other steps.
 - Nothing moves money: the refund and the credits are recorded in `order_adjustments` and
   stated to the customer, which is all the simulation does.
+- Amounts are integer cents, and a percentage is rounded half up without floats
+  (`_percent_rounded_half_up`).
+- **Cards come from state, not from the text.** `cards_for` builds them from what the steps
+  produced (an offer the rules made, an order that was read), so the model cannot invent a card or
+  leave out a number, and they stand even when a guardrail rewrites the text around them.
 
 ## Consequences
 

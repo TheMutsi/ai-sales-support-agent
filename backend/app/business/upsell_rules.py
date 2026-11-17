@@ -1,19 +1,3 @@
-"""The upsell decision tree.
-
-Answers one question: should the agent recommend upgrading to unlock a
-specific feature, and if so, to which plan? The three checks below run in
-that order and each can end the decision for a different reason — already
-supported, no plan offers it, or the subscription isn't eligible to upgrade.
-Collapsing them into a single boolean would lose the ability to give the
-agent (and ultimately the customer) a specific, honest reason instead of a
-bare no; that's why `UpsellDecision.reason` is always populated, not just
-attached on the negative path.
-
-The LLM never runs this logic itself — per Core Principle #1, "does this plan
-support X" and "which plan is cheapest to add" are facts a function computes,
-not something a prompt decides.
-"""
-
 from app.business.eligibility import check_upgrade_eligibility
 from app.business.pricing import calculate_upgrade_price
 from app.db.models import Plan, Subscription
