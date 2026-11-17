@@ -1,13 +1,3 @@
-"""Ingestion pipeline: loads KB docs, chunks them, embeds each chunk, and persists
-`Document` + `DocumentChunk` rows.
-
-Orchestration only — no chunking/embedding logic lives here, it delegates to
-`loaders.load_documents()`, `chunker.chunk_document()`, and
-`app.core.embeddings.get_embeddings()`. Run as a script
-(`python -m app.rag.ingestion`) against a migrated DB, or re-run after KB content
-changes to re-ingest.
-"""
-
 from sqlalchemy.orm import Session
 
 from app.core.embeddings import get_embeddings
@@ -19,12 +9,6 @@ from app.schemas.rag import SourceDocument
 
 
 def ingest(session: Session) -> int:
-    """Run the full pipeline: load -> chunk -> embed -> persist.
-
-    Returns the number of `DocumentChunk` rows written. Commits once at the end,
-    so a single failing document (a bad embedding call, say) leaves the KB at its
-    previous state instead of half-updated.
-    """
     chunks_written = sum(_ingest_document(session, source_document) for source_document in load_documents())
     session.commit()
     return chunks_written
@@ -43,7 +27,7 @@ def _ingest_document(session: Session, source_document: SourceDocument) -> int:
         content=source_document.content,
     )
     session.add(document)
-    session.flush()  # assigns document.id, needed for the chunks' foreign key below
+    session.flush()
 
     chunks = chunk_document(source_document)
     vectors = get_embeddings().embed_documents([chunk.content for chunk in chunks])
@@ -63,12 +47,6 @@ def _ingest_document(session: Session, source_document: SourceDocument) -> int:
 
 
 def _delete_existing(session: Session, source: str) -> None:
-    """Replace, don't duplicate: re-ingesting a KB file that was already loaded
-    (matched on `Document.source`, the file's path relative to the KB root) removes
-    its old `Document` first, so the retriever never sees a stale copy alongside
-    the fresh one. Deleting just the `Document` is enough — `chunks` is a
-    `cascade="all, delete-orphan"` relationship, backed by `ON DELETE CASCADE` at
-    the DB level, so its `DocumentChunk` rows go with it."""
     existing = session.query(Document).filter_by(source=source).one_or_none()
     if existing is None:
         return

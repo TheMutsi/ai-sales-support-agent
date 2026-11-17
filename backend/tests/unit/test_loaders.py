@@ -48,6 +48,12 @@ def test_defaults_version_and_optional_fields_when_omitted(tmp_path):
     assert document.plan_scope is None
 
 
+def test_an_unquoted_numeric_version_is_kept_as_text(tmp_path):
+    _write(tmp_path / "faq.md", '---\ntitle: "FAQ"\ndoc_type: faq\nversion: 1.0\n---\nSome content.\n')
+
+    assert load_documents(kb_dir=tmp_path)[0].version == "1.0"
+
+
 def test_source_is_relative_to_kb_dir(tmp_path):
     nested = tmp_path / "policy"
     nested.mkdir()

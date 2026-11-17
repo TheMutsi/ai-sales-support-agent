@@ -28,6 +28,17 @@ filters (document type, the plan a document applies to) that are naturally SQL.
   the previous KB intact.
 - **Plan-scoped documents** match their plan or `plan_scope IS NULL` (applies to all
   plans), so general terms are never hidden from a plan-specific query.
+- **Metadata comes from YAML front matter**, not from file names or folders: `title` and
+  `doc_type` are required (an untagged document is a content bug, so loading raises), values are
+  read as text (`version: 1.0` is not a float), and files load in sorted order so every run is the
+  same. `documents.source` is the path relative to the KB folder, so the key ingestion replaces on
+  is the same on every machine.
+- **Section chunking details:** text before the first `##` is its own untitled chunk, and a section
+  longer than the limit alone falls back to fixed-size windows. Windows rejoin words with single
+  spaces, which loses layout but not meaning, which is what embeddings index.
+- **Retrieval selects columns, not entities**, so a top-k result does not carry the 768-dimension
+  vector or a document's full text once per matching chunk. `doc_type` and `plan_scope` filter
+  before the similarity search, so an off-topic chunk that shares words cannot win.
 - **No default `min_score` cutoff.** Cosine search always returns the closest chunks,
   relevant or not; the right cutoff is an empirical question for the evaluation
   suite, not a guess.

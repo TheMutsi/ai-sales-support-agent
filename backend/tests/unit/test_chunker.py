@@ -65,7 +65,7 @@ def test_chunk_by_section_falls_back_to_fixed_size_for_oversized_section():
     long_body = " ".join(f"word{i}" for i in range(120))
     document = _document(DocType.POLICY, f"## Long section\n{long_body}")
 
-    chunks = chunk_by_section(document, max_tokens=50)
+    chunks = chunk_by_section(document, max_words=50)
 
     assert len(chunks) == 3
     assert all(c.metadata["section_title"] == "Long section" for c in chunks)
@@ -78,7 +78,7 @@ def test_chunk_index_is_sequential_across_fallback_sub_chunks():
     long_body = " ".join(f"word{i}" for i in range(120))
     document = _document(DocType.POLICY, f"## Short\nshort.\n\n## Long\n{long_body}\n\n## Short again\nshort.")
 
-    chunks = chunk_by_section(document, max_tokens=50)
+    chunks = chunk_by_section(document, max_words=50)
 
     assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
 
@@ -86,7 +86,7 @@ def test_chunk_index_is_sequential_across_fallback_sub_chunks():
 def test_chunk_by_fixed_size_overlaps_consecutive_windows():
     document = _document(DocType.FEATURES, " ".join(f"w{i}" for i in range(25)))
 
-    chunks = chunk_by_fixed_size(document, max_tokens=10, overlap=3)
+    chunks = chunk_by_fixed_size(document, max_words=10, overlap=3)
 
     assert [c.content for c in chunks] == [
         "w0 w1 w2 w3 w4 w5 w6 w7 w8 w9",
@@ -99,7 +99,7 @@ def test_chunk_by_fixed_size_overlaps_consecutive_windows():
 def test_chunk_by_fixed_size_on_short_content_returns_one_chunk():
     document = _document(DocType.FEATURES, "just a few words")
 
-    chunks = chunk_by_fixed_size(document, max_tokens=50, overlap=5)
+    chunks = chunk_by_fixed_size(document, max_words=50, overlap=5)
 
     assert len(chunks) == 1
     assert chunks[0].content == "just a few words"
