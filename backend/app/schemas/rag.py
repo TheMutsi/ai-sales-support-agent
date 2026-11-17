@@ -49,3 +49,11 @@ class SourceReference(BaseModel):
     source: str
     section: str | None = None
     version: int | None = None
+
+
+class DocumentMapEntry(BaseModel):
+    document_id: uuid.UUID
+    title: str
+    when_to_use: str
+    estimated_tokens: int
+    plan_scope: str | None = None
