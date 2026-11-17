@@ -1,14 +1,8 @@
-/**
- * What a message is made of. The backend sends plain text today; a message is rendered as a list
- * of typed parts so images, then cards and carousels, are one more case in `MessageView` and not a
- * rewrite. Nothing here is ever inserted as HTML.
- */
 export type MessagePart =
   | { type: "text"; text: string }
   | { type: "link"; url: string; label: string }
   | { type: "image"; url: string; alt: string };
 
-// Only http(s): a `javascript:` URL in a message must never become a clickable link.
 const URL_PATTERN = /https?:\/\/[^\s<>"')]+/g;
 const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 

@@ -55,7 +55,7 @@ describe("applyEvent", () => {
     expect(offline.handoff).toBe("none");
     const told = run([{ event: "done", data: { identity_required: false, identity_methods: [], handoff: "active" } }]);
     expect(told.handoff).toBe("active");
-    expect(told.messages).toEqual([]); // the message was stored; there is no answer to show
+    expect(told.messages).toEqual([]);
     expect(run([done]).handoff).toBe("none");
   });
 
@@ -167,9 +167,7 @@ describe("chat", () => {
   });
 });
 
-
 describe("while a person has the conversation", () => {
-  /** A chat that already has a saved session, as one has once the panel was opened. */
   function chatWithSession(api: Api) {
     const store = createSessionStore("pk", memoryStorage(), Date.now, null);
     store.save(session());
@@ -208,11 +206,11 @@ describe("while a person has the conversation", () => {
     const auth = createAuth(api, store);
     const chat = createChat(api, auth, { touch() {} } as never);
 
-    await chat.refresh(); // no saved session: nothing to ask about
+    await chat.refresh();
     expect(api.messages).not.toHaveBeenCalled();
 
     store.save(session());
-    await chat.refresh(); // a rejected session
+    await chat.refresh();
     expect(api.messages).toHaveBeenCalledTimes(1);
     expect(api.startConversation).not.toHaveBeenCalled();
     expect(api.login).not.toHaveBeenCalled();
@@ -232,7 +230,7 @@ describe("while a person has the conversation", () => {
 
     const first = chat.refresh();
     await chat.refresh();
-    release({ messages: [], handoff: "none" }); // the older answer arrives last
+    release({ messages: [], handoff: "none" });
     await first;
 
     expect(chat.getState().handoff).toBe("active");
@@ -255,7 +253,6 @@ describe("cards of a turn", () => {
     expect(state.messages.at(-1)).toMatchObject({ role: "assistant", content: "Sure?", cards: [card] });
   });
 });
-
 
 describe("a button click", () => {
   const card = { type: "action" as const, id: "offer-refund", title: "$14.00 back", message: "I'll take the $14.00 refund", action: "take_refund", order_id: null };

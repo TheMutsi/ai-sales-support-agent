@@ -2,8 +2,6 @@ import type { Api } from "./api";
 import type { Auth } from "./auth";
 import type { Session } from "./types";
 
-// The server's limits (app/chat/context.py). A hint it would refuse is dropped here with a
-// warning, because one bad value makes the server refuse the whole batch and the rest is lost.
 const PROPERTY_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const TAG = /^[a-z0-9][a-z0-9_.:-]{0,39}$/;
 const MAX_VALUE_LENGTH = 100;
@@ -11,18 +9,12 @@ const MAX_ITEMS = 20;
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
 
-/**
- * Public hints the shop's page gives about the visitor (`Mew('addProperty', 'device', 'iphone')`,
- * `Mew('addTag', 'landing-sale')`). They are kept here as the state the page wants and sent to the
- * conversation before a message, and straight away when a conversation already exists. A hint
- * never blocks the chat: if sending fails it is tried again with the next message.
- */
 export function createContext(api: Api, auth: Auth) {
-  const properties = new Map<string, string | null>(); // null = remove it
+  const properties = new Map<string, string | null>();
   const addTags = new Set<string>();
   const removeTags = new Set<string>();
   let version = 0;
-  let synced = ""; // `${conversationId}:${version}` last sent
+  let synced = "";
 
   const warn = (what: string) => console.warn(`Mew: ignored ${what}`);
 
@@ -48,7 +40,7 @@ export function createContext(api: Api, auth: Auth) {
       }
     }
     version += 1;
-    const session = auth.current(); // never starts a conversation just for a hint
+    const session = auth.current();
     if (session) void sync(session);
   }
 
@@ -62,9 +54,7 @@ export function createContext(api: Api, auth: Auth) {
         remove_tags: [...removeTags],
       });
       synced = mark;
-    } catch {
-      /* hints are not worth failing a message for; the next one tries again */
-    }
+    } catch {}
   }
 
   return { command, sync };

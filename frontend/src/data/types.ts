@@ -1,5 +1,3 @@
-/** Wire and view types shared by the data layer. Field names follow the backend's JSON. */
-
 export interface Session {
   token: string;
   conversationId: string;
@@ -7,7 +5,6 @@ export interface Session {
   identityLevel: string;
 }
 
-/** Whether a person has taken the conversation from the assistant. */
 export type Handoff = "none" | "waiting" | "active";
 
 export interface CardImage {
@@ -15,7 +12,6 @@ export interface CardImage {
   alt: string;
 }
 
-/** Things a reply can show next to its text (see `app/schemas/cards.py`). */
 export type Card =
   | { type: "action"; id: string; title: string; subtitle?: string | null; badge?: string | null; message: string; action?: string | null; order_id?: string | null }
   | {
@@ -24,26 +20,20 @@ export type Card =
       name: string;
       subtitle?: string | null;
       price?: string | null;
-      /** Shown struck through before the price. */
       compare_price?: string | null;
       badge?: string | null;
       image: CardImage;
-      /** More pictures of the same thing, drawn stacked behind the first. */
       more_images?: CardImage[];
     }
   | { type: "divider"; id: string; label?: string };
 
 export interface ChatMessage {
   id: string;
-  /** `human` is a person from the shop's back office; `system` is a notice ("an agent joined"). */
   role: "user" | "assistant" | "human" | "system";
   kind: "text" | "identity_request" | "system";
   content: string;
-  /** The name a person's message is shown under. */
   author?: string;
-  /** Previews of images the visitor attached. Local only: they are not sent or stored yet. */
   images?: { url: string; alt: string }[];
-  /** Offers to pick, products to look at: drawn under the text of an assistant message. */
   cards?: Card[];
 }
 
@@ -51,15 +41,12 @@ export interface TurnSummary {
   identity_required: boolean;
   identity_methods: string[];
   ticket_created?: boolean;
-  /** Set when the turn escalated: `live` means a person joins this chat, `offline` that they follow up later. */
   escalation_route?: "live" | "offline" | null;
   escalation_reference?: string | null;
-  /** Set when a person has the conversation: the message was stored and nobody answers it live. */
   handoff?: "waiting" | "active" | null;
   cards?: Card[];
 }
 
-/** One server-sent event of a chat turn (see `app/api/chat.py`). */
 export type ChatEvent =
   | { event: "delta"; data: { text: string } }
   | { event: "reset"; data: Record<string, never> }
@@ -68,10 +55,6 @@ export type ChatEvent =
   | { event: "error"; data: { message?: string } }
   | { event: "done"; data: TurnSummary };
 
-/**
- * What a turn sends: text a model reads, or a button the visitor clicked (decided by rules on the
- * server; the text it shows in the conversation comes from the card, so it is not sent).
- */
 export type ChatInput =
   | { type: "text"; message: string }
   | { type: "action"; action: string; order_id?: string | null };

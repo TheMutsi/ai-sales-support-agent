@@ -1,12 +1,5 @@
 import type { ReactNode } from "react";
 
-/**
- * The small part of markdown the assistant actually writes: paragraphs, bullet and numbered
- * lists, `**bold**`, `code`, `[label](url)` and bare urls. It builds React elements, never HTML,
- * and only http(s) urls become links, so a model answer (or a prompt injection inside it) cannot
- * add markup, scripts or `javascript:` links. Anything it does not recognise stays as plain text,
- * which is also what a half-streamed `**Star` shows until the closing marker arrives.
- */
 const INLINE = /\*\*(.+?)\*\*|`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"')]+)/g;
 const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 
@@ -30,7 +23,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     else if (match[3] !== undefined) nodes.push(link(match[4], renderInline(match[3], key), key));
     else {
       const url = match[5].replace(TRAILING_PUNCTUATION, "");
-      consumed = url; // the punctuation after a bare url belongs to the sentence
+      consumed = url;
       nodes.push(link(url, url, key));
     }
     last = match.index + consumed.length;
@@ -85,7 +78,6 @@ export function Markdown({ text }: { text: string }) {
       flush();
     } else {
       if (list) flush();
-      // A heading is shown as bold text: the panel is too small for several heading sizes.
       paragraph.push(heading ? `**${heading[1]}**` : line);
     }
   }

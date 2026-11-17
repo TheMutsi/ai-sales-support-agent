@@ -55,7 +55,7 @@ describe("a person in the conversation", () => {
       </>,
     );
     expect(container.querySelector(".mew-human .mew-author")?.textContent).toBe("Mónica");
-    expect(container.querySelector("b")).toBeNull(); // text, not HTML
+    expect(container.querySelector("b")).toBeNull();
     expect(container.querySelector(".mew-notice")?.textContent).toBe("Mónica joined the chat.");
   });
 
@@ -147,13 +147,13 @@ describe("IdentityForm", () => {
 
 describe("unread count", () => {
   it("counts answers that arrive while closed, ignoring history and the one still streaming", () => {
-    let state = nextUnread({ seen: null, unread: 0 }, 4, false); // old conversation: baseline only
+    let state = nextUnread({ seen: null, unread: 0 }, 4, false);
     expect(state.unread).toBe(0);
     state = nextUnread(state, 5, false);
     expect(state.unread).toBe(1);
     state = nextUnread(state, 6, false);
     expect(state.unread).toBe(2);
-    state = nextUnread(state, 6, true); // opening the panel clears it
+    state = nextUnread(state, 6, true);
     expect(state).toEqual({ seen: 6, unread: 0 });
     expect(answeredCount([
       { id: "u", role: "user", kind: "text", content: "hi" },
@@ -169,7 +169,7 @@ describe("attachment rules", () => {
   it("accepts small images and rejects other types, big files and more than three", () => {
     expect(rejection(file("image/png"), 0)).toBeNull();
     expect(rejection(file("application/pdf"), 0)).toMatch(/only png/i);
-    expect(rejection(file("image/svg+xml"), 0)).not.toBeNull(); // svg can carry script
+    expect(rejection(file("image/svg+xml"), 0)).not.toBeNull();
     expect(rejection(file("image/png", 5 * 1024 * 1024 + 1), 0)).toMatch(/5 MB/);
     expect(rejection(file("image/png"), 3)).toMatch(/up to 3/i);
   });
@@ -242,7 +242,7 @@ describe("IdentityForm with an order number", () => {
     set(container.querySelector("input")!, "ana@example.com");
     await submit();
 
-    expect(identity.requestCode).not.toHaveBeenCalled(); // nothing is sent until they choose
+    expect(identity.requestCode).not.toHaveBeenCalled();
     expect(container.textContent).toMatch(/email me a code/i);
     expect(container.textContent).toMatch(/order number/i);
 
@@ -279,7 +279,6 @@ describe("IdentityForm with an order number", () => {
     mount(<IdentityForm identity={identity} methods={["order_id"]} />);
     set(container.querySelector("input")!, "ana@example.com");
     await submit();
-    // The field keeps only letters and digits, so what is left of these is too short.
     for (const bad of ["short", "A1b2C3d4E5f6G7h8I9j-", "é".repeat(20), ""]) {
       set(container.querySelector("input")!, bad);
       await submit();
@@ -310,7 +309,6 @@ describe("IdentityForm with an order number", () => {
     );
   });
 });
-
 
 describe("the menu", () => {
   it("only lets 'Help & Support' lead anywhere; the other entries are drawn and do nothing", async () => {
@@ -371,7 +369,7 @@ describe("the panel's views", () => {
 
     expect(container.querySelector(".mew-menu")).not.toBeNull();
     expect(chat.load).not.toHaveBeenCalled();
-    expect(chat.refresh).toHaveBeenCalled(); // only looks, it never starts a conversation
+    expect(chat.refresh).toHaveBeenCalled();
 
     click("Help & Support");
     expect(container.querySelector(".mew-menu")).toBeNull();
@@ -408,7 +406,7 @@ describe("the panel's views", () => {
 
   it("counts an answer that arrives while the menu is showing as unread, on the Help entry", async () => {
     const chat = fakeChat({ messages: [{ id: "1", role: "assistant", kind: "text", content: "hi" }] });
-    await mountApp(chat); // what was already there is the baseline, not unread
+    await mountApp(chat);
     act(() => chat.set({ messages: [{ id: "1", role: "assistant", kind: "text", content: "hi" }, { id: "2", role: "human", kind: "text", content: "hello" }] }));
 
     expect(container.querySelector(".mew-menu-badge")?.textContent).toBe("1");
@@ -543,7 +541,7 @@ describe("scrolling", () => {
     expect(scrollModeFor(plain)).toBe("end");
     expect(scrollModeFor(undefined)).toBe("end");
     (HOLD_SCROLL_FOR as Set<string>).delete("action");
-    expect(scrollModeFor(withCards)).toBe("end"); // taking a type out of the set brings back autoscroll
+    expect(scrollModeFor(withCards)).toBe("end");
     (HOLD_SCROLL_FOR as Set<string>).add("action");
   });
 

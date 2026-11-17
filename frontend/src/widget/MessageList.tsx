@@ -15,7 +15,6 @@ export function MessageList({
   messages: ChatMessage[];
   waiting: boolean;
   busy: boolean;
-  /** A person has the conversation: an offer of the assistant is no longer theirs to take. */
   locked: boolean;
   onPick: (card: ActionCard) => void;
   onZoom: (images: CardImage[]) => void;
@@ -24,8 +23,6 @@ export function MessageList({
   const end = useRef<HTMLDivElement>(null);
   const last = messages.at(-1);
 
-  // Follow the answer as it streams in (the last message's text changes without a new message),
-  // except when it carries cards: then the view stays at the top of that reply (see `scroll.ts`).
   useEffect(() => {
     if (scrollModeFor(last) === "message-start") {
       const rows = list.current?.querySelectorAll("[data-message]");
