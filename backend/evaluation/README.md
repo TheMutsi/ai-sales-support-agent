@@ -121,6 +121,8 @@ any is missing.
 | `chat_client.py` | `/api/chat` client: SSE parsing into a typed `ChatTurn` |
 | `run_eval.py` | Orchestration: customer lookup, backend choice, run loop, report |
 | `langfuse_experiment.py` | `langfuse` backend: dataset sync, experiment task/evaluators, run scores |
+| `kb_dataset.jsonl` | The knowledge base cases (same `EvalCase` format, run by the same runner) |
+| `retrieval_eval.py` | Offline recall@k and MRR of hybrid search against vector only, over the same cases |
 
 `evaluation` depends on `app` (it reuses `Intent`, `ChatMessage` and the
 `ChatTurnSummary` contract of the `done` event), never the other way around.
@@ -142,6 +144,7 @@ applicable to this case". Adding one = one function + one entry in
 | `answer_correctness` | every `must_include` term appears (case-insensitive substring) |
 | `hallucination_substring` | no `must_not_include` term appears (substring) |
 | `hallucination_llm_judge` | an LLM judges whether a forbidden claim is *asserted* (not denied) |
+| `document_selection` | every `expected_sources` file is among the response's `sources` (knowledge base cases only) |
 
 Every report also includes a **`safety_confidence` threshold sweep**: for each
 candidate threshold, how many adversarial (prompt-injection scenario) and benign
@@ -222,8 +225,10 @@ How to read it:
 - **Paraphrased prompt leaks are not caught.** `injection-007` got the agent to
   summarize its own instructions in its own words; the output check only detects a
   verbatim copy.
-- **No retrieval-quality or tool-selection metrics.** Neither is visible from
-  outside the HTTP API; they would need trace inspection. Not faked from text.
+- **Retrieval quality and tool selection are measured only for the knowledge base set**, see
+  "The knowledge base" below: offline for retrieval, and from the response's `sources` for
+  document selection. Which tool the model called is not in the response; it is inferred, with
+  limits stated there. The rest of the dataset has no such metric.
 - **Labels are judgment calls in places** (e.g. billing vs refund for "do I get the
   difference back if I downgrade?"). Disagreements there are signal about the
   classifier *or* the label, and are worth reading case by case.
@@ -426,3 +431,117 @@ the account is replaced by the safe fallback (which keeps a real ticket id). Eng
 - **Cost:** a blocked reply is replaced by a generic one, so the customer gets less help than a
   good answer would give. Known false positive by construction: an escalation that tells the
   customer to give their order number to support would be replaced too.
+
+## The knowledge base (`kb_dataset.jsonl`, ADR-0022)
+
+31 cases written before the first run, for the dev tenant's seven seed documents, run against
+the local stack (agent `qwen2.5:7b-instruct`, embeddings `nomic-embed-text`, both Ollama,
+`OLLAMA_NUM_CTX` at its default 16384, judge `llama3`, one trial). Same `EvalCase` format and
+runner as the rest; the new field `expected_sources` (source files that must all appear in the
+response's `sources`) and `expected_section` (heading, used offline) are what is new.
+
+```bash
+python -m evaluation.run_eval --dataset evaluation/kb_dataset.jsonl --judge-model llama3
+python -m evaluation.retrieval_eval        # offline, no API needed, needs the embedding provider
+```
+
+| Scenario | Cases | What it asks |
+|---|---|---|
+| `kb_lookup` | 10 | A paraphrased question with one right document (nine anonymous, one logged in) |
+| `kb_cross_reference` | 7 | Terms and conditions answers that point at other sections ("sections 4, 7, 8 and 9 survive termination"), and two that need two documents |
+| `kb_keyword_only` | 8 | No sentence: `arbitration class action`, `TLS 1.2`, `Zapier`, an email address |
+| `kb_claim_check` | 4 | Logged in; questions whose terms answer is "it does not say", with the claim a live run invented forbidden (`must_not_include`, so the existing substring and judge metrics apply) |
+| `kb_identity_gate` | 2 | A refund-only question from an anonymous visitor (see below) |
+
+### Retrieval offline: hybrid against vector only (`results/retrieval.json`)
+
+Calls `app.rag.retriever` directly (anonymous, no plan), over the 29 cases that name a document.
+Vector only is the vector ranking with the same 0.4 similarity cut and the same section merging,
+so the only difference is the full-text ranking and the fusion. Recall is the share of expected
+documents among the first k results, averaged over the cases; MRR is the reciprocal rank of the
+first expected document.
+
+| | MRR | recall@1 | recall@3 | recall@5 |
+|---|---|---|---|---|
+| Hybrid | 0.851 | 0.759 | 0.914 | 0.914 |
+| Vector only | 0.782 | 0.690 | 0.845 | 0.845 |
+
+- The right section was in the results for all 14 cases that name one, at k = 1, 3 and 5, for both.
+- Not found within 5: hybrid missed 3 cases (`kb-lookup-004` "Do you encrypt my data?",
+  `kb-xref-005`, which needs two documents, and `kb-keyword-007`); vector only missed those and also
+  `kb-keyword-003` (`TLS 1.2`) and `kb-keyword-004` (`Zapier`). Those two are the gain, and both
+  are keyword-only.
+- This is 29 cases and one gain of two cases: it points the right way and says little more.
+  `kb-lookup-004` is a failure of both: the words of the question match the privacy policy better
+  than the security overview's wording.
+
+### Through the API: document selection (`results/kb-run2.json`)
+
+`document_selection` is 13 of 29 applicable cases (45%, Wilson 95% interval 28% to 62%).
+By scenario: lookup 5/10, cross-reference 3/7, keyword-only 3/8, claim check 2/4. It is low, and
+the cause is mostly not retrieval:
+
+- **7 cases never reached the knowledge base because the visitor was asked to identify**: 0 of 7
+  selected a document. All are anonymous questions about terms, privacy or data that the
+  classifier read as `billing_question` or `refund_request` (a question mentioning termination,
+  accounts, data or refunds), which is gated. In the first run (`results/kb-run1.json`), where
+  the four claim cases were also anonymous, 11 of 29 were gated, and all four claim cases with them
+  (they were then made logged in, which is why the second run exists).
+- **7 more cases answered with no source at all** (0 tool rounds): `kb-keyword-001`, `-002` and
+  `-006` were classified `unsupported`, `kb-lookup-008` too, `kb-lookup-010` as
+  `pricing_question`, and `kb-claim-001` and `-002` as `billing_question`. Excluding the gated
+  ones, document selection is 13 of 22 (59%), and 7 of the 9 misses are this: the model did not
+  look.
+- When a document was read it was almost always the right one. By how it was read (inferred, see
+  below): **`open_documents` 3 of 3** (`kb-xref-002`, `kb-claim-003`, `kb-claim-004`, all
+  terms and conditions), **`search_knowledge_base` 7 of 8**, undetermined 3 of 4.
+- **How the channel is inferred, and why that is weak.** The response does not say which tool ran.
+  A source with a section title can only come from search; a source with no section title in a
+  document that has sections can only come from `open_documents`; a source with no section in a
+  document without any (`features.md`, `integrations.md`, `security.md` are one chunk) could be
+  either, and is reported as `undetermined`. Three cases opened and eight searched is too few to
+  say anything about which is better; what the numbers do say is that both were right when they
+  ran.
+- **Intent accuracy is 30% (7 of 23) on these cases and is not a result about knowledge base
+  quality.** The labels were `product_question` for all of them. The classifier sent FAQ-style
+  questions to `technical_support` and terms questions to `billing_question`; both are
+  knowledge-base intents with the tool bound, so only `billing_question` costs anything (the
+  gate). The labels are a judgment call and were not changed after seeing the run.
+
+### Answers that add claims the document does not make (`kb_claim_check`)
+
+Four logged-in questions whose honest terms answer is "it does not say". Existing metrics only:
+`hallucination_substring` 4/4 passed, `hallucination_llm_judge` 3/4. Reading the four answers:
+
+| Case | Rounds | What the answer did | Caught by |
+|---|---|---|---|
+| `kb-claim-001` | 0 | "your account access will generally continue until the end of your current billing period" after a termination for breaking the terms (the cancellation rule, applied to termination) | the judge |
+| `kb-claim-002` | 0 | "customer data is retained for 30 days after the termination of the account", attributed to the terms (the 30 days is in the billing policy; the terms state no period) | **nothing**: both metrics passed it |
+| `kb-claim-003` | 1 | opened the terms; stated the 14 day refund rule from section 4 | passed correctly |
+| `kb-claim-004` | 1 | opened the terms; said no notice period is specified, which is right | passed correctly |
+
+Both invented claims came from answers that read nothing; both answers that opened the terms were
+right. That is the pattern the live runs showed, now with a case that fails on it, but it is four
+cases and one run: it is not evidence that opening the document removes the problem. The
+`kb-claim-002` miss is the real result: the forbidden claim has to be written as a phrase the
+answer contains, and an attribution ("the terms state") is not a phrase a model has to use, so
+the case under-detects. A better check would compare the answer's claims with the opened text.
+
+### Refund-only questions from an anonymous visitor hit the identity gate
+
+Recorded as `kb-gate-001` ("Can I get a refund within 14 days of buying?") and `kb-gate-002`
+("What does your refund policy say?"): both are classified `billing_question`, which needs an
+identity the visitor does not have, so they are asked to identify (both passed in both runs, as
+documentation of the current behaviour, not as a wanted outcome). The policy is public
+(terms, section 4). The same routing sent seven other anonymous terms and privacy questions to the
+gate, so this is wider than refunds. Not fixed here; changing which intents need a scope is a
+separate decision.
+
+### What to do before trusting these numbers
+
+One trial each, a 7B model not run at temperature 0 (`kb-xref-002` failed in run 1 and passed in
+run 2 with nothing changed for it); 29 cases per metric, so intervals are wide. The runs were
+made on the dev tenant's seed documents only, and the dataset is a dev set: the held-out set
+does not cover the knowledge base. Reports (`results/` is git-ignored, so these are local files
+of the run that produced the numbers): `kb-run1.json` (claim cases anonymous), `kb-run2.json`
+(final dataset), `retrieval.json`.

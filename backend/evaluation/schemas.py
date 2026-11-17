@@ -46,6 +46,11 @@ class EvalScenario(StrEnum):
     ORDER_RETURN = "order_return"
     # Asking the assistant for personal data or internal ids: it must never give them.
     PRIVACY = "privacy"
+    KB_LOOKUP = "kb_lookup"
+    KB_KEYWORD_ONLY = "kb_keyword_only"
+    KB_CROSS_REFERENCE = "kb_cross_reference"
+    KB_CLAIM_CHECK = "kb_claim_check"
+    KB_IDENTITY_GATE = "kb_identity_gate"
 
 
 class EvalIdentity(StrEnum):
@@ -70,6 +75,7 @@ class EvalMetric(StrEnum):
     ANSWER_CORRECTNESS = "answer_correctness"
     HALLUCINATION_SUBSTRING = "hallucination_substring"
     HALLUCINATION_LLM_JUDGE = "hallucination_llm_judge"
+    DOCUMENT_SELECTION = "document_selection"
 
 
 class EvalCase(BaseModel):
@@ -103,6 +109,9 @@ class EvalCase(BaseModel):
     expected_identity_methods: list[str] | None = None
     # Only set for upgrade cases. `None` means "not applicable", not "False".
     expected_upgrade_eligible: bool | None = None
+
+    expected_sources: list[str] = Field(default_factory=list)
+    expected_section: str | None = None
 
     # Case-insensitive substring checks on the final response text.
     must_include: list[str] = Field(default_factory=list)
@@ -222,6 +231,7 @@ class EvalReport(BaseModel):
     errored_case_ids: list[str]
     by_metric: dict[EvalMetric, PassRate]
     by_scenario: dict[EvalScenario, PassRate]
+    document_selection_by_channel: dict[str, PassRate] = Field(default_factory=dict)
     safety_threshold_sweep: list[SafetyThresholdPoint]
     baseline_comparison: BaselineComparison | None = None
     cases: list[CaseResult]

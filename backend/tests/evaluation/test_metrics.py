@@ -4,9 +4,12 @@ import uuid
 import pytest
 
 from app.schemas.chat import ChatTurnSummary
+from app.schemas.rag import DocType, SourceReference
 from evaluation.metrics import (
     compare_to_baseline,
+    document_selection_by_channel,
     evaluate_answer_correctness,
+    evaluate_document_selection,
     evaluate_escalation,
     evaluate_hallucination_substring,
     evaluate_identity_request,
@@ -18,6 +21,9 @@ from evaluation.metrics import (
     pass_hat_k,
     pass_rates_by_metric,
     pass_rates_by_scenario,
+    recall_at_k,
+    reciprocal_rank,
+    retrieval_channel,
     safety_threshold_sweep,
     score_case,
     wilson_interval,
@@ -338,3 +344,84 @@ def test_a_report_without_per_case_outcomes_is_rejected_clearly(tmp_path):
 
     with pytest.raises(ValueError, match="cannot be a baseline"):
         load_baseline_outcomes(old_report)
+
+
+def _source(source: str, section: str | None) -> SourceReference:
+    return SourceReference(title=source, doc_type=DocType.POLICY, source=source, section=section)
+
+
+def test_document_selection_passes_when_every_expected_source_is_cited():
+    case = _case(expected_sources=["a.md", "b.md"])
+    turn = _turn(sources=[_source("a.md", "One"), _source("b.md", None)])
+
+    assert evaluate_document_selection(case, turn).passed
+
+
+def test_document_selection_names_the_missing_source():
+    case = _case(expected_sources=["a.md", "b.md"])
+
+    result = evaluate_document_selection(case, _turn(sources=[_source("a.md", "One")]))
+
+    assert not result.passed and "b.md" in result.detail
+
+
+def test_document_selection_does_not_apply_without_expected_sources():
+    assert evaluate_document_selection(_case(), _turn()) is None
+
+
+@pytest.mark.parametrize(
+    ("sources", "channel"),
+    [
+        ([], "none"),
+        ([_source("a.md", "One")], "search_knowledge_base"),
+        ([_source("a.md", None)], "open_documents"),
+        ([_source("a.md", None), _source("b.md", "Two")], "both"),
+        ([_source("flat.md", None)], "undetermined"),
+    ],
+)
+def test_retrieval_channel_is_read_from_the_section_of_the_sources(sources, channel):
+    assert retrieval_channel(sources, frozenset({"a.md", "b.md"})) == channel
+
+
+def test_document_selection_is_reported_per_channel():
+    passing = _result("a", True).model_copy(
+        update={
+            "metrics": [MetricResult(metric=EvalMetric.DOCUMENT_SELECTION, passed=True)],
+            "summary": _turn(sources=[_source("a.md", None)]).summary,
+        }
+    )
+    failing = passing.model_copy(
+        update={
+            "case_id": "b",
+            "metrics": [MetricResult(metric=EvalMetric.DOCUMENT_SELECTION, passed=False)],
+        }
+    )
+
+    rates = document_selection_by_channel([passing, failing], frozenset({"a.md"}))
+
+    assert (rates["open_documents"].n, rates["open_documents"].pass_rate) == (2, 0.5)
+
+
+def test_a_turn_that_asked_the_visitor_to_identify_is_its_own_channel():
+    asked = _result("a", False).model_copy(
+        update={
+            "metrics": [MetricResult(metric=EvalMetric.DOCUMENT_SELECTION, passed=False)],
+            "summary": _turn(identity_required=True).summary,
+        }
+    )
+
+    rates = document_selection_by_channel([asked], frozenset())
+
+    assert list(rates) == ["identity_required"]
+
+
+def test_recall_counts_the_share_of_expected_sources_found_within_k():
+    ranked = ["a.md", "x.md", "b.md"]
+
+    assert recall_at_k(ranked, ["a.md", "b.md"], 2) == 0.5
+    assert recall_at_k(ranked, ["a.md", "b.md"], 3) == 1.0
+
+
+def test_reciprocal_rank_is_one_over_the_position_of_the_first_expected_source():
+    assert reciprocal_rank(["x.md", "a.md"], ["a.md"]) == 0.5
+    assert reciprocal_rank(["x.md"], ["a.md"]) == 0.0

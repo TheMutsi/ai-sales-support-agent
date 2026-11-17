@@ -1,6 +1,6 @@
 # ADR-0005: Postgres + pgvector as the only datastore, with per-doc-type chunking
 
-- **Status:** Accepted
+- **Status:** Accepted; three parts superseded by [ADR-0022](0022-per-tenant-knowledge-base-document-map-whole-documents-and-hybrid-search.md), marked below
 - **Introduced in:** Stage 1 (schema), Stage 3 (RAG pipeline)
 
 ## Context
@@ -25,7 +25,9 @@ filters (document type, the plan a document applies to) that are naturally SQL.
   provider-neutral proxy, since three providers tokenize differently.
 - **Re-ingestion is idempotent.** `documents.source` is unique; ingestion replaces a
   document's chunks and commits once at the end, so a failed embedding call leaves
-  the previous KB intact.
+  the previous KB intact. *Superseded by ADR-0022: documents are per tenant (unique per
+  tenant and source) and have draft, published and archived versions; publishing embeds
+  first and flips the live version in one transaction.*
 - **Plan-scoped documents** match their plan or `plan_scope IS NULL` (applies to all
   plans), so general terms are never hidden from a plan-specific query.
 - **Metadata comes from YAML front matter**, not from file names or folders: `title` and
@@ -39,9 +41,12 @@ filters (document type, the plan a document applies to) that are naturally SQL.
 - **Retrieval selects columns, not entities**, so a top-k result does not carry the 768-dimension
   vector or a document's full text once per matching chunk. `doc_type` and `plan_scope` filter
   before the similarity search, so an off-topic chunk that shares words cannot win.
+  *Superseded by ADR-0022 in part: retrieval is hybrid (vector plus full-text, fused) and
+  returns the whole `##` section of a matching chunk.*
 - **No default `min_score` cutoff.** Cosine search always returns the closest chunks,
   relevant or not; the right cutoff is an empirical question for the evaluation
-  suite, not a guess.
+  suite, not a guess. *Superseded by ADR-0022: a chunk is relevant only if the full-text
+  query matched or its cosine similarity is at least 0.4.*
 
 ## Consequences
 

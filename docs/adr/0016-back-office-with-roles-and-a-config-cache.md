@@ -23,9 +23,14 @@ the back office.
   back office is an application with its own pages.
 - **Permissions are checked per action, from the start.** Roles (`viewer`, `agent`, `admin`,
   `operator`) are only bundles of permissions (`config:read`, `config:write`, `conversations:read`,
-  `escalations:reply`, `tenants:create`, ...), and every admin endpoint declares the one permission
-  it needs, as the chat declares the scope each intent needs (ADR-0014). The authorization is
-  therefore built before the authentication that will feed it.
+  `escalations:reply`, `tenants:create`, `kb:read`, `kb:write`, ...), and every admin endpoint
+  declares the one permission it needs, as the chat declares the scope each intent needs
+  (ADR-0014). The authorization is therefore built before the authentication that will feed it.
+  The admin permissions `kb:read` (every role: list and read the knowledge base's documents and
+  versions) and `kb:write` (`admin` and `operator`: create, edit, publish, roll back and archive)
+  are not the visitor chat scope `kb:read` of ADR-0014, which only lets an anonymous visitor ask
+  knowledge-base questions. They live in different enums (`app.admin.permissions.Permission` and
+  `app.auth.scopes.Scope`) and one never grants the other.
 - **The login is a placeholder, and the admin API refuses to exist outside local environments
   while it is.** The entry page says "login pending" and lets the person pick a role; the session
   it gives is a signed token carrying that role. Because that is no authentication at all, the
