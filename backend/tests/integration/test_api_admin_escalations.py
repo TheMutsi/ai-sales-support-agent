@@ -1,6 +1,3 @@
-"""The back office's inbox of escalations: a person joins an escalated conversation, talks to the
-visitor and gives it back to the assistant."""
-
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -30,7 +27,6 @@ def _conversation(
     db, tenant, customer, *, status, minutes_waiting, name=None, route="live", escalation="open",
     reference=None, category="escalation", tags=(), properties=None, said=None,
 ):
-    """`status` is the handoff state; `escalation` the state of the escalation itself (None: none)."""
     conversation = Conversation(
         tenant_id=tenant.id, customer_id=customer.id, identity_level="store_login",
         created_at=NOW.replace(tzinfo=None), last_activity_at=NOW.replace(tzinfo=None),
@@ -130,7 +126,7 @@ def test_the_search_filters_by_route_category_tag_and_property(world):
     assert _ids(world, route="offline") == [str(world["offline"])]
     assert _ids(world, category="refund") == [str(world["offline"])]
     assert _ids(world, tag="vip") == [str(world["old"]), str(world["offline"])]
-    assert _ids(world, tag=["vip", "black-friday"]) == [str(world["offline"])]  # every tag
+    assert _ids(world, tag=["vip", "black-friday"]) == [str(world["offline"])]
     assert _ids(world, property="device:iphone") == [str(world["offline"])]
     assert _ids(world, property="device:android") == []
     assert client.get(_url(world, None), params={"property": "nokey"}, headers=_login("viewer", world["a"].id)).status_code == 422
@@ -138,14 +134,14 @@ def test_the_search_filters_by_route_category_tag_and_property(world):
 
 def test_the_search_text_looks_in_the_number_the_customer_and_what_they_said(world):
     assert _ids(world, q="MF-OFFLINE22") == [str(world["offline"])]
-    assert _ids(world, q="mf-offline") == [str(world["offline"])]  # case does not matter
+    assert _ids(world, q="mf-offline") == [str(world["offline"])]
     assert _ids(world, q="parcel") == [str(world["new"])]
-    assert len(_ids(world, q="ana@a.test")) == 4  # every open one of that customer
+    assert len(_ids(world, q="ana@a.test")) == 4
     assert _ids(world, q="refund", status="all") == [str(world["resolved"])]
-    assert _ids(world, q="MF-EARLIER2", status="all") == [str(world["resolved"])]  # an earlier number
+    assert _ids(world, q="MF-EARLIER2", status="all") == [str(world["resolved"])]
     assert _ids(world, q="no such thing") == []
-    assert _ids(world, q="%") == []  # a wildcard is just a character
-    assert _ids(world, q="parcel", route="offline") == []  # filters narrow together
+    assert _ids(world, q="%") == []
+    assert _ids(world, q="parcel", route="offline") == []
 
 
 def test_the_search_filters_by_when_it_was_escalated(world):
@@ -187,7 +183,7 @@ def test_an_agent_joins_talks_and_hands_the_conversation_back(world):
 
     assert client.post(_url(world, world["old"], "messages"), json={"text": "too early"}, headers=agent).status_code == 409
     assert client.post(_url(world, world["old"], "claim"), headers=agent).status_code == 204
-    assert client.post(_url(world, world["old"], "claim"), headers=agent).status_code == 409  # taken
+    assert client.post(_url(world, world["old"], "claim"), headers=agent).status_code == 409
     sent = client.post(_url(world, world["old"], "messages"), json={"text": "Hi, I am Mónica."}, headers=agent)
     assert (sent.status_code, sent.json()["author_name"]) == (200, "Mónica")
 
@@ -205,7 +201,6 @@ def test_an_agent_joins_talks_and_hands_the_conversation_back(world):
     assert (conversation.escalation_status, conversation.escalation_notes) == ("resolved", "sorted out")
     assert conversation.escalation_resolved_by == "Mónica"
     with SessionLocal() as db:
-        # The assistant answers the visitor again.
         turn = begin_turn(db, conversation_id=world["old"], client_message_id=uuid.uuid4(), content="thanks", now=NOW)
         assert turn.action is TurnAction.RUN
     last = client.get(f"/api/conversations/{world['old']}/messages", headers=visitor).json()["messages"]

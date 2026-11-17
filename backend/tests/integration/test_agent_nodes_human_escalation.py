@@ -1,6 +1,3 @@
-"""The human_escalation node decides where an escalation goes and gives it a follow-up number. It
-needs a real DB because it asks which agents are around, and the tenant's schedule."""
-
 from datetime import UTC, datetime, time, timedelta
 
 import pytest
@@ -77,7 +74,7 @@ def test_goes_offline_outside_the_tenants_support_hours_even_with_an_agent(shop)
     _an_agent_is_there(shop)
     now = datetime.now(UTC)
     closed_now = SupportHours("UTC", time(0), time(0, 1), frozenset({(now.weekday() + 1) % 7}))
-    tenant_configs.get(shop["tenant"].id)  # load the snapshot
+    tenant_configs.get(shop["tenant"].id)
     with SessionLocal() as db:
         tenant = db.get(Tenant, shop["tenant"].id)
         tenant.support_hours = {

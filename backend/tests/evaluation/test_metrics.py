@@ -1,6 +1,3 @@
-"""Unit tests for the deterministic evaluators in `evaluation/metrics.py`.
-Pure functions over a case and a turn: no server, database or LLM needed."""
-
 import json
 import uuid
 
@@ -50,9 +47,6 @@ def _turn(response_text: str = "text", **summary_overrides) -> ChatTurn:
     return ChatTurn(response_text=response_text, summary=summary)
 
 
-# --- evaluate_identity_request ---
-
-
 def test_identity_request_passes_when_nothing_was_asked_and_nothing_expected():
     assert evaluate_identity_request(_case(), _turn()).passed
 
@@ -85,9 +79,6 @@ def test_identity_request_fails_when_it_offers_other_methods_than_expected():
     assert not result.passed and "order_id" in result.detail
 
 
-# --- evaluate_intent_accuracy ---
-
-
 def test_intent_accuracy_not_applicable_without_expected_intent():
     assert evaluate_intent_accuracy(_case(), _turn()) is None
 
@@ -106,9 +97,6 @@ def test_intent_accuracy_fails_on_mismatch():
     assert "billing_question" in result.detail
 
 
-# --- evaluate_input_blocked ---
-
-
 def test_input_blocked_passes_by_default():
     result = evaluate_input_blocked(_case(), _turn())
     assert result.metric == EvalMetric.INPUT_BLOCKED_CORRECTNESS
@@ -122,7 +110,6 @@ def test_input_blocked_passes_when_expected_and_blocked():
 
 
 def test_input_blocked_counts_a_safety_judge_refusal():
-    """The cascade's second tier blocks without any regex flag."""
     case = _case(expected_input_blocked=True)
     turn = _turn(input_blocked=True, guardrail_flags=["semantic_unsafe_message"])
     assert evaluate_input_blocked(case, turn).passed is True
@@ -135,9 +122,6 @@ def test_input_blocked_fails_when_blocked_unexpectedly():
 
 def test_input_blocked_fails_when_expected_but_not_blocked():
     assert evaluate_input_blocked(_case(expected_input_blocked=True), _turn()).passed is False
-
-
-# --- evaluate_escalation ---
 
 
 def test_escalation_passes_when_nothing_happened_and_nothing_expected():
@@ -162,9 +146,6 @@ def test_escalation_fails_when_expected_but_missing():
     assert evaluate_escalation(case, _turn()).passed is False
 
 
-# --- evaluate_upgrade_eligibility ---
-
-
 def test_upgrade_eligibility_not_applicable_outside_upgrade_cases():
     assert evaluate_upgrade_eligibility(_case(), _turn()) is None
 
@@ -177,9 +158,6 @@ def test_upgrade_eligibility_passes_on_match():
 def test_upgrade_eligibility_fails_when_not_evaluated():
     case = _case(expected_upgrade_eligible=True)
     assert evaluate_upgrade_eligibility(case, _turn(upgrade_eligible=None)).passed is False
-
-
-# --- evaluate_answer_correctness ---
 
 
 def test_answer_correctness_not_applicable_without_must_include():
@@ -200,9 +178,6 @@ def test_answer_correctness_reports_every_missing_term():
     assert "SSO" in result.detail
 
 
-# --- evaluate_hallucination_substring ---
-
-
 def test_hallucination_substring_not_applicable_without_must_not_include():
     assert evaluate_hallucination_substring(_case(), _turn()) is None
 
@@ -214,15 +189,10 @@ def test_hallucination_substring_passes_on_clean_text():
 
 
 def test_hallucination_substring_is_negation_blind():
-    """Pins the known limitation that motivates the LLM judge: a correct
-    denial still contains the forbidden substring."""
     case = _case(must_not_include=["SOC 2"])
     result = evaluate_hallucination_substring(case, _turn("We are not SOC 2 certified."))
     assert result.passed is False
     assert "SOC 2" in result.detail
-
-
-# --- score_case ---
 
 
 def test_score_case_keeps_only_applicable_metrics():
@@ -252,12 +222,8 @@ def test_score_case_runs_the_given_evaluators_only():
 
 
 def test_case_result_serializes_its_pass_status():
-    """`passed` is derived, and must still reach the JSON report."""
     result = score_case(_case(expected_intent="product_question"), _turn(intent="billing_question"))
     assert result.model_dump()["passed"] is False
-
-
-# --- pass rates ---
 
 
 def test_pass_rates_aggregate_by_metric_and_scenario():
@@ -273,9 +239,6 @@ def test_pass_rates_aggregate_by_metric_and_scenario():
     by_scenario = pass_rates_by_scenario([passing, failing])
     assert by_scenario[EvalScenario.PRODUCT_QUESTION].pass_rate == 1.0
     assert by_scenario[EvalScenario.REFUND_REQUEST].pass_rate == 0.0
-
-
-# --- safety_threshold_sweep ---
 
 
 def _scored(scenario: EvalScenario, safety_confidence: float | None) -> CaseResult:
@@ -311,9 +274,6 @@ def test_safety_sweep_ignores_cases_blocked_before_intent_router():
     assert point.adversarial_total == 0
 
 
-# --- reliability and paired comparison ---
-
-
 def _result(case_id: str, passed: bool, trial: int = 1) -> CaseResult:
     return CaseResult(
         case_id=case_id,
@@ -341,7 +301,6 @@ def test_pass_hat_k_requires_every_trial_to_pass():
     ]
     rate = pass_hat_k(results)
     assert (rate.n, rate.pass_rate) == (2, 0.5)
-    # Per-trial metric rates still count every trial.
     assert pass_rates_by_metric(results)[EvalMetric.INTENT_ACCURACY].n == 4
 
 

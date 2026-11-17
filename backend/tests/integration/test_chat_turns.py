@@ -1,6 +1,3 @@
-"""A conversation's stored history and the one-turn-at-a-time rule: the same
-`client_message_id` replays its reply, and another message while a turn runs is refused."""
-
 import threading
 import time
 import uuid
@@ -110,7 +107,6 @@ def test_sending_the_same_message_again_replays_the_reply_without_a_new_turn(db,
 
 
 def test_a_message_id_cannot_be_reused_for_different_text(db, conversation):
-    """Replaying the stored answer for other text would answer a question that was never asked."""
     message_id = uuid.uuid4()
     _finish(db, conversation, _begin(db, conversation, "hello", message_id=message_id), "Hi there")
 
@@ -162,7 +158,7 @@ def test_a_second_request_waits_for_the_lock_and_then_finds_the_conversation_bus
             except TurnInProgress:
                 outcome["result"] = "refused"
 
-    with SessionLocal() as holder:  # tab one is mid-way through starting its turn
+    with SessionLocal() as holder:
         row = holder.query(Conversation).filter_by(id=conversation.id).with_for_update().one()
         thread = threading.Thread(target=other_tab)
         thread.start()
@@ -197,9 +193,9 @@ def test_a_stale_turn_ending_late_cannot_free_or_write_into_the_new_one(
     else:
         abandon_turn(db, conversation_id=conversation.id, turn=a)
 
-    with pytest.raises(TurnInProgress):  # the new turn still owns the conversation
+    with pytest.raises(TurnInProgress):
         _begin(db, conversation, "third", now=later)
-    _finish(db, conversation, b, "answer to B", now=later)  # and can still finish
+    _finish(db, conversation, b, "answer to B", now=later)
     stored = [m.content for m in list_messages(db, conversation_id=conversation.id)]
     assert "answer to B" in stored and "late answer to A" not in stored
 
@@ -231,7 +227,6 @@ def test_an_identity_request_is_stored_with_its_kind(db, conversation):
 
 
 def test_the_model_never_sees_an_identity_request_in_the_history(db, conversation):
-    """It is a form the widget shows, not something the assistant said about the product."""
     _ask_for_identity(db, conversation, _begin(db, conversation, "my invoice?"))
 
     turn = _begin(db, conversation, "never mind, what are your plans?")
@@ -242,8 +237,6 @@ def test_the_model_never_sees_an_identity_request_in_the_history(db, conversatio
 def test_retrying_the_message_after_an_identity_request_runs_it_again_and_can_be_answered(
     db, conversation
 ):
-    """This is how a turn resumes once the visitor has identified: same message id, no reply
-    yet. The identity request must not count as its reply, or it would be replayed forever."""
     message_id = uuid.uuid4()
     _ask_for_identity(db, conversation, _begin(db, conversation, "my invoice?", message_id=message_id))
 
@@ -272,7 +265,6 @@ def test_nothing_is_pending_in_a_new_conversation_or_after_a_normal_answer(db, c
 
 
 def test_nothing_is_pending_once_the_visitor_moved_on(db, conversation):
-    """The form is only the last word of the conversation until something else is said."""
     _ask_for_identity(db, conversation, _begin(db, conversation, "my invoice?"))
     _complete(db, conversation, "never mind, what are your plans?", "Three plans.")
 
@@ -299,8 +291,8 @@ def test_a_pending_return_is_kept_between_turns_and_cleared_when_asked(db, conve
     )
 
     second = _begin(db, conversation, "tell me about the plans", now=NOW + timedelta(seconds=5))
-    assert second.pending_return == pending  # the next turn starts from it
-    finish_turn(db, conversation_id=conversation.id, turn=second, content="Plans...", now=NOW)  # not touched
+    assert second.pending_return == pending
+    finish_turn(db, conversation_id=conversation.id, turn=second, content="Plans...", now=NOW)
     third = _begin(db, conversation, "the credits", now=NOW + timedelta(seconds=10))
     assert third.pending_return == pending
 
@@ -324,8 +316,8 @@ def test_a_pending_return_is_dropped_when_it_is_not_answered_in_time(db, convers
     finish_turn(db, conversation_id=conversation.id, turn=soon, content="ok", now=NOW + PENDING_RETURN_TTL)
     late = _begin(db, conversation, "yes", now=NOW + PENDING_RETURN_TTL + timedelta(seconds=1))
 
-    assert soon.pending_return == pending  # still within the time
-    assert late.pending_return is None  # a later "yes" cannot complete it
+    assert soon.pending_return == pending
+    assert late.pending_return is None
 
 
 def test_carrying_a_pending_return_along_does_not_restart_its_time(db, conversation):
@@ -354,7 +346,7 @@ def test_a_return_offered_again_after_it_lapsed_gets_a_fresh_time(db, conversati
 
     later = NOW + PENDING_RETURN_TTL + timedelta(seconds=1)
     again = _begin(db, conversation, "reject my order again", now=later)
-    assert again.pending_return is None  # the first one lapsed
+    assert again.pending_return is None
     finish_turn(db, conversation_id=conversation.id, turn=again, content="Offer", now=later, pending_return=pending)
 
     answer = _begin(db, conversation, "the credits", now=later + timedelta(minutes=1))

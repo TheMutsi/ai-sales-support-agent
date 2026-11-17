@@ -1,5 +1,3 @@
-"""The admin API against a real Postgres: who may see and change what."""
-
 import uuid
 
 import pytest
@@ -12,7 +10,6 @@ from app.core.tenant_config import tenant_configs
 from app.db.models import Tenant
 from app.db.session import SessionLocal
 
-# The router alone: `main` mounts it only when switched on, which a test of the routes must not need.
 app = FastAPI()
 for router in ADMIN_ROUTERS:
     app.include_router(router, prefix="/api")
@@ -127,7 +124,6 @@ def test_scope_overrides_are_saved_cleared_and_validated(shops):
     url, headers = f"/api/admin/tenants/{a}/config", _login("admin", a)
     saved = client.patch(url, json={"scope_overrides": {"order_lookup": ["kb:read"]}}, headers=headers)
     assert saved.json()["scope_overrides"] == {"order_lookup": ["kb:read"]}
-    # A field left out is left alone.
     kept = client.patch(url, json={"allowed_origins": ["https://a.example"]}, headers=headers)
     assert kept.json()["scope_overrides"] == {"order_lookup": ["kb:read"]}
     cleared = client.patch(url, json={"scope_overrides": None}, headers=headers)

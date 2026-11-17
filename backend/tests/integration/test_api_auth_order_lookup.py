@@ -1,6 +1,3 @@
-"""`POST /api/auth/order-lookup` through the real app: a visitor gets a weak session by giving
-the email of an order and its id. The session names that one order, never the customer."""
-
 import asyncio
 import time
 import uuid
@@ -50,7 +47,6 @@ def shop(tenant_wipe):
         tenant, customer = _tenant_with_order(
             db, name="Shop", email=EMAIL, order_id=ORDER_ID, plan=plan
         )
-        # Another shop with an order of its own: its id must never resolve for the first.
         _tenant_with_order(
             db, name="Other", email="bob@other.test", order_id=OTHER_ORDER_ID, plan=plan
         )
@@ -172,8 +168,6 @@ def _a_valid_order() -> OrderDetails:
 
 @pytest.fixture
 def fake_orders():
-    """Replaces the shop's orders API with one the test controls, restoring the real one."""
-
     def install(source):
         app.dependency_overrides[get_order_source] = lambda: source
 
@@ -224,7 +218,6 @@ def _all_tenants():
 
 
 def test_the_session_it_gives_can_open_a_chat_turn(shop):
-    """It has no customer, like an anonymous one: the chat must accept it as it does that."""
     response = _lookup(shop["api_key"])
     claims = verify_session_token(response.json()["session_token"], get_settings().session_signing_key)
 
@@ -234,8 +227,6 @@ def test_the_session_it_gives_can_open_a_chat_turn(shop):
 
 
 def test_no_database_connection_is_held_while_waiting_for_the_shops_orders(shop, fake_orders):
-    """The orders will be a network call: the request's own session must not sit on a pooled
-    connection (and its transaction) while it waits, or a slow shop drains the pool."""
     seen = {}
 
     class Source:
@@ -251,9 +242,6 @@ def test_no_database_connection_is_held_while_waiting_for_the_shops_orders(shop,
 
 @pytest.mark.asyncio
 async def test_slow_orders_do_not_make_requests_wait_for_each_other(shop, fake_orders):
-    """Five lookups against a source that takes 0.3 s each finish in about 0.3 s, not 1.5 s:
-    the endpoint awaits instead of blocking the event loop."""
-
     class Slow:
         async def get_order(self, *, tenant_id, order_id):
             await asyncio.sleep(0.3)
