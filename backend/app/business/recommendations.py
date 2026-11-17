@@ -82,8 +82,17 @@ def item_cross_sell(
 ) -> list[RankedItem]:
     _reject_duplicate_ids(catalog)
     chosen_ids = {item.item_id for item in chosen}
+    owned_products = {
+        item.product_id
+        for item in catalog
+        if item.product_id is not None and (item.item_id in chosen_ids or item.item_id in already_bought)
+    } | {item.product_id for item in chosen if item.product_id is not None}
     excluded = chosen_ids | already_bought
-    eligible = [item for item in catalog if item.item_id not in excluded]
+    eligible = [
+        item
+        for item in catalog
+        if item.item_id not in excluded and item.product_id not in owned_products
+    ]
     eligible_ids = {item.item_id for item in eligible}
     observed = _usable_co_purchase_scores(chosen_ids, eligible_ids, co_purchases or {})
     if observed:

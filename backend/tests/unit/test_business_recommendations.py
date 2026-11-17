@@ -197,6 +197,48 @@ def test_upsell_is_none_when_there_is_nothing_bigger():
     assert item_upsell(current, [current], frozenset()) is None
 
 
+def test_cross_sell_excludes_other_pack_sizes_of_the_chosen_product():
+    chosen = [_item("s3", product_id="serum", pack_size=3, complement_tags=frozenset({"x"}))]
+    catalog = [
+        chosen[0],
+        _item("s1", {"x": 9}, product_id="serum", pack_size=1),
+        _item("cream", {"x": 1}, product_id="cream"),
+    ]
+    assert [r.item_id for r in item_cross_sell(chosen, catalog, frozenset())] == ["cream"]
+
+
+def test_cross_sell_excludes_other_pack_sizes_of_a_bought_product():
+    chosen = [_item("mask", complement_tags=frozenset({"x"}))]
+    catalog = [
+        chosen[0],
+        _item("s1", product_id="serum", pack_size=1),
+        _item("s3", {"x": 9}, product_id="serum", pack_size=3),
+        _item("cream", {"x": 1}, product_id="cream"),
+    ]
+    ranked = item_cross_sell(chosen, catalog, frozenset({"s1"}))
+    assert [r.item_id for r in ranked] == ["cream"]
+
+
+def test_cross_sell_does_not_group_items_without_a_product():
+    chosen = [_item("a", complement_tags=frozenset({"x"}))]
+    catalog = [chosen[0], _item("b", {"x": 1}), _item("c", {"x": 1})]
+    ranked = item_cross_sell(chosen, catalog, frozenset({"b"}))
+    assert [r.item_id for r in ranked] == ["c"]
+
+
+def test_co_purchase_path_excludes_sibling_pack_sizes_too():
+    chosen = [_item("s3", product_id="serum", pack_size=3)]
+    catalog = [
+        chosen[0],
+        _item("s1", product_id="serum", pack_size=1),
+        _item("cream", product_id="cream"),
+    ]
+    ranked = item_cross_sell(
+        chosen, catalog, frozenset(), co_purchases={"s3": {"s1": 9, "cream": 2}}
+    )
+    assert [r.item_id for r in ranked] == ["cream"]
+
+
 def test_candidate_price_tier_defaults_to_the_lowest_tier():
     assert Candidate("a").price_tier == price_tier(0, [1_000])
 
