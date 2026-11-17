@@ -1,5 +1,3 @@
-"""The conversation's properties and tags reach the agent as unverified hints and the trace."""
-
 import uuid
 
 from app.agent.nodes.response_writer import _build_context_blob

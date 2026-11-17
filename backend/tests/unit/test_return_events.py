@@ -1,5 +1,3 @@
-"""What is recorded for a turn of a return: built only from what the steps did."""
-
 import uuid
 from datetime import UTC, datetime
 
@@ -74,7 +72,7 @@ def test_written_words_and_what_was_taken_with_the_gift_are_recorded():
     event = _event(state, TurnStart(TurnAction.RUN, user_seq=9))
 
     assert (event["input_type"], event["action"], event["reading"]) == ("text", None, "credits")
-    assert (event["stage_before"], event["stage_after"]) == (None, None)  # finished
+    assert (event["stage_before"], event["stage_after"]) == (None, None)
     assert (event["taken_credit_cents"], event["taken_refund_cents"], event["gift"]) == (2100, None, "the gift")
 
 

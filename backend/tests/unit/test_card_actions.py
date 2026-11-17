@@ -1,6 +1,3 @@
-"""A click carries an action, not text: the request shape, the check that it was offered, and
-where the graph sends it."""
-
 import uuid
 
 import pytest
@@ -27,7 +24,7 @@ def test_a_click_is_an_action_with_no_text_of_its_own():
 @pytest.mark.parametrize(
     "entry",
     [
-        {"type": "action", "action": "refund_everything"},  # not in the closed set
+        {"type": "action", "action": "refund_everything"},
         {"type": "action"},
         {"type": "action", "action": "choose_order", "order_id": "x" * 65},
         {"type": "text"},
@@ -54,9 +51,9 @@ def test_a_click_is_offered_only_if_the_same_action_and_order_were_shown():
 
     assert offered_card(cards, CardAction.KEEP_ORDER, None).message == "what it says"
     assert offered_card(cards, CardAction.CHOOSE_ORDER, "A" * 20) is not None
-    assert offered_card(cards, CardAction.CHOOSE_ORDER, "B" * 20) is None  # another order
+    assert offered_card(cards, CardAction.CHOOSE_ORDER, "B" * 20) is None
     assert offered_card(cards, CardAction.CHOOSE_ORDER, None) is None
-    assert offered_card(cards, CardAction.TAKE_REFUND, None) is None  # never shown
+    assert offered_card(cards, CardAction.TAKE_REFUND, None) is None
     assert offered_card([], CardAction.KEEP_ORDER, None) is None
 
 
@@ -71,7 +68,7 @@ def test_a_click_from_a_verified_customer_skips_the_filter_and_the_classifier():
 @pytest.mark.parametrize(
     "state",
     [
-        _state(action=None),  # written text
+        _state(action=None),
         _state(customer_id=None),
         _state(scopes=[]),
     ],

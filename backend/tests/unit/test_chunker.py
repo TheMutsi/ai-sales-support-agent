@@ -1,9 +1,3 @@
-"""Unit tests for the chunking strategies.
-
-Chunking is deterministic (text in, list[Chunk] out), so these are pure
-input/output tests — no fixtures, DB, or network involved.
-"""
-
 from app.rag.chunker import chunk_by_fixed_size, chunk_by_section, chunk_document
 from app.schemas.rag import DocType, SourceDocument
 
@@ -69,8 +63,6 @@ def test_chunk_by_section_falls_back_to_fixed_size_for_oversized_section():
 
     assert len(chunks) == 3
     assert all(c.metadata["section_title"] == "Long section" for c in chunks)
-    # "## Long section" (3 words) + 120 body words = 123 total; overlap = 50 // 10 = 5,
-    # so the step is 45 words per window: [0:50], [45:95], [90:123].
     assert [len(c.content.split()) for c in chunks] == [50, 50, 33]
 
 

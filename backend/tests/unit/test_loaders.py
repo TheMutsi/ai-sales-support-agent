@@ -1,13 +1,3 @@
-"""Unit tests for the KB loader.
-
-Front-matter parsing is deterministic (file in, `SourceDocument` out, or a raise),
-so it's tested the same way as the provider factories: pure input/output, no
-network or DB needed. Each test writes its own throwaway `.md` files under
-pytest's `tmp_path`, instead of depending on the real seed KB in
-`backend/data/seed/kb/` — that keeps these tests correct even if the seed content
-changes later.
-"""
-
 import pytest
 
 from app.rag.loaders import load_documents
@@ -86,12 +76,6 @@ def test_raises_on_unsupported_doc_type(tmp_path):
 
 
 def test_loads_real_seed_kb_documents():
-    """Sanity check against the actual KB content, not just synthetic fixtures —
-    catches the case where a real seed doc's front-matter drifts out of sync with
-    what the loader expects. Lives here, not alongside the rest of this file's
-    tests, because the real KB markdown files (data/seed/kb/) are added in this
-    same PR — a version of this test in an earlier PR of the chain would run
-    against a KB directory that doesn't exist yet."""
     from app.rag.loaders import KB_DIR
 
     documents = load_documents(kb_dir=KB_DIR)

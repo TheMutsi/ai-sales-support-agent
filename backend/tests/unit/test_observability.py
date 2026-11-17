@@ -1,10 +1,3 @@
-"""Unit tests for Langfuse env-var wiring.
-
-`configure_langfuse()` mutates `os.environ`, a process-wide global, so this suite
-restores whatever was there before each test instead of just deleting keys — it must
-not leak env state into whichever test, in this file or another, runs after it.
-"""
-
 import os
 
 import pytest

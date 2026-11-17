@@ -1,10 +1,3 @@
-"""Unit tests for the LLM provider factory.
-
-These only assert on which concrete class `get_chat_model()` returns for a given
-`LLM_PROVIDER` — constructing a LangChain chat model client makes no network call,
-so no real API key or network access is needed here.
-"""
-
 import pytest
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -76,7 +69,6 @@ def test_settings_reject_an_unsupported_provider():
 
 
 def test_create_chat_model_uses_the_requested_model(monkeypatch):
-    """The eval judge builds a model other than the configured one."""
     monkeypatch.setattr(llm, "get_settings", lambda: Settings(llm_provider="ollama"))
 
     model = llm.create_chat_model("ollama", "llama3")

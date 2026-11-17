@@ -9,9 +9,6 @@ AUDIT_KEY = "an-audit-hmac-key-of-32-characters!!"
 
 @pytest.mark.parametrize("env", ["production", "prod", "staging", "anything-else"])
 def test_every_non_local_environment_refuses_the_dev_session_key(env):
-    """The dev key is public (it's in the repo), so a deployment that forgot to set
-    its own — under whatever name it gave its environment — must fail at startup
-    instead of signing sessions anyone can forge."""
     with pytest.raises(ValidationError, match="SESSION_SIGNING_KEY"):
         Settings(app_env=env)
 
@@ -33,13 +30,8 @@ def test_a_short_key_is_rejected_in_every_environment(env):
         Settings(app_env=env, session_signing_key="short")
 
 
-# --- the audit key: the email and order hashes in `identification_events` -------------------
-
-
 @pytest.mark.parametrize("env", ["production", "prod", "staging"])
 def test_a_deployment_must_set_its_own_audit_key(env):
-    """Rotating the session key must not change every hash, and a leaked session key must not
-    also make the audit hashes guessable: outside local envs the audit key is its own secret."""
     with pytest.raises(ValidationError, match="AUDIT_HMAC_KEY"):
         Settings(app_env=env, session_signing_key=REAL_KEY)
 

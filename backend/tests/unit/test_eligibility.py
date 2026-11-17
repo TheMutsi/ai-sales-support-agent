@@ -1,11 +1,3 @@
-"""Unit tests for subscription-upgrade eligibility.
-
-`Subscription` is a plain SQLAlchemy declarative model here, not a Pydantic
-schema, but its fields are ordinary Python attributes — constructing one
-in-memory (no session, no DB) is enough to exercise the pure decision logic,
-the same way `test_pricing.py` constructs `Plan` instances directly.
-"""
-
 from app.business.eligibility import check_upgrade_eligibility
 from app.db.models import Subscription
 

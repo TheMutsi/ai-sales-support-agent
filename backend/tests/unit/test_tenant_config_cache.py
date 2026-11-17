@@ -1,8 +1,3 @@
-"""The cache of tenant configuration: read often, changed rarely. One snapshot of every tenant,
-reloaded when it is old, when it is asked to, and (throttled) when something is not found, so a
-tenant created a moment ago is not mistaken for an unknown one. When the database cannot be read
-it says "I cannot know" instead of "unknown", because an unknown tenant skips the origin check."""
-
 import threading
 import time
 import uuid
@@ -23,20 +18,18 @@ def _config(name="Shop", origins=("https://a.example",), overrides=None) -> Tena
 
 
 class Source:
-    """A loader that counts its calls and can be slowed, broken or hooked."""
-
     def __init__(self, *configs):
         self.configs = list(configs)
         self.calls = 0
         self.broken = False
         self.delay = 0.0
-        self.on_call = None  # called with the call number, while the "query" is in flight
+        self.on_call = None
 
     def __call__(self):
         self.calls += 1
         if self.on_call:
             self.on_call(self.calls)
-        time.sleep(self.delay)  # a slow query is what makes threads pile up
+        time.sleep(self.delay)
         if self.broken:
             raise RuntimeError("db down")
         return list(self.configs)
@@ -89,7 +82,7 @@ def test_a_change_is_seen_after_the_ttl_or_at_once_when_invalidated():
 
     changed = TenantConfig(a.tenant_id, a.name, a.api_key, None, ("https://b.example",))
     source.configs = [changed]
-    assert cache.get(a.tenant_id).allowed_origins == ("https://a.example",)  # still the old one
+    assert cache.get(a.tenant_id).allowed_origins == ("https://a.example",)
 
     cache.invalidate()
     assert cache.get(a.tenant_id).allowed_origins == ("https://b.example",)
@@ -104,10 +97,10 @@ def test_a_tenant_created_after_the_load_is_found_by_a_throttled_reload_on_a_mis
     new = _config(name="New")
     source.configs = [a, new]
 
-    assert cache.get_by_api_key(new.api_key) is None  # too soon: no reload for a miss
+    assert cache.get_by_api_key(new.api_key) is None
     assert source.calls == 1
     clock.now += 6
-    assert cache.get_by_api_key(new.api_key) == new  # now it may refresh, and finds it
+    assert cache.get_by_api_key(new.api_key) == new
     assert source.calls == 2
 
 
@@ -124,13 +117,7 @@ def test_guessing_unknown_keys_cannot_hammer_the_database():
     assert source.calls == 2, "one reload for the whole burst, not one per guess"
 
 
-# --- when the database cannot be read -------------------------------------------------------
-
-
 def test_a_database_failure_keeps_serving_what_it_knows_but_cannot_confirm_a_miss():
-    """Known tenants keep working from the old snapshot. An unknown one cannot be told apart from
-    one created a moment ago, and an unknown tenant skips the origin check, so it must not be
-    reported as unknown: the cache says it cannot know."""
     a = _config()
     source, clock = Source(a), Clock()
     cache = _cache(source, clock)
@@ -138,7 +125,7 @@ def test_a_database_failure_keeps_serving_what_it_knows_but_cannot_confirm_a_mis
     source.broken = True
     clock.now += 61
 
-    assert cache.get(a.tenant_id) == a  # the old snapshot still serves
+    assert cache.get(a.tenant_id) == a
     assert cache.all_origins() == frozenset({"https://a.example"})
     with pytest.raises(TenantConfigUnavailable):
         cache.get_by_api_key("pk_never_seen")
@@ -153,10 +140,10 @@ def test_a_failed_first_load_cannot_answer_and_is_retried_soon_not_after_a_whole
     cache = _cache(source, clock)
     with pytest.raises(TenantConfigUnavailable):
         cache.get(a.tenant_id)
-    assert cache.all_origins() == frozenset()  # the CORS layer must never raise
+    assert cache.all_origins() == frozenset()
 
     source.broken = False
-    clock.now += 6  # retry_seconds, far less than the 60 s TTL
+    clock.now += 6
     assert cache.get(a.tenant_id) == a
 
 
@@ -191,7 +178,7 @@ def test_a_warm_cache_with_an_old_snapshot_and_a_failing_database_does_not_hamme
         with pytest.raises(TenantConfigUnavailable):
             cache.get_by_api_key("pk_unknown")
 
-    assert source.calls == 2  # the first load, and one failed reload
+    assert source.calls == 2
 
 
 def test_an_invalidation_while_the_database_is_down_does_not_cause_a_query_per_request():
@@ -205,22 +192,17 @@ def test_an_invalidation_while_the_database_is_down_does_not_cause_a_query_per_r
     for _ in range(40):
         cache.get(a.tenant_id)
 
-    assert source.calls == 2  # the first load and one failed reload
-
-
-# --- concurrency -------------------------------------------------------------------------------
+    assert source.calls == 2
 
 
 def test_an_invalidation_that_arrives_while_a_reload_is_running_is_not_lost():
-    """The back office commits and invalidates while a reload's query is in flight: that query
-    read the old rows, so the snapshot it produces is already out of date."""
     a = _config(origins=("https://a.example",))
     source, clock = Source(a), Clock()
     cache = _cache(source, clock)
-    cache.get(a.tenant_id)  # call 1
+    cache.get(a.tenant_id)
     clock.now += 61
     source.on_call = lambda n: cache.invalidate() if n == 2 else None
-    cache.get(a.tenant_id)  # call 2: reloads, and an invalidation lands during it
+    cache.get(a.tenant_id)
     changed = TenantConfig(a.tenant_id, a.name, a.api_key, None, ("https://b.example",))
     source.configs = [changed]
 
@@ -244,7 +226,7 @@ def test_many_threads_hitting_an_old_snapshot_cause_one_reload():
     [t.start() for t in threads]
     [t.join() for t in threads]
 
-    assert source.calls == 2  # the first load plus one reload, not one per thread
+    assert source.calls == 2
 
 
 @pytest.mark.parametrize("state", ["cold", "invalidated"])
@@ -271,7 +253,6 @@ def test_many_threads_on_a_cold_or_invalidated_cache_cause_one_load(state):
 
 
 def test_the_cors_lookup_never_waits_for_a_reload_in_progress():
-    """The CORS layer runs on the event loop: it serves the current snapshot rather than block."""
     a = _config()
     source, clock = Source(a), Clock()
     cache = _cache(source, clock)
@@ -281,7 +262,7 @@ def test_the_cors_lookup_never_waits_for_a_reload_in_progress():
 
     worker = threading.Thread(target=lambda: cache.get(a.tenant_id))
     worker.start()
-    time.sleep(0.05)  # the reload holds the lock now
+    time.sleep(0.05)
     begun = time.perf_counter()
     origins = cache.all_origins()
     waited = time.perf_counter() - begun

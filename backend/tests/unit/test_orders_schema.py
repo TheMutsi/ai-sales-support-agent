@@ -1,6 +1,3 @@
-"""The order id is typed like the identity inputs are: a shape check with no database behind
-it, so a malformed id never reaches a query or a log line."""
-
 import pytest
 from pydantic import ValidationError
 
@@ -20,9 +17,9 @@ def test_accepts_exactly_twenty_alphanumeric_characters(good: str):
         "a" * 21,
         "a" * 19 + "-",
         "a" * 19 + " ",
-        "a" * 19 + "\n",  # `$` would let a trailing newline through
+        "a" * 19 + "\n",
         "é" * 20,
-        "٠" * 20,  # Arabic-Indic digits: `\\d` would accept them, `[0-9]` does not
+        "٠" * 20,
         "a'; DROP TABLE orders;--",
     ],
 )

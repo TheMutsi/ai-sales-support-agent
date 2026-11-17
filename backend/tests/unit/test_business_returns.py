@@ -1,6 +1,3 @@
-"""What may be done with an order a customer does not want, and what is offered to keep it.
-Pure rules: no database, no model."""
-
 from datetime import UTC, datetime
 
 import pytest
@@ -25,8 +22,8 @@ def test_the_offer_for_69_99_is_14_dollars_back_or_21_dollars_in_credits():
     offer = retention_offer(6999)
 
     assert offer is not None
-    assert offer.refund_cents == 1400  # 20% of 69.99 = 13.998, rounded to the cent
-    assert offer.credit_cents == 2100  # 30% = 20.997 dollars, to the cent
+    assert offer.refund_cents == 1400
+    assert offer.credit_cents == 2100
 
 
 @pytest.mark.parametrize("amount", [2999, 4999, 0])
@@ -56,7 +53,7 @@ def test_an_order_on_its_way_cannot_be_rejected_only_returned_later():
 
     assert (cheap.can_cancel, cheap.return_after_delivery, cheap.retention) == (False, True, None)
     assert not expensive.can_cancel and expensive.return_after_delivery
-    assert expensive.retention is not None  # the same offer to keep it
+    assert expensive.retention is not None
 
 
 @pytest.mark.parametrize("status", [OrderStatus.CANCELLED, OrderStatus.PAID, OrderStatus.REFUNDED])
@@ -67,7 +64,7 @@ def test_other_statuses_allow_and_offer_nothing(status):
 
 
 def test_rounding_is_half_up_in_integer_cents():
-    offer = retention_offer(5005)  # 30% = 1501.5 cents
+    offer = retention_offer(5005)
 
     assert offer is not None and offer.credit_cents == 1502
 
