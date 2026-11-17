@@ -21,20 +21,29 @@ function groupRecommendations(cards: Card[]): CardItem[] {
   }, []);
 }
 
+export function httpOrRelativeUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  return /^https?:\/\//i.test(url) || /^\/(?!\/)/.test(url) ? url : "";
+}
+
 function Stars({ rating }: { rating: number }) {
-  const full = Math.round(rating);
+  const filled = Math.min(5, Math.max(0, rating)) * 20;
   return (
     <span className="mew-stars" role="img" aria-label={`${rating} out of 5`}>
-      {"★".repeat(full)}
-      {"☆".repeat(5 - full)}
+      <span className="mew-stars-fill" style={{ width: `${filled}%` }}>
+        ★★★★★
+      </span>
+      ★★★★★
     </span>
   );
 }
 
 function RecommendationView({ card }: { card: RecommendationCard }) {
+  const imageUrl = httpOrRelativeUrl(card.image.url);
+  const linkUrl = httpOrRelativeUrl(card.url);
   const body = (
     <>
-      {card.image.url && <img src={card.image.url} alt={card.image.alt} loading="lazy" />}
+      {imageUrl && <img src={imageUrl} alt={card.image.alt} loading="lazy" />}
       {card.offer_label && <span className="mew-card-badge">{card.offer_label}</span>}
       <strong>{card.title}</strong>
       {card.rating != null && <Stars rating={card.rating} />}
@@ -49,8 +58,8 @@ function RecommendationView({ card }: { card: RecommendationCard }) {
   );
   return (
     <div className="mew-card mew-recommendation">
-      {card.url ? (
-        <a href={card.url} target="_blank" rel="noopener noreferrer">
+      {linkUrl ? (
+        <a href={linkUrl} target="_blank" rel="noopener noreferrer">
           {body}
         </a>
       ) : (

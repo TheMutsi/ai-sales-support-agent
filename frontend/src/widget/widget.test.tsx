@@ -523,10 +523,53 @@ describe("cards", () => {
     const first = container.querySelector(".mew-recommendation")!;
     expect(first.querySelector(".mew-price")?.textContent).toBe("$19.99");
     expect(first.querySelector("s.mew-compare")?.textContent).toBe("$25.99");
-    expect(first.querySelector(".mew-stars")?.textContent).toBe("★★★★☆");
+    expect(first.querySelector<HTMLElement>(".mew-stars-fill")?.style.width).toBe("80%");
     expect(first.querySelector(".mew-why")?.textContent).toBe("Goes with your cleanser");
     expect(first.querySelector("a")?.getAttribute("href")).toBe("https://shop.test/serum");
     expect(container.querySelectorAll(".mew-recommendation a")).toHaveLength(1);
+  });
+
+  it("fills the stars in proportion to the rating, so 4.5 and 4.4 are not shown as 5", async () => {
+    const { Cards } = await import("./Cards");
+    const base = {
+      type: "recommendation" as const, template: "product_card" as const, title: "Serum",
+      image: { url: "https://cdn.test/serum.jpg", alt: "Serum" },
+    };
+    mount(<Cards cards={[{ ...base, id: "a", rating: 4.5 }, { ...base, id: "b", rating: 4.4 }]} active onPick={() => {}} onZoom={() => {}} />);
+
+    const widths = Array.from(container.querySelectorAll<HTMLElement>(".mew-stars-fill")).map((el) => el.style.width);
+    expect(widths).toEqual(["90%", "88%"]);
+    expect(container.querySelector(".mew-stars")?.getAttribute("aria-label")).toBe("4.5 out of 5");
+  });
+
+  it.each([
+    ["javascript:alert(1)", null],
+    ["data:text/html,<b>x</b>", null],
+    ["https://shop.test/serum", "https://shop.test/serum"],
+    ["/products/serum", "/products/serum"],
+    ["//evil.test/x", null],
+  ])("only links to http(s) or relative addresses: %s", async (url, expected) => {
+    const { Cards } = await import("./Cards");
+    const card = {
+      type: "recommendation" as const, id: "r", template: "product_card" as const, title: "Serum", url,
+      image: { url: "https://cdn.test/serum.jpg", alt: "Serum" },
+    };
+    mount(<Cards cards={[card]} active onPick={() => {}} onZoom={() => {}} />);
+
+    expect(container.querySelector(".mew-recommendation a")?.getAttribute("href") ?? null).toBe(expected);
+  });
+
+  it.each([
+    ["javascript:alert(1)", null],
+    ["data:image/svg+xml,<svg/>", null],
+    ["https://cdn.test/a.jpg", "https://cdn.test/a.jpg"],
+    ["/api/assets/a.svg", "/api/assets/a.svg"],
+  ])("only shows a picture from http(s) or a relative address: %s", async (src, expected) => {
+    const { Cards } = await import("./Cards");
+    const card = { type: "recommendation" as const, id: "r", template: "product_card" as const, title: "Serum", image: { url: src, alt: "Serum" } };
+    mount(<Cards cards={[card]} active onPick={() => {}} onZoom={() => {}} />);
+
+    expect(container.querySelector(".mew-recommendation img")?.getAttribute("src") ?? null).toBe(expected);
   });
 
   it("stacks a second picture behind the first, shows a struck price, and lets the large view switch pictures", async () => {

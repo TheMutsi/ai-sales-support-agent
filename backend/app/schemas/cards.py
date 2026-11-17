@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CardImage(BaseModel):
@@ -66,8 +66,23 @@ class RecommendationCard(BaseModel):
     offer_label: str | None = None
     why: str | None = None
 
+    @field_validator("url")
+    @classmethod
+    def _url_is_http_or_https(cls, value: str | None) -> str | None:
+        if value is not None and not value.lower().startswith(("http://", "https://")):
+            raise ValueError("a recommendation link must be an http or https address")
+        return value
 
-Card = Annotated[
+    @field_validator("image")
+    @classmethod
+    def _image_is_http_https_or_relative(cls, value: CardImage) -> CardImage:
+        url = value.url
+        if not (url.lower().startswith(("http://", "https://")) or (url.startswith("/") and not url.startswith("//"))):
+            raise ValueError("a recommendation picture must be an http or https address or a relative path")
+        return value
+
+
+Card =Annotated[
     ActionCard | ProductCard | DividerCard | RecommendationCard, Field(discriminator="type")
 ]
 

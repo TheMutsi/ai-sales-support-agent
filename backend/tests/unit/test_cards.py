@@ -160,6 +160,23 @@ def test_a_recommendation_card_formats_its_prices_from_cents():
     assert card.image.alt == "Serum"
 
 
+def test_a_recommendation_card_refuses_a_link_or_picture_that_is_not_http_or_relative():
+    import pytest
+    from pydantic import ValidationError
+
+    from app.cards import recommendation_card
+
+    for bad_url in ("javascript:alert(1)", "data:text/html,x", "//evil.test/x", "/relative"):
+        with pytest.raises(ValidationError):
+            recommendation_card(item_id="a", title="A", image_url="/a.svg", url=bad_url)
+    for bad_image in ("javascript:alert(1)", "data:image/svg+xml,x", "//evil.test/a.jpg"):
+        with pytest.raises(ValidationError):
+            recommendation_card(item_id="a", title="A", image_url=bad_image)
+
+    ok = recommendation_card(item_id="a", title="A", image_url="https://cdn.test/a.jpg", url="HTTPS://shop.test/a")
+    assert ok.url == "HTTPS://shop.test/a"
+
+
 def test_a_recommendation_with_a_template_that_no_longer_exists_is_dropped_on_read():
     from app.schemas.chat import StoredMessage
 
