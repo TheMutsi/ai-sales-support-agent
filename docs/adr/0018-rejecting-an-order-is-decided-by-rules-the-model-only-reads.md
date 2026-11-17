@@ -67,6 +67,12 @@ are, or whether something happened.
   from it to this flow (evaluation case `order-012` changed accordingly).
 - Not built: the return after delivery, telling "already kept"
   from "not allowed" to the customer, a real refund or credits API.
+- **Stages and outcomes.** `pending_return.stage` is `check` (shown the order, asked if it is the
+  one), `offer`, `final_offer` (declined once, offered again with a gift) or `confirm` (asked to
+  confirm cancelling). `not_available` means the order changed under us and nothing was done;
+  `escalated` means the customer pushed back on a "no" and `human_escalation` words the reply.
+  A product card's `compare_price` is shown struck through (what the gift would have cost), and
+  `more_images` are drawn stacked behind the first.
 
 ## Updates
 

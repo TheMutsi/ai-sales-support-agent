@@ -1,5 +1,3 @@
-"""Wire contracts for the conversation, login and one-time-code endpoints."""
-
 import uuid
 from datetime import datetime
 from typing import Annotated
@@ -9,9 +7,6 @@ from pydantic import BaseModel, Field, StringConstraints
 from app.auth.scopes import IdentityLevel, Scope
 from app.schemas.orders import ORDER_ID_PATTERN
 
-# Strict on purpose: these arrive from strangers and end up in a query and a log line. No
-# validator library, so the rule is the one written here: a plain local part, a dotted
-# domain, ASCII only. `[0-9]` and not `\\d`, which would also accept other scripts' digits.
 Email = Annotated[
     str,
     StringConstraints(
@@ -38,23 +33,16 @@ class OtpRequest(BaseModel):
 
 
 class OtpVerifyRequest(OtpRequest):
-    # Malformed is a 422, since its shape reveals nothing about accounts; a well-formed but
-    # wrong code is the same generic 401 as every other failure.
     code: OtpCode
 
 
 class OrderLookupRequest(BaseModel):
-    """Email and the id of one of that email's orders. Malformed is a 422 (the shape reveals
-    nothing); a well-formed pair that does not match is the same 401 as every other failure."""
-
     api_key: str = Field(min_length=1)
     email: Email
     order_id: str = Field(pattern=ORDER_ID_PATTERN)
 
 
 class SessionResponse(BaseModel):
-    """What a client gets back when it starts a conversation or logs in."""
-
     session_token: str
     conversation_id: uuid.UUID
     expires_at: datetime
