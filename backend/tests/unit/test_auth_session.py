@@ -23,7 +23,6 @@ def _issue(**overrides) -> tuple[str, datetime]:
 
 
 def _forge(claims: dict) -> str:
-    """A correctly signed token with arbitrary claims, to probe the verifier."""
     return jwt.encode({"exp": 9**10, **claims}, KEY, algorithm="HS256")
 
 
@@ -156,8 +155,6 @@ def test_verify_rejects_garbage():
         verify_session_token("not-a-jwt", KEY)
 
 
-# --- the order_lookup level: it names an order, never a customer ----------------------------
-
 ORDER_ID = "A1b2C3d4E5f6G7h8I9j0"
 
 
@@ -173,10 +170,10 @@ def test_an_order_lookup_session_carries_the_order_and_no_customer():
 @pytest.mark.parametrize(
     "claims",
     [
-        _ids(cid=None) | {"lvl": "order_lookup"},  # an order level without an order
-        _ids() | {"lvl": "order_lookup", "oid": ORDER_ID},  # ... that also names a customer
-        _ids(cid=None) | {"lvl": "order_lookup", "oid": "short"},  # a malformed order id
-        _ids() | {"lvl": "otp_login", "oid": ORDER_ID},  # an order on a level that has none
+        _ids(cid=None) | {"lvl": "order_lookup"},
+        _ids() | {"lvl": "order_lookup", "oid": ORDER_ID},
+        _ids(cid=None) | {"lvl": "order_lookup", "oid": "short"},
+        _ids() | {"lvl": "otp_login", "oid": ORDER_ID},
         _ids(cid=None) | {"lvl": "anonymous", "oid": ORDER_ID},
     ],
     ids=["no-order", "order-and-customer", "malformed-order", "order-on-otp", "order-on-anonymous"],

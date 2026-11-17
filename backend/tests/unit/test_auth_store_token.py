@@ -90,8 +90,6 @@ def test_unknown_kid_is_rejected():
 
 @pytest.mark.parametrize("kid", [["k1"], {}, 7])
 def test_non_string_kid_is_rejected_not_a_server_error(kid):
-    # PyJWT refuses to *encode* such a header, so build the hostile token by hand.
-    # The signature is junk; the kid check must reject it before getting that far.
     def segment(data: dict) -> str:
         return jwt.utils.base64url_encode(json.dumps(data).encode()).decode()
 
@@ -120,7 +118,6 @@ def test_no_active_secrets_rejects_everything():
 
 
 def test_token_that_outlives_the_maximum_lifetime_is_rejected():
-    """A shop minting day-long tokens would defeat the point of short-lived ones."""
     far_future = _token({"exp": int(time.time()) + 24 * 3600})
 
     with pytest.raises(StoreTokenError) as error:

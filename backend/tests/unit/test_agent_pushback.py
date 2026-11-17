@@ -1,6 +1,3 @@
-"""The rules that decide when a customer's insistence is handed to a person: plain functions over
-the conversation's messages."""
-
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.nodes.ask_case import ask_case_node

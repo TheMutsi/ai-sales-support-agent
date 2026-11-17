@@ -44,7 +44,6 @@ def test_a_tenant_can_take_a_method_away_by_removing_the_scope_from_its_level():
 
 
 def test_the_shops_own_login_is_never_offered_in_the_chat():
-    """store_login happens on the shop's page, not in a form the widget can show."""
     assert "store_login" not in identity_methods_for(Scope.CUSTOMER_READ, None)
 
 

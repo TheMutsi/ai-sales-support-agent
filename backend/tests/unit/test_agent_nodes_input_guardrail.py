@@ -1,6 +1,3 @@
-"""Unit tests for the input guardrail node: no LLM involved, it decides
-purely from the regex signals in app/guardrails/input_checks.py."""
-
 from langchain_core.messages import HumanMessage
 
 from app.agent.nodes.input_guardrail import REFUSAL_MESSAGE, input_guardrail_node

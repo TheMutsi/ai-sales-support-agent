@@ -1,7 +1,3 @@
-"""CORS for the browser frontend. The SPA (Vite dev server, or the nginx
-container) runs on a different origin than the API, so without these headers
-the browser blocks every `fetch` before the request reaches an endpoint."""
-
 from fastapi.testclient import TestClient
 
 from app.main import app

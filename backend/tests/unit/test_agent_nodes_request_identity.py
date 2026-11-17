@@ -46,8 +46,6 @@ def test_a_customer_step_refuses_to_run_without_a_customer():
 
 
 def test_a_visitor_who_already_has_a_scope_but_no_order_is_offered_only_the_order_form():
-    """A customer verified with a code needs no second code to look an order up: what is
-    missing is the order, so only that method is offered."""
     result = request_identity_node(
         {
             "intent": Intent.ORDER_STATUS,
@@ -66,8 +64,6 @@ def test_an_anonymous_visitor_asking_about_an_order_is_offered_both_methods():
 
 
 def test_someone_already_logged_in_is_not_told_to_log_in_when_no_order_form_is_left():
-    """Found in review: a tenant that removes `order_lookup` from `order:read` leaves no method,
-    and a customer who already holds the scope would be told to log in, which they have."""
     result = request_identity_node(
         {
             "intent": Intent.ORDER_STATUS,

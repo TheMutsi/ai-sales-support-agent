@@ -1,10 +1,3 @@
-"""Unit tests for the agent graph's conditional-edge routing functions.
-
-`route_after_intent` and `route_after_customer_context` are plain functions
-over a `state` dict — no LLM, no DB, no graph compilation needed to exercise
-them, the same way the business-rules tests construct their inputs directly.
-"""
-
 import uuid
 
 from langchain_core.messages import AIMessage
@@ -53,16 +46,12 @@ def test_high_safety_confidence_dispatches_normally():
 
 
 def test_a_typical_unsure_score_still_gets_a_second_look():
-    """Regression: qwen2.5 scores nearly everything 0.9 or 1.0, so the old 0.7
-    threshold let regex-evading misuse attempts scored 0.9 skip safety_judge."""
     assert route_after_intent(_state(Intent.PRODUCT_QUESTION, safety_confidence=0.9)) == (
         "safety_judge"
     )
 
 
 def test_unsupported_gets_a_second_look_even_with_full_safety_confidence():
-    """Regression: phishing and other-customers'-data requests were scored
-    0.95-1.0, classified unsupported, and opened a support ticket."""
     assert route_after_intent(_state(Intent.UNSUPPORTED, safety_confidence=1.0)) == ("safety_judge")
 
 
@@ -173,9 +162,6 @@ def test_tool_calls_past_the_round_cap_go_to_guardrail_anyway():
 
 
 def test_compiled_graph_exposes_every_conditional_destination():
-    """The `Literal` return types give LangGraph the destinations, so the
-    drawn graph has the real edges (not just nodes) and every routing target
-    is a registered node."""
     from app.agent.graph import build_graph
     from app.agent.names import Node
 
@@ -210,7 +196,6 @@ def test_an_anonymous_visitor_can_still_ask_about_the_product():
 
 
 def test_an_off_topic_message_from_an_anonymous_visitor_is_answered_without_a_ticket():
-    """A ticket needs a customer; asking someone to identify just to say no would be odd."""
     state = {"input_blocked": False, "intent": Intent.UNSUPPORTED, "scopes": _ANONYMOUS_SCOPES}
 
     assert route_after_safety_judge(state) == "response_writer"
@@ -231,8 +216,6 @@ def test_the_safety_judge_still_runs_before_the_identity_request():
 
 
 def test_someone_who_proved_only_an_order_is_asked_to_identify_for_anything_about_the_account():
-    """The order level has no customer: account intents must route to `request_identity`
-    (never into a node that needs a customer), whatever the order says."""
     for intent in (
         Intent.BILLING_QUESTION,
         Intent.UPGRADE_REQUEST,
@@ -262,8 +245,6 @@ def test_an_anonymous_visitor_asking_about_an_order_is_asked_to_identify():
 
 
 def test_a_verified_customer_with_no_order_in_the_session_gets_their_own_orders_read():
-    """The session names no order, so none is picked for them: all of their own are read and
-    they say which one. Without a customer (an anonymous visitor) it asks to identify."""
     state = {**_asking_about_an_order(_CUSTOMER_SCOPES), "customer_id": str(uuid.uuid4())}
 
     assert route_after_intent(state) == "get_customer_orders"
@@ -285,7 +266,6 @@ def test_the_order_lookup_goes_on_to_the_response_writer_in_the_compiled_graph()
     edges = {(e.source, e.target) for e in build_graph().get_graph().edges}
     assert ("get_order_status", "response_writer") in edges
     assert ("get_customer_orders", "response_writer") in edges
-
 
 
 def _returning(intent, scopes=None, customer=True, pending=None) -> dict:
@@ -312,14 +292,11 @@ def test_while_a_return_is_pending_a_bare_answer_filed_as_small_talk_continues_i
 
     assert route_after_intent(_returning(Intent.SMALL_TALK, pending=pending)) == "order_return"
     assert route_after_intent(_returning(Intent.ORDER_RETURN, pending=pending)) == "order_return"
-    # Other requests must not complete a return: a subscription cancellation is not an answer,
-    # a request for a person still gets its own path and "where is my order" still gets its status.
     assert route_after_intent(_returning(Intent.REFUND_REQUEST, pending=pending)) == "get_customer_context"
     assert route_after_intent(_returning(Intent.ORDER_STATUS, pending=pending)) == "get_customer_orders"
     assert route_after_intent(_returning(Intent.HUMAN_ESCALATION, pending=pending)) == "ask_case"
     unsupported = {**_returning(Intent.UNSUPPORTED, pending=pending), "input_blocked": False}
     assert route_after_safety_judge(unsupported) == "human_escalation"
-    # A different question goes its own way, and the pending return waits.
     assert route_after_intent(_returning(Intent.PRICING_QUESTION, pending=pending)) == "get_plan_catalog"
 
 

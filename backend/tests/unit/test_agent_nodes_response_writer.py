@@ -1,7 +1,3 @@
-"""Unit tests for the response_writer node: `_build_context_blob` (a pure
-function, tested directly) and `response_writer_node` (LLM mocked out, same
-pattern as `test_agent_nodes_intent_router.py`)."""
-
 import uuid
 
 import pytest
@@ -13,9 +9,6 @@ from app.schemas.tools import EscalationReceipt, PlanSummary
 
 
 class _FakeChatModel:
-    """Mimics only the chain `response_writer_node` calls: `.with_retry(...)`
-    returns self, `.invoke(...)` hands back a fixed `AIMessage`."""
-
     def __init__(self, response: AIMessage):
         self._response = response
         self.bound_tools: list | None = None
@@ -121,8 +114,6 @@ def test_does_not_bind_a_tool_for_non_rag_intents(monkeypatch):
 
 
 class _ScriptedChatModel(_FakeChatModel):
-    """Returns the scripted replies in order and records each prompt."""
-
     def __init__(self, *responses: AIMessage):
         super().__init__(responses[0])
         self._responses = list(responses)
@@ -176,9 +167,9 @@ def test_keeps_the_retry_reply_even_if_it_still_does_not_search(monkeypatch):
 @pytest.mark.parametrize(
     ("intent", "tool_call_rounds"),
     [
-        (Intent.BILLING_QUESTION, 0),  # answerable from customer context
-        (Intent.PRICING_QUESTION, 0),  # arrives with the plan catalog
-        (Intent.TECHNICAL_SUPPORT, 1),  # already searched this turn
+        (Intent.BILLING_QUESTION, 0),
+        (Intent.PRICING_QUESTION, 0),
+        (Intent.TECHNICAL_SUPPORT, 1),
     ],
 )
 def test_does_not_retry_when_a_search_is_not_required(monkeypatch, intent, tool_call_rounds):

@@ -1,6 +1,3 @@
-"""Unit tests for the guardrail node: no LLM involved, it only inspects the
-message `response_writer` already produced against the rest of the state."""
-
 from langchain_core.messages import AIMessage
 
 from app.agent.nodes.guardrail import guardrail_node
@@ -72,8 +69,6 @@ def test_protects_the_response_writer_prompt():
 
 
 def test_a_reply_that_asks_for_an_order_number_is_replaced_and_keeps_the_real_ticket():
-    """order-010 and order-012: a refund or cancellation that created a ticket, answered by asking
-    for an order number nothing can look up. The customer must still learn about the ticket."""
     from app.schemas.tools import EscalationReceipt
 
     original = AIMessage(content="Could you please provide the order number?", id="m")
@@ -111,7 +106,6 @@ def test_an_order_that_was_really_read_is_not_taken_for_an_unbacked_lookup():
     }
 
     assert guardrail_node(state) == {}
-
 
 
 def _result(outcome):
@@ -163,7 +157,7 @@ def test_a_reply_that_leaves_out_the_follow_up_number_gets_it_added():
 
     replacement = guardrail_node(state)["messages"][0]
 
-    assert replacement.id == "m"  # replaces the streamed text, same message
+    assert replacement.id == "m"
     assert replacement.content.startswith("A representative will follow up shortly.")
     assert "MF-ABCD2345" in replacement.content
 

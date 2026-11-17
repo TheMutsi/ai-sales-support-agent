@@ -1,6 +1,3 @@
-"""The back office decides per action. These tests pin the role table and keep an admin token and
-a chat session from standing in for each other."""
-
 import uuid
 from datetime import timedelta
 from itertools import pairwise

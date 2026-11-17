@@ -1,10 +1,3 @@
-"""Unit test for the intent_router node, with the chat model mocked out.
-
-Per CLAUDE.md's testing philosophy, graph nodes are tested against a stubbed
-LLM response, asserting on deterministic state transitions — not on real
-model output, which belongs to the evaluation suite instead.
-"""
-
 from langchain_core.messages import HumanMessage
 
 from app.agent.nodes import intent_router as intent_router_module
@@ -12,11 +5,6 @@ from app.schemas.agent import Intent, IntentClassification
 
 
 class _FakeStructuredChatModel:
-    """Stands in for `get_chat_model()`'s return value. Mimics only the chain
-    `intent_router` actually calls — `.with_structured_output(...)` and
-    `.with_retry(...)` both just return self, and `.invoke(...)` hands back a
-    fixed response instead of calling a real model."""
-
     def __init__(self, response: IntentClassification):
         self._response = response
 
@@ -71,8 +59,6 @@ def test_a_short_closing_message_stays_small_talk(monkeypatch):
 
 
 def test_small_talk_is_not_trusted_for_a_question_or_a_long_message(monkeypatch):
-    """The 7B model sometimes calls an off-topic request small talk, which would skip the
-    ticket and the safety re-check `unsupported` gets; a request is never just thanks."""
     question = "Can you recommend a good pizza place nearby?"
     assert _classify_as_small_talk(monkeypatch, question) is Intent.UNSUPPORTED
     long = "thanks " * 20
