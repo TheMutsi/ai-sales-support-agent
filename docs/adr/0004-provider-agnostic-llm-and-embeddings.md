@@ -29,6 +29,10 @@ providers would mean editing all of them.
 - LangChain is used for this abstraction (and for tool binding and structured
   output), not as a general framework.
 
+- `build_chat_model(provider, model)` exists for callers that need a model other than the
+  configured one, such as the evaluation's judge, which must not be the agent it grades.
+  `LLM_PROVIDER` is a `Literal`, so a typo fails when settings load, not on the first request.
+
 ## Consequences
 
 - Provider choice is an environment change, never a code change.
