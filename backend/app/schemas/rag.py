@@ -1,5 +1,6 @@
 import uuid
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -57,3 +58,20 @@ class DocumentMapEntry(BaseModel):
     when_to_use: str
     estimated_tokens: int
     plan_scope: str | None = None
+
+
+class OpenedDocument(BaseModel):
+    document_id: uuid.UUID
+    title: str
+    doc_type: DocType
+    source: str
+    version: int
+    estimated_tokens: int
+    text: str | None = None
+    section_titles: list[str] = Field(default_factory=list)
+    omitted_reason: Literal["document_too_long", "call_limit_reached"] | None = None
+
+
+class OpenDocumentsResult(BaseModel):
+    documents: list[OpenedDocument] = Field(default_factory=list)
+    not_found: list[uuid.UUID] = Field(default_factory=list)

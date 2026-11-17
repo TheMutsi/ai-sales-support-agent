@@ -4,8 +4,24 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.nodes import response_writer as response_writer_module
+from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
 from app.schemas.agent import Intent
+from app.schemas.rag import DocumentMapEntry
 from app.schemas.tools import EscalationReceipt, PlanSummary
+
+TENANT_ID = uuid.uuid4()
+DOCUMENT_ID = uuid.uuid4()
+
+
+def _stub_tools(monkeypatch, entries=()):
+    monkeypatch.setattr(
+        response_writer_module, "make_search_knowledge_base_tool", lambda *a: "fake-search"
+    )
+    monkeypatch.setattr(response_writer_module, "make_open_documents_tool", lambda *a: "fake-open")
+    monkeypatch.setattr(response_writer_module, "resolve_plan_slug", lambda state: "pro")
+    monkeypatch.setattr(
+        response_writer_module, "get_document_map", lambda tenant_id, plan_slug: entries
+    )
 
 
 class _FakeChatModel:
@@ -84,18 +100,17 @@ def test_binds_the_knowledge_base_tool_for_rag_eligible_intents(monkeypatch, int
     fake_reply = AIMessage(content="It's $49/month.")
     fake_model = _FakeChatModel(fake_reply)
     monkeypatch.setattr(response_writer_module, "get_chat_model", lambda: fake_model)
-    monkeypatch.setattr(
-        response_writer_module, "make_search_knowledge_base_tool", lambda customer_id: "fake-tool"
-    )
+    _stub_tools(monkeypatch)
 
     state = {
         "customer_id": "c-1",
+        "tenant_id": str(TENANT_ID),
         "intent": intent,
         "messages": [HumanMessage(content="how much is the pro plan?")],
     }
     response_writer_module.response_writer_node(state)
 
-    assert fake_model.bound_tools == ["fake-tool"]
+    assert fake_model.bound_tools == ["fake-search", "fake-open"]
 
 
 def test_does_not_bind_a_tool_for_non_rag_intents(monkeypatch):
@@ -133,11 +148,10 @@ def _search_call() -> AIMessage:
 
 def _run_writer(monkeypatch, model, intent, tool_call_rounds=0) -> dict:
     monkeypatch.setattr(response_writer_module, "get_chat_model", lambda: model)
-    monkeypatch.setattr(
-        response_writer_module, "make_search_knowledge_base_tool", lambda customer_id: "fake-tool"
-    )
+    _stub_tools(monkeypatch)
     state = {
         "customer_id": "c-1",
+        "tenant_id": str(TENANT_ID),
         "intent": intent,
         "tool_call_rounds": tool_call_rounds,
         "messages": [HumanMessage(content="How do I set up SSO?")],
@@ -237,3 +251,74 @@ def test_context_blob_hides_the_customer_email():
     )
     blob = response_writer_module._build_context_blob({"customer_context": context})
     assert "ada@example.com" not in blob
+
+
+def _terms_entry() -> DocumentMapEntry:
+    return DocumentMapEntry(
+        document_id=DOCUMENT_ID,
+        title="Terms and Conditions",
+        when_to_use="Contract questions",
+        estimated_tokens=900,
+    )
+
+
+def test_the_document_map_follows_the_instructions_and_the_context(monkeypatch):
+    model = _ScriptedChatModel(AIMessage(content="ok"))
+    _stub_tools(monkeypatch, (_terms_entry(),))
+    monkeypatch.setattr(response_writer_module, "get_chat_model", lambda: model)
+
+    response_writer_module.response_writer_node(
+        {
+            "customer_id": None,
+            "tenant_id": str(TENANT_ID),
+            "intent": Intent.PRICING_QUESTION,
+            "messages": [HumanMessage(content="terms?")],
+        }
+    )
+
+    prompt = model.prompts[0][0].content
+    assert prompt.split("\n\n")[0] == RESPONSE_WRITER_SYSTEM_PROMPT.split("\n\n")[0]
+    assert prompt.index("Context:") < prompt.index("<document_map>")
+    assert f"- id: {DOCUMENT_ID} | title: Terms and Conditions | when to use: Contract questions | ~900 tokens" in prompt
+
+
+def test_no_document_map_block_when_the_tenant_has_no_documents(monkeypatch):
+    model = _ScriptedChatModel(AIMessage(content="ok"))
+    _stub_tools(monkeypatch)
+    monkeypatch.setattr(response_writer_module, "get_chat_model", lambda: model)
+
+    response_writer_module.response_writer_node(
+        {
+            "customer_id": None,
+            "tenant_id": str(TENANT_ID),
+            "intent": Intent.PRICING_QUESTION,
+            "messages": [HumanMessage(content="terms?")],
+        }
+    )
+
+    assert "<document_map>" not in model.prompts[0][0].content
+
+
+def test_no_document_map_for_intents_without_the_knowledge_base(monkeypatch):
+    model = _ScriptedChatModel(AIMessage(content="ok"))
+    _stub_tools(monkeypatch, (_terms_entry(),))
+    monkeypatch.setattr(response_writer_module, "get_chat_model", lambda: model)
+
+    response_writer_module.response_writer_node(
+        {"customer_id": None, "intent": Intent.REFUND_REQUEST, "messages": [HumanMessage(content="refund")]}
+    )
+
+    assert "<document_map>" not in model.prompts[0][0].content
+
+
+def test_the_retry_accepts_an_open_documents_call_as_the_first_tool_use(monkeypatch):
+    open_call = AIMessage(
+        content="",
+        tool_calls=[{"name": "open_documents_tool", "args": {"document_ids": []}, "id": "1"}],
+    )
+    model = _ScriptedChatModel(open_call)
+
+    result = _run_writer(monkeypatch, model, Intent.PRODUCT_QUESTION)
+
+    assert result["messages"][0] is open_call
+    assert len(model.prompts) == 1
