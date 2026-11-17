@@ -11,7 +11,7 @@ def _write(path, content: str) -> None:
 def test_loads_document_with_full_front_matter(tmp_path):
     _write(
         tmp_path / "refunds.md",
-        '---\ntitle: "Refund Policy"\ndoc_type: policy\nproduct_area: legal\n'
+        '---\ntitle: "Refund Policy"\nwhen_to_use: "Use it"\ndoc_type: policy\nproduct_area: legal\n'
         'plan_scope: pro\nversion: "2.0"\n---\nRefunds are issued within 14 days.\n',
     )
 
@@ -20,6 +20,7 @@ def test_loads_document_with_full_front_matter(tmp_path):
     assert len(documents) == 1
     document = documents[0]
     assert document.title == "Refund Policy"
+    assert document.when_to_use == "Use it"
     assert document.doc_type == DocType.POLICY
     assert document.product_area == "legal"
     assert document.plan_scope == "pro"
@@ -29,7 +30,7 @@ def test_loads_document_with_full_front_matter(tmp_path):
 
 
 def test_defaults_version_and_optional_fields_when_omitted(tmp_path):
-    _write(tmp_path / "faq.md", '---\ntitle: "FAQ"\ndoc_type: faq\n---\nSome content.\n')
+    _write(tmp_path / "faq.md", '---\ntitle: "FAQ"\nwhen_to_use: "Use it"\ndoc_type: faq\n---\nSome content.\n')
 
     document = load_documents(kb_dir=tmp_path)[0]
 
@@ -39,7 +40,7 @@ def test_defaults_version_and_optional_fields_when_omitted(tmp_path):
 
 
 def test_an_unquoted_numeric_version_is_kept_as_text(tmp_path):
-    _write(tmp_path / "faq.md", '---\ntitle: "FAQ"\ndoc_type: faq\nversion: 1.0\n---\nSome content.\n')
+    _write(tmp_path / "faq.md", '---\ntitle: "FAQ"\nwhen_to_use: "Use it"\ndoc_type: faq\nversion: 1.0\n---\nSome content.\n')
 
     assert load_documents(kb_dir=tmp_path)[0].version == "1.0"
 
@@ -47,7 +48,7 @@ def test_an_unquoted_numeric_version_is_kept_as_text(tmp_path):
 def test_source_is_relative_to_kb_dir(tmp_path):
     nested = tmp_path / "policy"
     nested.mkdir()
-    _write(nested / "refunds.md", '---\ntitle: "Refund Policy"\ndoc_type: policy\n---\nContent.\n')
+    _write(nested / "refunds.md", '---\ntitle: "Refund Policy"\nwhen_to_use: "Use it"\ndoc_type: policy\n---\nContent.\n')
 
     document = load_documents(kb_dir=tmp_path)[0]
 
@@ -68,8 +69,15 @@ def test_raises_on_missing_required_field(tmp_path):
         load_documents(kb_dir=tmp_path)
 
 
+def test_raises_on_missing_when_to_use(tmp_path):
+    _write(tmp_path / "broken.md", '---\ntitle: "No hint"\ndoc_type: faq\n---\nContent.\n')
+
+    with pytest.raises(ValueError, match="when_to_use"):
+        load_documents(kb_dir=tmp_path)
+
+
 def test_raises_on_unsupported_doc_type(tmp_path):
-    _write(tmp_path / "broken.md", '---\ntitle: "Bad Type"\ndoc_type: pricing\n---\nContent.\n')
+    _write(tmp_path / "broken.md", '---\ntitle: "Bad Type"\nwhen_to_use: "Use it"\ndoc_type: pricing\n---\nContent.\n')
 
     with pytest.raises(ValueError, match="not a valid DocType"):
         load_documents(kb_dir=tmp_path)

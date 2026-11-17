@@ -3,14 +3,14 @@ from pathlib import Path
 
 import yaml
 
-from app.db.seed import SEED_DIR
+from app.core.config import SEED_DIR
 from app.schemas.rag import DocType, SourceDocument
 
 KB_DIR = SEED_DIR / "kb"
 
 _FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n(.*)\Z", re.DOTALL)
 
-_REQUIRED_FRONT_MATTER_FIELDS = ("title", "doc_type")
+_REQUIRED_FRONT_MATTER_FIELDS = ("title", "doc_type", "when_to_use")
 
 
 def load_documents(kb_dir: Path = KB_DIR) -> list[SourceDocument]:
@@ -26,6 +26,7 @@ def _load_document(path: Path, kb_dir: Path) -> SourceDocument:
 
     return SourceDocument(
         title=front_matter["title"],
+        when_to_use=str(front_matter["when_to_use"]),
         doc_type=DocType(front_matter["doc_type"]),
         product_area=front_matter.get("product_area"),
         plan_scope=front_matter.get("plan_scope"),

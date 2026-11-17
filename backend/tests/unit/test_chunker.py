@@ -3,7 +3,7 @@ from app.schemas.rag import DocType, SourceDocument
 
 
 def _document(doc_type: DocType, content: str) -> SourceDocument:
-    return SourceDocument(title="Test", doc_type=doc_type, source="test.md", content=content)
+    return SourceDocument(title="Test", when_to_use="Test", doc_type=doc_type, source="test.md", content=content)
 
 
 def test_chunk_document_dispatches_policy_to_chunk_by_section():

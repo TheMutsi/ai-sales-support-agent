@@ -1,5 +1,6 @@
 ---
 title: "MewFlow Features by Plan"
+when_to_use: "What each plan includes: features, seat and API call limits, and what changes when upgrading."
 doc_type: features
 product_area: product
 plan_scope: null

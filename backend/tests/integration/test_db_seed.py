@@ -76,7 +76,7 @@ def test_seed_backfills_customers_that_predate_the_dev_tenant(db: Session):
 
 
 def test_seed_skips_the_dev_tenant_outside_local_environments(db: Session, monkeypatch):
-    from app.db import seed as seed_module
+    from app.db import dev_tenant as seed_module
 
     production = Settings(app_env="production", session_signing_key="p" * 32, audit_hmac_key="q" * 32, secrets_encryption_key="u8LHfPlALFyX_gGFRXbIv-3Er6qUqIN8um7hlZVvkag=")
     monkeypatch.setattr(seed_module, "get_settings", lambda: production)

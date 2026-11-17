@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _ENV_FILE = _REPO_ROOT / ".env"
+SEED_DIR = Path(__file__).resolve().parents[2] / "data" / "seed"
 
 
 LLMProvider = Literal["anthropic", "google", "ollama"]

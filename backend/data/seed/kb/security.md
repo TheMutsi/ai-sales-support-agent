@@ -1,5 +1,6 @@
 ---
 title: "MewFlow Security Overview"
+when_to_use: "Questions about how customer data is protected: encryption, access control, certifications and incidents."
 doc_type: security
 product_area: security
 plan_scope: null
