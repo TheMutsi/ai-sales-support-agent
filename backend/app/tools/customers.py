@@ -1,11 +1,3 @@
-"""Agent-facing tool: fetch a customer's identity and current commercial state.
-
-Manages its own DB session — unlike `app/rag/retriever.py`, which is a
-lower-level module the RAG pipeline threads a session through, tools are the
-boundary the agent graph calls across, and `AgentState` (Stage 6) has no
-place for a live SQLAlchemy session to live between nodes.
-"""
-
 import uuid
 
 from app.db.models import Customer
@@ -39,10 +31,6 @@ def get_customer_context(customer_id: uuid.UUID) -> CustomerContext:
 
 
 def list_customers() -> list[CustomerListItem]:
-    """Every customer with their current plan, for the frontend's selector.
-    Sorted by name so the list is stable between requests. One query per
-    customer for the subscription is fine at demo scale; paginate and join
-    before pointing this at a real customer base."""
     with SessionLocal() as session:
         items = []
         for customer in session.query(Customer).order_by(Customer.name).all():

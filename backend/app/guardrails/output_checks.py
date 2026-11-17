@@ -1,11 +1,3 @@
-"""Deterministic, tool-grounded checks run on `response_writer`'s output.
-
-These aren't an LLM judging another LLM's answer — each check is a plain
-function comparing the response text against what the turn's context actually
-confirms, the same "let code decide a fact a tool can compute" principle
-(CLAUDE.md #1) applied to guardrails instead of business rules.
-"""
-
 import re
 
 from app.schemas.agent import Intent
@@ -18,7 +10,6 @@ _REFUND_CONFIRMATION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Past-tense claims only, for a reply that is presenting an offer ("will be refunded" is the offer).
 _REFUND_DONE_PATTERN = re.compile(
     r"(reembolso|refund).{0,40}(has been|have been|was|ha sido|fue) "
     r"(approved|processed|issued|refunded|aprobad|procesad|emitid)|"
@@ -40,9 +31,6 @@ _TICKET_CREATION_CLAIM_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Catches a specific ticket number/ID cited in either word order ("ticket
-# number is #123" or "123 is your ticket number") — when `ticket_receipt`
-# is None there's no real number to cite, so this alone is unconditional.
 _TICKET_NUMBER_CLAIM_PATTERN = re.compile(
     r"(ticket|caso)\D{0,25}\d{3,}|\d{3,}\D{0,25}(ticket|caso)",
     re.IGNORECASE,
@@ -51,12 +39,6 @@ _TICKET_NUMBER_CLAIM_PATTERN = re.compile(
 _FOLLOW_UP_NUMBER_PATTERN = re.compile(r"\bMF-[A-Z0-9]{8}\b", re.IGNORECASE)
 
 
-# Claims of having consulted the knowledge base. Spanish alternatives are kept
-# alongside English, like the patterns above, because the agent replies in
-# the customer's language.
-# Requires an explicit documentation/knowledge-base object: a bare "I've
-# checked" also covers legitimate statements about the customer's account or
-# a ticket, which come from other tools and must not be blocked.
 _LOOKUP_CLAIM_PATTERN = re.compile(
     r"((checked|searched|looked (it )?up in|reviewed|consulted) (in )?(our|the|mewflow'?s?) "
     r"(documentation|docs|knowledge base)|"
@@ -67,9 +49,6 @@ _LOOKUP_CLAIM_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# First-person claims of having looked at the customer's billing records. No
-# tool exposes invoices, charges or payment history (`CustomerContext` only
-# carries the current subscription), so any such claim is fabricated.
 _BILLING_HISTORY_CLAIM_PATTERN = re.compile(
     r"(\bi('ve| have)? (checked|reviewed|looked (at|into|over)|gone through|went through|"
     r"verified|examined) (your |the )?(\w+ ){0,3}"
@@ -79,20 +58,13 @@ _BILLING_HISTORY_CLAIM_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Raw tool-call syntax written into the reply text instead of a real tool
-# call: snake_case tool identifiers (`search_knowledge_base_tool`) or
-# `tool_call(s)`. A customer never has a reason to see either.
 _INTERNAL_TOOL_TEXT_PATTERN = re.compile(r"\b([a-z]+_)+tool\b|\btool_calls?\b")
 
 
 def check_unconfirmed_refund_claim(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """No tool in `app/tools/` can issue a refund — every `refund_request` ends
-    at `human_escalation`, which only creates a ticket. So any text reading as a
-    refund being granted or already in motion is unconditionally false, not
-    merely unverified, and gets blocked rather than just flagged."""
-    if context.refund_recorded:  # the return flow recorded one this turn, or the order says so
+    if context.refund_recorded:
         return None
     pattern = _REFUND_DONE_PATTERN if context.offering else _REFUND_CONFIRMATION_PATTERN
     if pattern.search(response_text):
@@ -121,9 +93,6 @@ _CREDITS_ADDED_CLAIM_PATTERN = re.compile(
 def check_unbacked_order_action_claim(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Rejecting an order and taking the offer are done by the return step and nothing else, so
-    a reply saying an order was cancelled, or that credits were added, without that step (or an
-    order that already says so) having done it is invented, and is blocked."""
     cancelled = not context.order_cancelled and _ORDER_CANCELLED_CLAIM_PATTERN.search(response_text)
     credited = not context.credits_added and _CREDITS_ADDED_CLAIM_PATTERN.search(response_text)
     if cancelled or credited:
@@ -138,9 +107,6 @@ def check_unbacked_order_action_claim(
 def check_checkout_without_eligibility(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """A checkout link is only legitimate once `business_rules_node` has run
-    eligibility and `checkout_session` holds a real one — anything else is an
-    invented link, which the CLAUDE.md guardrails section rules out explicitly."""
     if _CHECKOUT_LINK_PATTERN.search(response_text) and not context.checkout_created:
         return GuardrailViolation(
             code="checkout_without_eligibility",
@@ -153,9 +119,6 @@ def check_checkout_without_eligibility(
 def check_system_prompt_leak(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Crude but reliable: the system prompt is a fixed string we own, so if a
-    meaningful chunk of it shows up verbatim in the answer, the model leaked it
-    rather than happening to agree with its content."""
     prompt_body = context.protected_prompt.split("\n\n")[0]
     if prompt_body and prompt_body in response_text:
         return GuardrailViolation(
@@ -169,13 +132,6 @@ def check_system_prompt_leak(
 def check_fabricated_ticket_claim(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Found live during Stage 6 verification, not hypothesized: a
-    `billing_question` routes straight to `response_writer` (no ticket is ever
-    created for it — see `route_after_customer_context`), and the model still
-    told the customer a ticket had been created, with a fabricated ID lifted
-    from their own UUID. `create_support_ticket` is the only thing that can
-    make `ticket_receipt` non-`None`, so this is exactly as falsifiable as the
-    refund check above."""
     known = (context.escalation_reference or "").upper()
     invented_number = any(
         match.upper() != known for match in _FOLLOW_UP_NUMBER_PATTERN.findall(response_text)
@@ -198,12 +154,6 @@ def check_fabricated_ticket_claim(
 def check_unverified_lookup_claim(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Found by the evaluation suite: the model answered "I checked our
-    documentation, and the Starter plan includes SSO" (false: SSO is
-    Enterprise-only) without having called the knowledge base tool at all.
-    `tool_call_rounds` is the graph's own record of whether a search ran, so a
-    claim of having consulted the documentation with zero rounds is false by
-    construction, and the content it vouches for is ungrounded."""
     if context.tool_call_rounds == 0 and _LOOKUP_CLAIM_PATTERN.search(response_text):
         return GuardrailViolation(
             code="unverified_lookup_claim",
@@ -216,9 +166,6 @@ def check_unverified_lookup_claim(
 def check_fabricated_billing_history_claim(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Found by the evaluation suite: asked to check a double charge, the
-    model said it had reviewed the customer's invoices. No tool can read
-    invoices, so the claim and anything it concludes from them are invented."""
     if _BILLING_HISTORY_CLAIM_PATTERN.search(response_text):
         return GuardrailViolation(
             code="fabricated_billing_history_claim",
@@ -231,10 +178,6 @@ def check_fabricated_billing_history_claim(
 def check_internal_tool_text(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Found by the evaluation suite: on a path with no tool bound, the model
-    wrote `search_knowledge_base_tool` and a fake "searching..." step into its
-    reply. That narrates a search that never ran, so it is blocked like the
-    other unbacked claims rather than shown to the customer."""
     if _INTERNAL_TOOL_TEXT_PATTERN.search(response_text):
         return GuardrailViolation(
             code="internal_tool_text",
@@ -247,10 +190,6 @@ def check_internal_tool_text(
 def check_unverified_billing_explanation(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Speculative language about *why* a charge happened ("podria haber...")
-    is a softer signal than the other checks — legitimate hedging can look
-    similar, so this only flags for Stage 9's evaluation dataset instead of
-    rewriting a real answer on a heuristic that can false-positive."""
     if context.intent == Intent.BILLING_QUESTION and _BILLING_SPECULATION_PATTERN.search(
         response_text
     ):
@@ -262,10 +201,6 @@ def check_unverified_billing_explanation(
     return None
 
 
-# Orders: asking for an order number, claiming to have checked or to be able to check an order,
-# or saying there is none on the account. English and Spanish, like the checks above. A verb
-# that asks for it ("provide", "share"...) shortly before the noun; a bare "order number" (as in
-# "you can find your order number in the email") is not a request.
 _ORDER_NUMBER_REQUEST_PATTERN = re.compile(
     r"\b(provide|share|send|give|tell|confirm|enter|type|paste|proporcion\w*|compart\w*|"
     r"env[ií]\w*|ind[ií]c\w*|dime|dame)\b[^.?!]{0,40}"
@@ -286,13 +221,8 @@ _NO_ORDER_ON_ACCOUNT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Any mention of an invoice, in either language the agent answers in.
 _INVOICE_MENTION_PATTERN = re.compile(r"\b(invoices?|facturas?)\b", re.IGNORECASE)
 
-# An admission that the model cannot see something ("I don't have access to...", "no tengo
-# acceso a..."): a negation (don't, can't, cannot, unable to) followed by an access word, with
-# one optional word allowed between ("have specific details"). "doesn't" is not a negation here,
-# so "the system doesn't have X" stays a claim about the product instead of an admission.
 _NO_ACCESS_ADMISSION_PATTERN = re.compile(
     r"((i |we )?(don'?t|do not|can'?t|cannot|am unable to|am not able to)\s+"
     r"(have\s+)?(\w+\s+)?(access|information|details|ability|capability|means|see|view|retrieve|look up)|"
@@ -304,16 +234,6 @@ _NO_ACCESS_ADMISSION_PATTERN = re.compile(
 def check_ungrounded_invoice_claim(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Found live while recording the demo: asked about invoices, the model said none were
-    scheduled, that there was no invoice preview, or that invoices live in a dashboard. No tool
-    reads invoices and the customer context holds none, so such a statement can only be grounded
-    in a knowledge-base search this turn (`tool_call_rounds`). Without one, a billing answer that
-    talks about invoices is flagged unless it admits it cannot see them.
-
-    FLAG, not BLOCK, on purpose: the heuristic is wording-based and a hedged answer can look
-    the same, so it first records how often it fires (and on what) before it may rewrite a
-    reply. Known gap: an admission followed by an invented detail in the same reply is not caught
-    (see the unit test); the evaluation cases billing-007 and billing-008 measure that."""
     if (
         context.intent == Intent.BILLING_QUESTION
         and context.tool_call_rounds == 0
@@ -331,16 +251,6 @@ def check_ungrounded_invoice_claim(
 def check_unbacked_order_lookup(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Found by the evaluation suite (order-010 to order-012): a logged-in customer who said "a
-    refund for my order" was asked for an order number, told "I've checked your order" and told
-    "I don't have an order associated with your account". Outside `order_status` no step reads
-    an order and the session names none, so asking for a number that nothing can look up, saying
-    one was checked, or saying there is none are all things the agent cannot back. A prompt rule
-    only half worked on a 7B model, so this is a deterministic check on the reply.
-
-    `order_status` is exempt: its step did read the order (or learned there is none with that
-    number), and the writer may say so. Known false positive: an escalation that tells the
-    customer to give their order number to support would be replaced by the safe fallback."""
     if context.intent == Intent.ORDER_STATUS or context.order_found:
         return None
     if (
@@ -360,10 +270,7 @@ _UUID_PATTERN = re.compile(
     r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.IGNORECASE
 )
 _EMAIL_PATTERN = re.compile(r"[\w.+-]+@([\w-]+\.)+[a-z]{2,}", re.IGNORECASE)
-# The company's own contact addresses come from the knowledge base and are fine to show.
 _PUBLIC_EMAIL_DOMAIN = "@mewflow.example"
-# Only shapes that cannot be an order id, a price or a date: an international number with a
-# plus sign, a bracketed area code, or three groups of digits.
 _PHONE_PATTERN = re.compile(
     r"\+\d[\d\s().-]{7,}\d|\(\d{2,4}\)\s?\d[\d\s.-]{5,}\d|\b\d{3}[\s.-]\d{3,4}[\s.-]\d{4}\b"
 )
@@ -376,12 +283,6 @@ _GOVERNMENT_ID_PATTERN = re.compile(
 def check_sensitive_data_exposure(
     context: OutputCheckContext, response_text: str
 ) -> GuardrailViolation | None:
-    """Personal data and internal ids never go out in a reply, logged in or not: an internal
-    UUID (a customer id, anything but the ticket id the customer was told), an email address
-    other than the company's, a phone number or a government id. The prompt asks the model
-    not to and the context no longer carries them, this catches the model producing them
-    anyway (from the conversation, or from its own training). An order number is not matched:
-    it is the one identifier a signed-in customer is meant to receive."""
     allowed = {u.lower() for u in context.allowed_uuids}
     leaked_uuid = any(m.lower() not in allowed for m in _UUID_PATTERN.findall(response_text))
     leaked_email = any(

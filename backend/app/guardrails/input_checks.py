@@ -1,20 +1,3 @@
-"""Signal-tagging for the incoming message.
-
-`flag_prompt_injection_signals` itself only tags known attack shapes — it
-never blocks or rewrites anything. What a caller does with those tags is its
-own call: `app/agent/nodes/input_guardrail.py` uses them to short-circuit the
-graph outright (the production-grade behavior CLAUDE.md's guardrails section
-asks for), while Stage 9's evaluation suite can use the same tags just to
-measure how often each attack shape shows up, without needing a second
-implementation of the pattern matching.
-
-Detection stays intentionally narrow — the curated shapes below, not generic
-suspicious wording — because a regex match is weaker evidence than a tool
-result. The Stage 6 adversarial testing already showed the base model
-refusing these attempts on its own; this module exists to make that refusal
-unconditional instead of trusting the model to keep doing it.
-"""
-
 import re
 
 _INJECTION_SIGNAL_PATTERNS: dict[str, re.Pattern[str]] = {

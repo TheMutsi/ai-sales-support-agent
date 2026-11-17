@@ -16,7 +16,9 @@ did.
 
 - **No ticket table.** The conversation is the record; old tickets are kept as `tickets_archive`,
   with no model and no foreign key to customers, out of the code's way. It gets `escalation_reference` (a follow-up
-  number such as `MF-7K3Q9X2A`, unique), `route`, `reason`, `category`, `status` (`open` or
+  number such as `MF-7K3Q9X2A`, unique), drawn from 31 characters with no `0`/`O` or `1`/`I`/`L` because the customer
+  may read it out or type it (31^8 values; a collision would fail the save on the unique column,
+  never hand out someone else's number), `route`, `reason`, `category`, `status` (`open` or
   `resolved`), when it was escalated and resolved, who resolved it and a note. Whoever takes it reads
   the conversation. This also removes one model call per escalation.
 - **Two routes, decided by `app.business.escalation.decide_route`**, a pure function of facts the
