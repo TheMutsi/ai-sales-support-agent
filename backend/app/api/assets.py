@@ -1,6 +1,3 @@
-"""Pictures for cards. The simulated shop has no product photos, so a plan's picture is drawn
-here: a colored tile with its name. A real shop would send its own image URLs in the cards."""
-
 from fastapi import APIRouter, HTTPException, Response
 
 router = APIRouter()
@@ -31,7 +28,7 @@ def _svg(slug: str, light: str, dark: str) -> str:
 @router.get("/assets/products/{slug}.svg")
 def product_image(slug: str) -> Response:
     tile = _TILES.get(slug)
-    if tile is None:  # only the known plans: nothing from the URL reaches the markup
+    if tile is None:
         raise HTTPException(status_code=404)
     return Response(
         _svg(slug, *tile),

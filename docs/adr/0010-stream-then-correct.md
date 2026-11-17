@@ -34,6 +34,13 @@ the model, but their structured output is not user-facing.
 `ChatTurnSummary` is read from graph state, not parsed from text, and the evaluation
 suite consumes the same contract (ADR-0012).
 
+- A reply no model wrote (a fixed question, a refusal) is still sent a word at a time, at about a
+  fast typist's pace, so every answer appears the same way. Sources are collected from every
+  search of this turn, deduplicated, in the order first retrieved; the stored history is plain
+  text, so an earlier turn's sources cannot leak in. On a failure the `error` event carries no
+  details; they go to the server log, and the exception is raised inside the trace span so
+  Langfuse records it as failed.
+
 ## Consequences
 
 - The common path streams immediately.

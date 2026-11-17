@@ -1,5 +1,3 @@
-"""Request dependencies shared by the routers."""
-
 from typing import Annotated
 
 from fastapi import Header, HTTPException
@@ -15,11 +13,6 @@ def _unauthorized(code: str) -> HTTPException:
 
 
 def require_session(authorization: Annotated[str | None, Header()] = None) -> SessionClaims:
-    """Authenticates a request from the `Authorization: Bearer <session>` header.
-
-    The codes let a client react: `session_expired` means "log in again" (the
-    widget silently asks the shop for a fresh token); the others mean the
-    request can't be fixed by retrying."""
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
         raise _unauthorized("missing_session")
@@ -30,8 +23,6 @@ def require_session(authorization: Annotated[str | None, Header()] = None) -> Se
 
 
 def optional_session(authorization: Annotated[str | None, Header()] = None) -> SessionClaims | None:
-    """The caller's session if it has a usable one, else `None` (never an error): for
-    endpoints like login, where a missing or stale session just means a fresh start."""
     try:
         return require_session(authorization)
     except HTTPException:

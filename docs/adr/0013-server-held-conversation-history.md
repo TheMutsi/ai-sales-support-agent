@@ -38,6 +38,15 @@ carry stale tool output into a turn that never touched that node.
   order, so a reopened widget can show it. Any other id is a 404, as if it did not
   exist.
 
+- **A turn is never left busy.** The turn is opened before streaming, so a refusal can be a real
+  HTTP status (and the tenant's scope overrides are read before that, so a configuration failure
+  is a 503 that locks nothing). The graph runs under `aclosing`, so a client that leaves also
+  closes the run and its trace span. Saving the reply is shielded from cancellation and frees the
+  turn itself if it fails, because after a disconnect nobody else would; a reply that streamed
+  but could not be stored does not keep the conversation busy for two minutes. If the stream never
+  starts, a background task frees the turn. A click on a button the latest reply did not offer is
+  not an error: nothing is stored or run, and the open question is shown again.
+
 ## Consequences
 
 - History can no longer be forged by the client.

@@ -14,8 +14,6 @@ from app.core.config import get_settings
 from app.core.observability import configure_langfuse
 from app.core.tenant_config import TenantConfigUnavailable
 
-# Only the app's own messages at INFO (the local one-time code is one); libraries stay at
-# WARNING so they don't flood the console.
 logging.basicConfig(level=logging.WARNING)
 logging.getLogger("app").setLevel(logging.INFO)
 
@@ -33,8 +31,6 @@ app.add_middleware(
 
 @app.exception_handler(TenantConfigUnavailable)
 async def _configuration_unavailable(request: Request, exc: TenantConfigUnavailable):
-    """The shop's configuration could not be read and cannot be guessed (an unknown shop would skip
-    the origin check, missing scope overrides could widen what a visitor may do): fail closed."""
     return JSONResponse(status_code=503, content={"detail": {"code": "configuration_unavailable"}})
 
 
@@ -44,9 +40,6 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")
 
-# The back office login is a placeholder (anyone may ask for any role), so its API exists only when
-# switched on in a local environment, until a real login does (ADR-0016). It is not in the CORS
-# methods on purpose: the back office reaches it through its dev server's proxy.
 if settings.admin_api_is_mounted:
     for admin_router in ADMIN_ROUTERS:
         app.include_router(admin_router, prefix="/api")
