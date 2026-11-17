@@ -47,6 +47,7 @@ EXPECTED = {
     ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/messages"): Permission.ESCALATIONS_REPLY,
     ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/close"): Permission.ESCALATIONS_REPLY,
     ("POST", "/admin/tenants/{tenant_id}/escalations/{conversation_id}/resolve"): Permission.ESCALATIONS_REPLY,
+    ("GET", "/admin/tenants/{tenant_id}/plans"): Permission.KB_READ,
 }
 
 
