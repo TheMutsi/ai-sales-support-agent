@@ -1,10 +1,3 @@
-"""Populate plans, customers, subscriptions and their orders from the fixtures in `data/seed/`.
-
-Documents and evaluation runs are intentionally left empty here — they're
-produced by later stages (RAG ingestion, live agent runs, the evaluation suite), not
-by this fixture load.
-"""
-
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
@@ -28,16 +21,12 @@ from app.db.session import SessionLocal
 SEED_DIR = Path(__file__).resolve().parents[2] / "data" / "seed"
 
 
-# A fixed dev tenant so a local token can be signed without any setup: the secret
-# is public (it's right here), so it is only ever written in local environments.
 DEV_TENANT_API_KEY = "pk_dev_mewflow_local"
 DEV_TENANT_SECRET = "dev-only-tenant-secret-never-use-in-production"
-# Where the example page runs when served locally (`python -m http.server 8080`). A page
-# opened as a file has the origin "null", which is never allowed.
 DEV_TENANT_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
-    "http://127.0.0.1:8081",  # a second local server for the example page
+    "http://127.0.0.1:8081",
 ]
 DEV_TENANT_KID = "dev-1"
 
@@ -55,8 +44,6 @@ def _ensure_dev_tenant(db: Session) -> Tenant | None:
         db.add(tenant)
         db.flush()
     tenant.allowed_origins = DEV_TENANT_ORIGINS
-    # Checked on every run, not just when the tenant is created: a dev secret that
-    # was deleted or deactivated (say, while trying out rotation) comes back.
     secret = db.query(TenantSecret).filter_by(tenant_id=tenant.id, kid=DEV_TENANT_KID).one_or_none()
     if secret is None:
         db.add(TenantSecret(tenant_id=tenant.id, kid=DEV_TENANT_KID, secret=DEV_TENANT_SECRET))
@@ -77,9 +64,6 @@ def seed(db: Session) -> None:
 
     tenant = _ensure_dev_tenant(db)
     tenant_id = tenant.id if tenant else None
-    # Emails are unique per tenant, so only the dev tenant's customers (and orphans
-    # from before tenants existed) count as already seeded; another shop's customer
-    # with the same email is a different person.
     existing = {
         c.email: c
         for c in db.query(Customer).filter(
@@ -89,7 +73,6 @@ def seed(db: Session) -> None:
     now = datetime.now(UTC)
     for entry in _load("customers.json"):
         if entry["email"] in existing:
-            # Customers seeded before the dev tenant existed get linked to it.
             customer = existing[entry["email"]]
             if tenant and customer.tenant_id is None:
                 customer.tenant_id, customer.external_id = tenant_id, customer.email
@@ -126,9 +109,6 @@ def seed(db: Session) -> None:
     db.commit()
 
 
-# The example page's login buttons: one customer per case, each with one order. Amounts are
-# what was charged (cents), which is not always a plan's list price.
-# What the demo orders are for: one product with two pictures, so a card can show them stacked.
 DEMO_ITEM = {
     "name": "Shapermint Essentials High-Waisted Shaping Leggings x2",
     "images": [
@@ -146,14 +126,10 @@ DEMO_SHOP = [
 
 
 def _demo_plan(plans: dict[str, Plan], amount_cents: int) -> Plan:
-    """The plan an order of this amount is for, so a card shows a name that fits its price: the
-    cheaper demo orders are Starter, the $69.99 ones Pro (what was charged is not a list price)."""
     return plans["pro" if amount_cents >= 5000 else "starter"]
 
 
 def _ensure_demo_shop(db: Session, plans: dict[str, Plan], tenant_id, now: datetime) -> None:
-    """Demo customers and their orders for the example page. Idempotent; local environments only
-    (the caller has a dev tenant only there)."""
     have = {
         c.email: c
         for c in db.query(Customer).filter(
@@ -191,13 +167,10 @@ def _ensure_demo_shop(db: Session, plans: dict[str, Plan], tenant_id, now: datet
 
 
 def _order_id(email: str) -> str:
-    """Deterministic, so docs and tests can name an order: 20 hex characters, which is
-    alphanumeric. A real order id would be random."""
     return hashlib.sha256(f"order:{email}".encode()).hexdigest()[:20]
 
 
 def _ensure_orders(db: Session, plans_by_slug: dict[str, Plan], tenant_id) -> None:
-    """One order per seeded customer, for the plan they are on. Idempotent."""
     now = datetime.now(UTC)
     have = {o.order_id for o in db.query(Order)}
     entries = {e["email"]: e for e in _load("customers.json")}
@@ -224,8 +197,6 @@ def _ensure_orders(db: Session, plans_by_slug: dict[str, Plan], tenant_id) -> No
 
 
 def reset_demo_shop(db: Session) -> int:
-    """Puts the demo customers' orders back as seeded (status, amount, no retention taken) and
-    clears their conversations' pending returns, so the example page can be tried again."""
     if get_settings().app_env not in LOCAL_ENVIRONMENTS:
         raise RuntimeError("the demo shop exists only in local environments")
     tenant = db.query(Tenant).filter_by(api_key=DEV_TENANT_API_KEY).one_or_none()
