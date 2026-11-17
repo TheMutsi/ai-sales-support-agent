@@ -119,6 +119,23 @@ def test_an_unknown_tool_name_becomes_an_error_message(monkeypatch):
     assert result["tool_call_rounds"] == 1
 
 
+def test_open_documents_calls_run_the_documents_tool(monkeypatch):
+    fake_tool = _FakeTool("<document>text</document>")
+    monkeypatch.setattr(
+        knowledge_tool_module, "make_open_documents_tool", lambda tenant_id, plan_slug: fake_tool
+    )
+    ai_message = AIMessage(
+        content="",
+        tool_calls=[{"name": "open_documents_tool", "args": {"document_ids": ["x"]}, "id": "c1"}],
+    )
+    state = {"customer_id": None, "knowledge_plan_slug": None, "tenant_id": str(uuid.uuid4()), "messages": [ai_message]}
+
+    result = knowledge_tool_module.knowledge_tool_node(state)
+
+    assert fake_tool.invoked_with == [{"document_ids": ["x"]}]
+    assert result["messages"][0].content == "<document>text</document>"
+
+
 def test_keeps_the_tool_artifact_on_the_message(monkeypatch):
     fake_tool = _FakeTool("text", artifact=["a-source"])
     monkeypatch.setattr(

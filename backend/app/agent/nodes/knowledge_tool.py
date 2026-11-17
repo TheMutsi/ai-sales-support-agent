@@ -3,11 +3,13 @@ import uuid
 from langchain_core.messages import ToolMessage
 from pydantic import ValidationError
 
+from app.agent.llm_tools.documents import make_open_documents_tool
 from app.agent.llm_tools.knowledge_base import make_search_knowledge_base_tool
 from app.agent.llm_tools.plan_scope import resolve_plan_slug
 from app.agent.state import AgentState
 
 SEARCH_TOOL_NAME = "search_knowledge_base_tool"
+OPEN_DOCUMENTS_TOOL_NAME = "open_documents_tool"
 
 
 def _error_message(call: dict, content: str) -> ToolMessage:
@@ -33,6 +35,7 @@ def knowledge_tool_node(state: AgentState) -> dict:
     plan_slug = resolve_plan_slug(state)
     tools = {
         SEARCH_TOOL_NAME: make_search_knowledge_base_tool(tenant_id, plan_slug),
+        OPEN_DOCUMENTS_TOOL_NAME: make_open_documents_tool(tenant_id, plan_slug),
     }
     last_message = state["messages"][-1]
 

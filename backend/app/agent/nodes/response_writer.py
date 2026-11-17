@@ -1,10 +1,16 @@
+import uuid
+
 from langchain_core.messages import SystemMessage
 
+from app.agent.llm_tools.documents import make_open_documents_tool
 from app.agent.llm_tools.knowledge_base import make_search_knowledge_base_tool
-from app.agent.prompts.response_writer import RESPONSE_WRITER_SYSTEM_PROMPT
+from app.agent.llm_tools.plan_scope import resolve_plan_slug
+from app.agent.prompts.response_writer import DOCUMENT_MAP_BLOCK, RESPONSE_WRITER_SYSTEM_PROMPT
+from app.agent.prompts.safe_text import prompt_safe
 from app.agent.state import AgentState
 from app.business.escalation import EscalationRoute
 from app.core.llm import get_chat_model
+from app.rag.catalog import get_document_map
 from app.schemas.agent import Intent
 from app.schemas.orders import (
     OrderDetails,
@@ -12,6 +18,7 @@ from app.schemas.orders import (
     RetentionChoice,
     RetentionReceipt,
 )
+from app.schemas.rag import DocumentMapEntry
 from app.schemas.tools import EscalationReceipt, PlanSummary
 
 _RAG_ELIGIBLE_INTENTS = {
@@ -25,6 +32,8 @@ _SEARCH_REQUIRED_INTENTS = {
     Intent.PRODUCT_QUESTION,
     Intent.TECHNICAL_SUPPORT,
 }
+_MAP_TITLE_LIMIT = 120
+_MAP_WHEN_TO_USE_LIMIT = 300
 _NEVER_SHOWN_TO_CUSTOMERS = {"customer_id", "email"}
 _SEARCH_REQUIRED_REMINDER = (
     "You have not searched the knowledge base in this turn and the context has no "
@@ -127,13 +136,38 @@ def _retention_text(receipt: RetentionReceipt) -> str:
     return f"${(receipt.credit_cents or 0) / 100:,.2f} in credits added to their account"
 
 
+def format_document_map_line(entry: DocumentMapEntry) -> str:
+    return (
+        f"- id: {entry.document_id} | title: {prompt_safe(entry.title, _MAP_TITLE_LIMIT)}"
+        f" | when to use: {prompt_safe(entry.when_to_use, _MAP_WHEN_TO_USE_LIMIT)}"
+        f" | ~{entry.estimated_tokens} tokens"
+    )
+
+
+def _format_document_map(entries: tuple[DocumentMapEntry, ...]) -> str:
+    listing = "\n".join(format_document_map_line(entry) for entry in entries)
+    return DOCUMENT_MAP_BLOCK.format(listing=listing)
+
+
 def response_writer_node(state: AgentState) -> dict:
     context = _build_context_blob(state)
-    system_message = SystemMessage(content=RESPONSE_WRITER_SYSTEM_PROMPT.format(context=context))
+    content = RESPONSE_WRITER_SYSTEM_PROMPT.format(context=context)
 
     llm = get_chat_model()
+    updates: dict = {}
     if state.get("intent") in _RAG_ELIGIBLE_INTENTS:
-        llm = llm.bind_tools([make_search_knowledge_base_tool(state["customer_id"])])
+        tenant_id = uuid.UUID(state["tenant_id"])
+        plan_slug = resolve_plan_slug(state)
+        updates["knowledge_plan_slug"] = plan_slug
+        if entries := get_document_map(tenant_id, plan_slug):
+            content = f"{content}\n\n{_format_document_map(entries)}"
+        llm = llm.bind_tools(
+            [
+                make_search_knowledge_base_tool(tenant_id, plan_slug),
+                make_open_documents_tool(tenant_id, plan_slug),
+            ]
+        )
+    system_message = SystemMessage(content=content)
     llm = llm.with_retry(stop_after_attempt=3)
 
     ai_message = llm.invoke([system_message, *state["messages"]])
@@ -146,4 +180,4 @@ def response_writer_node(state: AgentState) -> dict:
         reminder = SystemMessage(content=f"{system_message.content}\n\n{_SEARCH_REQUIRED_REMINDER}")
         ai_message = llm.invoke([reminder, *state["messages"]])
 
-    return {"messages": [ai_message]}
+    return {"messages": [ai_message], **updates}
