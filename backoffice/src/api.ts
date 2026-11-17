@@ -187,3 +187,99 @@ export const closeEscalation = (
     { method: "POST", body: JSON.stringify({ notes: notes || null }) },
     token,
   );
+
+export interface KbVersion {
+  id: string;
+  version: number;
+  status: string;
+  created_at: string;
+  published_at: string | null;
+  published_by: string | null;
+  estimated_tokens: number;
+  fits_whole_document: boolean;
+  content: string;
+}
+
+export interface KbDocumentItem {
+  id: string;
+  title: string;
+  doc_type: string;
+  plan_scope: string | null;
+  when_to_use: string;
+  published_version_id: string | null;
+  published_version: number | null;
+  has_draft: boolean;
+  estimated_tokens: number;
+  fits_whole_document: boolean;
+}
+
+export interface KbDocumentDetail extends KbDocumentItem {
+  product_area: string | null;
+  versions: KbVersion[];
+}
+
+export interface NewKbDocument {
+  title: string;
+  doc_type: string;
+  plan_scope: string | null;
+  when_to_use: string;
+  content: string;
+}
+
+export interface KbDocumentDetails {
+  title: string;
+  doc_type: string;
+  plan_scope: string | null;
+  when_to_use: string;
+}
+
+const kb = (tenantId: string, path = "") => `/tenants/${tenantId}/kb/documents${path}`;
+
+export const listKbDocuments = (token: string, tenantId: string) =>
+  request<KbDocumentItem[]>(kb(tenantId), {}, token);
+
+export const readKbDocument = (token: string, tenantId: string, documentId: string) =>
+  request<KbDocumentDetail>(kb(tenantId, `/${documentId}`), {}, token);
+
+export const createKbDocument = (token: string, tenantId: string, document: NewKbDocument) =>
+  request<KbDocumentDetail>(kb(tenantId), { method: "POST", body: JSON.stringify(document) }, token);
+
+export const updateKbDocumentDetails = (
+  token: string,
+  tenantId: string,
+  documentId: string,
+  details: KbDocumentDetails,
+) =>
+  request<KbDocumentDetail>(
+    kb(tenantId, `/${documentId}`),
+    { method: "PATCH", body: JSON.stringify(details) },
+    token,
+  );
+
+export const saveKbDraft = (token: string, tenantId: string, documentId: string, content: string) =>
+  request<KbDocumentDetail>(
+    kb(tenantId, `/${documentId}/draft`),
+    { method: "PUT", body: JSON.stringify({ content }) },
+    token,
+  );
+
+export const publishKbDraft = (token: string, tenantId: string, documentId: string) =>
+  request<KbDocumentDetail>(kb(tenantId, `/${documentId}/draft/publish`), { method: "POST" }, token);
+
+export const republishKbVersion = (token: string, tenantId: string, documentId: string, versionId: string) =>
+  request<KbDocumentDetail>(
+    kb(tenantId, `/${documentId}/versions/${versionId}/publish`),
+    { method: "POST" },
+    token,
+  );
+
+export const archiveKbDocument = (token: string, tenantId: string, documentId: string) =>
+  request<KbDocumentDetail>(kb(tenantId, `/${documentId}/archive`), { method: "POST" }, token);
+
+export interface PlanItem {
+  slug: string;
+  name: string;
+}
+
+export const listPlans = (token: string, tenantId: string) =>
+  request<PlanItem[]>(`/tenants/${tenantId}/plans`, {}, token);
