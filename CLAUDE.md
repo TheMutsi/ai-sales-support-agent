@@ -127,7 +127,7 @@ again for manual testing.
 
 ## Environment variables
 
-See `.env.example` for the full list. Key ones: `LLM_PROVIDER` (`anthropic` | `google` | `ollama`), `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_MODEL`/`OLLAMA_BASE_URL` (no key needed — requires `ollama pull qwen2.5:7b-instruct` + `ollama serve` running locally), `EMBEDDING_PROVIDER` (`google` | `ollama`), `OLLAMA_EMBEDDING_MODEL` (requires `ollama pull nomic-embed-text`), `DATABASE_URL`, `LANGFUSE_TRACING_ENABLED`/`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` for the self-hosted Langfuse stack in `docker-compose.yml`.
+See `.env.example` for the full list. Key ones: `LLM_PROVIDER` (`anthropic` | `google` | `ollama`), `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_MODEL`/`OLLAMA_BASE_URL`/`OLLAMA_NUM_CTX` (context window in tokens, default 16384; without it Ollama truncates long prompts silently; no key needed — requires `ollama pull qwen2.5:7b-instruct` + `ollama serve` running locally), `EMBEDDING_PROVIDER` (`google` | `ollama`), `OLLAMA_EMBEDDING_MODEL` (requires `ollama pull nomic-embed-text`), `DATABASE_URL`, `LANGFUSE_TRACING_ENABLED`/`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` for the self-hosted Langfuse stack in `docker-compose.yml`.
 
 The `db` service in `docker-compose.yml` publishes on host port **5433** (not 5432), to avoid colliding with a native Postgres install. `DATABASE_URL` in `.env.example` already points at 5433; containers talk to each other over the internal Docker network on the default 5432, unaffected by this.
 

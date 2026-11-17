@@ -24,7 +24,9 @@ def create_chat_model(provider: LLMProvider, model: str) -> BaseChatModel:
         return ChatGoogleGenerativeAI(model=model, google_api_key=settings.google_api_key)
 
     if provider == "ollama":
-        return ChatOllama(model=model, base_url=settings.ollama_base_url)
+        return ChatOllama(
+            model=model, base_url=settings.ollama_base_url, num_ctx=settings.ollama_num_ctx
+        )
 
     raise ValueError(f"Unsupported LLM provider: {provider!r}")
 
