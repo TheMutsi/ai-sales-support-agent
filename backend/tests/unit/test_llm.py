@@ -63,6 +63,20 @@ def test_returns_chat_ollama_for_ollama_provider(monkeypatch):
     assert isinstance(model, ChatOllama)
 
 
+def test_ollama_chat_model_gets_num_ctx_from_settings(monkeypatch):
+    monkeypatch.setattr(
+        llm, "get_settings", lambda: Settings(llm_provider="ollama", ollama_num_ctx=8192)
+    )
+
+    model = llm.create_chat_model("ollama", "llama3")
+
+    assert model.num_ctx == 8192
+
+
+def test_ollama_num_ctx_defaults_to_16384():
+    assert Settings().ollama_num_ctx == 16384
+
+
 def test_settings_reject_an_unsupported_provider():
     with pytest.raises(ValidationError, match="llm_provider"):
         Settings(llm_provider="openai")

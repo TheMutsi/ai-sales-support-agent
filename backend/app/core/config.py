@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     google_model: str = "gemini-2.5-pro"
     ollama_model: str = "qwen2.5:7b-instruct"
     ollama_base_url: str = "http://localhost:11434"
+    ollama_num_ctx: int = Field(
+        default=16384,
+        gt=0,
+        description="Ollama's context window in tokens; without it Ollama truncates silently.",
+    )
 
     embedding_provider: str = "google"
     embedding_model: str = "text-embedding-004"
