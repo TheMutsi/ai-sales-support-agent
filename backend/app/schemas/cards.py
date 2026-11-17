@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CardImage(BaseModel):
@@ -46,6 +46,50 @@ class DividerCard(BaseModel):
     type: Literal["divider"] = "divider"
     id: str
     label: str = ""
+    variant: Literal["heading"] | None = None
 
 
-Card = Annotated[ActionCard | ProductCard | DividerCard, Field(discriminator="type")]
+class RecommendationTemplate(StrEnum):
+    PRODUCT_CARD = "product_card"
+
+
+class RecommendationCard(BaseModel):
+    type: Literal["recommendation"] = "recommendation"
+    id: str
+    template: RecommendationTemplate
+    title: str
+    description: str | None = None
+    image: CardImage | None = None
+    rating: float | None = Field(default=None, ge=0, le=5)
+    url: str | None = None
+    price: str | None = None
+    compare_price: str | None = None
+    offer_label: str | None = None
+    why: str | None = None
+
+    @field_validator("url")
+    @classmethod
+    def _url_is_http_or_https(cls, value: str | None) -> str | None:
+        if value is not None and not value.lower().startswith(("http://", "https://")):
+            raise ValueError("a recommendation link must be an http or https address")
+        return value
+
+    @field_validator("image")
+    @classmethod
+    def _image_is_https(cls, value: CardImage | None) -> CardImage | None:
+        if value is not None and not value.url.lower().startswith("https://"):
+            raise ValueError("a recommendation picture must be an https address")
+        return value
+
+
+Card = Annotated[
+    ActionCard | ProductCard | DividerCard | RecommendationCard, Field(discriminator="type")
+]
+
+
+def is_a_card_still_readable(card: object) -> bool:
+    if not isinstance(card, dict):
+        return True
+    if card.get("type") == "recommendation":
+        return card.get("template") in {template.value for template in RecommendationTemplate}
+    return card.get("type") in {"action", "product", "divider"}

@@ -24,11 +24,13 @@ const toSession = (json: SessionJson): Session => ({
   identityLevel: json.identity_level,
 });
 
+export function safeAbsoluteUrl(url: string | null | undefined, schemes: "https" | "http-https"): string {
+  const allowed = schemes === "https" ? /^https:\/\//i : /^https?:\/\//i;
+  return url && allowed.test(url) ? url : "";
+}
+
 export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch = fetch) {
-  const safeUrl = (url: string): string => {
-    const absolute = url.startsWith("/") ? `${baseUrl}${url}` : url;
-    return /^https?:\/\//i.test(absolute) ? absolute : "";
-  };
+  const safeUrl = (url: string): string => safeAbsoluteUrl(url.startsWith("/") ? `${baseUrl}${url}` : url, "http-https");
   const resolveCards = (cards: Card[] | undefined): Card[] | undefined =>
     cards?.map((card) =>
       card.type === "product"

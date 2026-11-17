@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { safeAbsoluteUrl } from "../data/api";
 import type { Card, CardImage } from "../data/types";
 import { ChevronRight } from "./icons";
 
@@ -9,11 +10,73 @@ interface Handlers {
   onZoom: (images: CardImage[]) => void;
 }
 
+type RecommendationCard = Extract<Card, { type: "recommendation" }>;
+type CardItem = Exclude<Card, RecommendationCard> | RecommendationCard[];
+
+function groupRecommendations(cards: Card[]): CardItem[] {
+  return cards.reduce<CardItem[]>((items, card) => {
+    const last = items[items.length - 1];
+    if (card.type !== "recommendation") return [...items, card];
+    if (Array.isArray(last)) return [...items.slice(0, -1), [...last, card]];
+    return [...items, [card]];
+  }, []);
+}
+
+function Stars({ rating }: { rating: number }) {
+  const filled = Math.min(5, Math.max(0, rating)) * 20;
+  return (
+    <span className="mew-stars" role="img" aria-label={`${Math.round(rating * 10) / 10} out of 5`}>
+      <span className="mew-stars-fill" style={{ width: `${filled}%` }}>
+        ★★★★★
+      </span>
+      ★★★★★
+    </span>
+  );
+}
+
+function RecommendationView({ card }: { card: RecommendationCard }) {
+  const imageUrl = safeAbsoluteUrl(card.image?.url, "https");
+  const linkUrl = safeAbsoluteUrl(card.url, "http-https");
+  const body = (
+    <>
+      {imageUrl && <img src={imageUrl} alt={card.image?.alt ?? ""} loading="lazy" />}
+      {card.offer_label && <span className="mew-card-badge">{card.offer_label}</span>}
+      <strong>{card.title}</strong>
+      {card.rating != null && <Stars rating={card.rating} />}
+      {(card.price || card.compare_price) && (
+        <span className="mew-price-row">
+          {card.compare_price && <s className="mew-compare">{card.compare_price}</s>}
+          {card.price && <span className="mew-price">{card.price}</span>}
+        </span>
+      )}
+      {card.description && <small>{card.description}</small>}
+    </>
+  );
+  return (
+    <div className="mew-card mew-recommendation">
+      {linkUrl ? (
+        <a href={linkUrl} target="_blank" rel="noopener noreferrer">
+          {body}
+        </a>
+      ) : (
+        body
+      )}
+      {card.why && <span className="mew-why">{card.why}</span>}
+    </div>
+  );
+}
+
 export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active: boolean } & Handlers) {
   return (
     <div className="mew-cards">
-      {cards.map((card) =>
-        card.type === "action" ? (
+      {groupRecommendations(cards).map((card) =>
+        Array.isArray(card) ? (
+          <div key={card[0].id} className="mew-carousel">
+            {card.map((item) => (
+              <RecommendationView key={item.id} card={item} />
+            ))}
+          </div>
+        ) : card.type === "action" ? (
           <button
             key={card.id}
             type="button"
@@ -31,7 +94,7 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
         ) : card.type === "divider" ? (
           <div key={card.id} className="mew-divider" role="separator">
             <span />
-            {card.label && <b>{card.label}</b>}
+            {card.label && <b className={card.variant === "heading" ? "mew-divider-title" : undefined}>{card.label}</b>}
             <span />
           </div>
         ) : (

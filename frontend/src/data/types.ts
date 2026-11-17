@@ -25,7 +25,21 @@ export type Card =
       image: CardImage;
       more_images?: CardImage[];
     }
-  | { type: "divider"; id: string; label?: string };
+  | { type: "divider"; id: string; label?: string; variant?: "heading" | null }
+  | {
+      type: "recommendation";
+      id: string;
+      template: "product_card";
+      title: string;
+      description?: string | null;
+      image?: CardImage | null;
+      rating?: number | null;
+      url?: string | null;
+      price?: string | null;
+      compare_price?: string | null;
+      offer_label?: string | null;
+      why?: string | null;
+    };
 
 export interface ChatMessage {
   id: string;
