@@ -1,8 +1,3 @@
-"""What every admin route depends on: the session, and the permission a route declares.
-
-Kept apart from the routes so the route modules can share it without importing each other.
-"""
-
 import uuid
 from typing import Annotated
 
@@ -28,8 +23,6 @@ def admin_session(authorization: Annotated[str | None, Header()] = None) -> Admi
 
 
 def require_permission(permission: Permission):
-    """A dependency that lets through a session whose role holds `permission`."""
-
     def check(session: Annotated[AdminSession, Depends(admin_session)]) -> AdminSession:
         if permission not in ROLE_PERMISSIONS[session.role]:
             raise error(403, "forbidden")
@@ -40,9 +33,6 @@ def require_permission(permission: Permission):
 
 
 def require_tenant_permission(permission: Permission):
-    """`require_permission` for routes about one tenant (`{tenant_id}` in the path): the session
-    must also be allowed to see that tenant."""
-
     def check(
         tenant_id: uuid.UUID,
         session: Annotated[AdminSession, Depends(require_permission(permission))],

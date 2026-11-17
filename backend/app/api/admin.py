@@ -1,10 +1,3 @@
-"""The back office's API (`/api/admin`), mounted only in local environments (ADR-0016).
-
-Every route except the placeholder login declares the permission it needs through
-`require_permission` / `require_tenant_permission`; `tests/unit/test_admin_permissions.py` fails
-if one does not, so a forgotten check fails a test instead of opening a route.
-"""
-
 import uuid
 from datetime import datetime, timedelta
 from typing import Annotated
@@ -46,16 +39,20 @@ class TenantOption(BaseModel):
 
 @router.get("/login-options", response_model=list[TenantOption])
 def placeholder_login_options(db: Annotated[Session, Depends(get_db)]) -> list[Tenant]:
-    """The tenants a placeholder login can pick, before there is a session to list them with.
-    Goes away with the placeholder."""
     return list(db.scalars(select(Tenant).order_by(Tenant.name)))
 
 
 class AdminLoginRequest(BaseModel):
     role: Role
-    tenant_id: uuid.UUID | None = None  # required for every role but the operator
-    # What a visitor sees when this person joins a chat; the role's name if left out.
-    name: str | None = Field(default=None, min_length=1, max_length=40)
+    tenant_id: uuid.UUID | None = Field(
+        default=None, description="Required for every role but the operator."
+    )
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=40,
+        description="What a visitor sees when this person joins a chat; the role's name if left out.",
+    )
 
 
 class AdminLoginResponse(BaseModel):
@@ -71,7 +68,6 @@ class AdminLoginResponse(BaseModel):
 def placeholder_login(
     request: AdminLoginRequest, db: Annotated[Session, Depends(get_db)]
 ) -> AdminLoginResponse:
-    """No authentication: anyone may ask for any role. See the module docstring."""
     tenant_id = None
     if request.role is not Role.OPERATOR:
         if request.tenant_id is None or db.get(Tenant, request.tenant_id) is None:
@@ -98,7 +94,7 @@ def placeholder_login(
 class TenantSummary(BaseModel):
     id: uuid.UUID
     name: str
-    api_key: str  # public: it ships in the widget's script URL
+    api_key: str = Field(description="Public: it ships in the widget's script URL.")
 
 
 @router.get("/tenants", response_model=list[TenantSummary])
@@ -106,7 +102,6 @@ def list_tenants(
     session: Annotated[AdminSession, Depends(require_permission(Permission.TENANTS_READ))],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[Tenant]:
-    """The tenants this session may choose from: all for the operator, its own for the rest."""
     query = select(Tenant).order_by(Tenant.name)
     if session.role not in CROSS_TENANT_ROLES:
         query = query.where(Tenant.id == session.tenant_id)
@@ -123,8 +118,6 @@ class TenantConfigView(BaseModel):
 
 
 class TenantConfigUpdate(BaseModel):
-    """What may be changed. A field left out is left alone; `scope_overrides: null` clears them."""
-
     model_config = ConfigDict(extra="forbid")
 
     allowed_origins: list[str] | None = None
@@ -171,17 +164,14 @@ def update_config(
 ) -> Tenant:
     tenant = _tenant_or_404(db, tenant_id)
     if "allowed_origins" in update.model_fields_set:
-        if update.allowed_origins is None:  # unlike scope_overrides, there is no "clear"
+        if update.allowed_origins is None:
             raise error(422, "allowed_origins_cannot_be_null")
         tenant.allowed_origins = update.allowed_origins
     if "scope_overrides" in update.model_fields_set:
         tenant.scope_overrides = update.scope_overrides or None
     db.commit()
-    # The writer sees its own change at once; other instances within the TTL (ADR-0016).
     tenant_configs.invalidate()
     return tenant
 
 
-# Mounted one by one (not nested with `include_router`) so the route-coverage test can read each
-# route's dependencies; see tests/unit/test_admin_routes.py.
 ADMIN_ROUTERS = [router, conversations_router, escalations_router]
