@@ -7,13 +7,15 @@ from sqlalchemy import (
     CheckConstraint,
     Computed,
     DateTime,
+    Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
@@ -383,6 +385,148 @@ class DocumentChunk(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     document_version: Mapped["DocumentVersion"] = relationship(back_populates="chunks")
+
+
+class RecommendationType(Base):
+    __tablename__ = "recommendation_types"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "key"),
+        UniqueConstraint("id", "tenant_id", name="uq_recommendation_types_id_tenant"),
+        CheckConstraint("card_template IN ('product_card')", name="ck_recommendation_types_card_template"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    key: Mapped[str]
+    name: Mapped[str]
+    card_template: Mapped[str]
+    field_schema: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class RecommendationItem(Base):
+    __tablename__ = "recommendation_items"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "external_id"),
+        UniqueConstraint("id", "tenant_id", name="uq_recommendation_items_id_tenant"),
+        ForeignKeyConstraint(
+            ["type_id", "tenant_id"],
+            ["recommendation_types.id", "recommendation_types.tenant_id"],
+            name="fk_recommendation_items_type_tenant",
+        ),
+        CheckConstraint("status IN ('draft', 'active', 'archived')", name="ck_recommendation_items_status"),
+        CheckConstraint(
+            "enrichment_status IN ('pending', 'ready', 'failed')", name="ck_recommendation_items_enrichment_status"
+        ),
+        CheckConstraint("price_cents >= 0", name="ck_recommendation_items_price"),
+        CheckConstraint("rating IS NULL OR rating BETWEEN 0 AND 5", name="ck_recommendation_items_rating"),
+        CheckConstraint("image_url IS NULL OR image_url ~* '^https://'", name="ck_recommendation_items_image_https"),
+        CheckConstraint("url IS NULL OR url ~* '^https?://'", name="ck_recommendation_items_url_http"),
+        CheckConstraint("pack_size > 0", name="ck_recommendation_items_pack_size"),
+        Index("ix_recommendation_items_search_tsv", "search_tsv", postgresql_using="gin"),
+        Index("ix_recommendation_items_tenant_product", "tenant_id", "product_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    type_id: Mapped[uuid.UUID]
+    external_id: Mapped[str]
+    product_id: Mapped[str | None]
+    pack_size: Mapped[int | None]
+    title: Mapped[str]
+    short_desc: Mapped[str] = mapped_column(Text, default="", server_default="")
+    long_desc: Mapped[str] = mapped_column(Text, default="", server_default="")
+    price_cents: Mapped[int]
+    currency: Mapped[str] = mapped_column(String(3), default="usd", server_default="usd")
+    rating: Mapped[float | None] = mapped_column(Float)
+    image_url: Mapped[str | None]
+    url: Mapped[str | None]
+    extra: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    status: Mapped[str] = mapped_column(default="draft", server_default="draft")
+    enrichment_status: Mapped[str] = mapped_column(default="pending", server_default="pending")
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    search_tsv: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('simple', title || ' ' || short_desc || ' ' || long_desc)", persisted=True),
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    offers: Mapped[list["ItemOffer"]] = relationship(back_populates="item", cascade="all, delete-orphan")
+
+
+class ItemOffer(Base):
+    __tablename__ = "item_offers"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["item_id", "tenant_id"],
+            ["recommendation_items.id", "recommendation_items.tenant_id"],
+            name="fk_item_offers_item_tenant",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("kind IN ('pack', 'discount', 'bundle')", name="ck_item_offers_kind"),
+        CheckConstraint("price_cents >= 0", name="ck_item_offers_price"),
+        CheckConstraint("compare_at_cents >= 0", name="ck_item_offers_compare_at"),
+        CheckConstraint("quantity > 0", name="ck_item_offers_quantity"),
+        CheckConstraint(
+            "compare_at_cents IS NULL OR compare_at_cents > price_cents", name="ck_item_offers_compare_at_above_price"
+        ),
+        Index("ix_item_offers_item_id", "item_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    item_id: Mapped[uuid.UUID]
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"))
+    kind: Mapped[str]
+    label: Mapped[str]
+    quantity: Mapped[int] = mapped_column(default=1, server_default="1")
+    price_cents: Mapped[int]
+    compare_at_cents: Mapped[int | None]
+    active: Mapped[bool] = mapped_column(default=True, server_default="true")
+
+    item: Mapped["RecommendationItem"] = relationship(back_populates="offers")
+
+
+class RecommendationTag(Base):
+    __tablename__ = "recommendation_tags"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug"),
+        UniqueConstraint("id", "tenant_id", name="uq_recommendation_tags_id_tenant"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    slug: Mapped[str]
+    description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ItemTag(Base):
+    __tablename__ = "item_tags"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["item_id", "tenant_id"],
+            ["recommendation_items.id", "recommendation_items.tenant_id"],
+            name="fk_item_tags_item_tenant",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tag_id", "tenant_id"],
+            ["recommendation_tags.id", "recommendation_tags.tenant_id"],
+            name="fk_item_tags_tag_tenant",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("weight >= 0 AND weight <= 1", name="ck_item_tags_weight"),
+        Index("ix_item_tags_tag_id", "tag_id"),
+    )
+
+    item_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    tag_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"))
+    weight: Mapped[float] = mapped_column(Float)
+    why: Mapped[str] = mapped_column(Text, default="", server_default="")
+    pinned: Mapped[bool] = mapped_column(default=False, server_default="false")
+    is_complement: Mapped[bool] = mapped_column(default=False, server_default="false")
 
 
 class AgentPresence(Base):

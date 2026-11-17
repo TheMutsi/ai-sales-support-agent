@@ -21,6 +21,7 @@ from app.db.models import (
     Subscription,
     Tenant,
 )
+from app.db.seed_catalog import seed_demo_catalog
 from app.db.session import SessionLocal
 
 
@@ -82,6 +83,7 @@ def seed(db: Session) -> None:
     _ensure_orders(db, plans_by_slug, tenant_id)
     if tenant:
         _ensure_demo_shop(db, plans_by_slug, tenant_id, now)
+        seed_demo_catalog(db, tenant_id)
     db.commit()
 
 

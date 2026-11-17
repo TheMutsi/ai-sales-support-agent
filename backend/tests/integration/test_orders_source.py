@@ -4,17 +4,27 @@ import uuid
 import pytest
 from sqlalchemy.orm import Session
 
-from app.db.models import Customer, Order, OrderAdjustment, Plan, Subscription, Tenant, TenantSecret
+from app.db.models import (
+    Customer,
+    Order,
+    OrderAdjustment,
+    Plan,
+    Subscription,
+    Tenant,
+    TenantSecret,
+)
 from app.db.seed import seed
 from app.db.session import SessionLocal
 from app.orders.simulated import SimulatedOrderSource
 from app.orders.source import OrderSource
 from app.schemas.orders import OrderStatus, RetentionChoice
+from tests.integration.conftest import wipe_recommendation_catalog
 
 
 @pytest.fixture
 def db() -> Session:
     session = SessionLocal()
+    wipe_recommendation_catalog(session)
     for model in (Order, Subscription, Customer, TenantSecret, Tenant, Plan):
         session.query(model).delete()
     session.commit()

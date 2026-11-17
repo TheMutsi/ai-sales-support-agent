@@ -10,11 +10,16 @@ from app.db.models import (
     DocumentChunk,
     DocumentVersion,
     IdentificationEvent,
+    ItemOffer,
+    ItemTag,
     Message,
     Order,
     OtpChallenge,
     Plan,
     RateLimitCounter,
+    RecommendationItem,
+    RecommendationTag,
+    RecommendationType,
     ReturnEvent,
     SecurityEvent,
     Subscription,
@@ -78,6 +83,14 @@ def _wipe_knowledge_base(session: Session) -> None:
     session.query(Document).delete()
 
 
+def wipe_recommendation_catalog(session: Session) -> None:
+    session.query(ItemTag).delete()
+    session.query(ItemOffer).delete()
+    session.query(RecommendationItem).delete()
+    session.query(RecommendationTag).delete()
+    session.query(RecommendationType).delete()
+
+
 def _wipe(session: Session) -> None:
     _wipe_knowledge_base(session)
     session.query(Tenant).filter_by(api_key=KB_TEST_TENANT_API_KEY).delete()
@@ -108,6 +121,7 @@ def _wipe_commercial_tables(session: Session) -> None:
     session.query(OtpChallenge).delete()
     session.query(SecurityEvent).delete()
     _wipe_knowledge_base(session)
+    wipe_recommendation_catalog(session)
     session.query(TenantSecret).delete()
     session.query(TenantSmtp).delete()
     session.query(Tenant).delete()
