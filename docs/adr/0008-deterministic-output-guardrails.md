@@ -28,6 +28,13 @@ tuple, `_ALL_CHECKS`.
   message `id`, so the `add_messages` reducer overwrites it and the false claim never
   stays in conversation history. If a real ticket exists, the fallback cites its real
   ID.
+- **The fallback promises nothing it cannot back.** Without an escalation it only offers to
+  connect the customer with a person; with one it repeats the follow-up number, since the blocked
+  reply was where the customer would have learned it. A reply that passes but leaves the number
+  out (a small model does, seen live) gets a fixed sentence with it appended.
+- **What an order already says counts only on a status question.** A cancelled order or a
+  recorded refund backs "it was cancelled" or "it was refunded" when the customer asked about their
+  orders, so an old refund cannot back a made-up new one in another answer.
 - Checks are regular expressions in English and Spanish, kept specific to claims
   rather than topics, so a correct denial ("we can't issue refunds here") passes.
 

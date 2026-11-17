@@ -1,15 +1,3 @@
-"""Rejecting or returning an order, a few turns long.
-
-The model only reads what the customer means (`ReturnReading`); what is allowed, what is
-offered and the numbers come from `app.business.returns`, and every change goes through the
-shop's `OrderSource`. The step keeps the customer's place between turns in `pending_return`
-(stored on the conversation) and tells the writer exactly what was done in `return_result`, so a
-reply can say only what really happened.
-
-A customer's request can reach it only through a session that proved a customer (the scope is
-checked in `routing.py`); the customer and the tenant come from that session.
-"""
-
 import uuid
 
 from langchain_core.messages import AIMessage, SystemMessage
@@ -39,8 +27,7 @@ from app.schemas.orders import (
     ReturnStage,
 )
 
-# What each way of taking the offer records and what it is called afterwards.
-_TAKEN = {
+_RETENTION_BY_CHOICE = {
     ReturnChoice.REFUND: (RetentionChoice.REFUND, ReturnOutcome.KEPT_WITH_REFUND),
     ReturnChoice.CREDITS: (RetentionChoice.CREDITS, ReturnOutcome.KEPT_WITH_CREDITS),
 }
@@ -67,23 +54,23 @@ async def _read(state: AgentState, orders: list[OrderDetails], situation: str) -
     prompt = ORDER_RETURN_READING_PROMPT.format(orders=_listing(orders), situation=situation)
     reader = get_chat_model().with_structured_output(ReturnReading).with_retry(stop_after_attempt=3)
     reading = await reader.ainvoke([SystemMessage(content=prompt), *state["messages"]])
-    # The id comes from the model, so it is only ever used if it is one of the listed orders.
+    return _without_unlisted_order(reading, orders)
+
+
+def _without_unlisted_order(reading: ReturnReading, orders: list[OrderDetails]) -> ReturnReading:
     if reading.order_id not in {o.order_id for o in orders}:
-        reading = reading.model_copy(update={"order_id": None})
+        return reading.model_copy(update={"order_id": None})
     return reading
 
 
-def _check(order: OrderDetails) -> tuple[PendingReturn, ReturnResult]:
-    """Show the order and ask if it is the one, before offering or cancelling anything."""
+def _ask_if_this_is_the_order(order: OrderDetails) -> tuple[PendingReturn, ReturnResult]:
     return (
         PendingReturn(order_id=order.order_id, stage=ReturnStage.CHECK),
         ReturnResult(outcome=ReturnOutcome.CONFIRM_ORDER, order=order),
     )
 
 
-# What a button means, and in which step each is valid. A click that does not fit the step the
-# customer is in (a button from an older question) is read as "not understood", never applied.
-_ACTION_CHOICE = {
+_CHOICE_BY_ACTION = {
     CardAction.CONFIRM_ORDER: ReturnChoice.REJECT,
     CardAction.CONFIRM_CANCEL: ReturnChoice.REJECT,
     CardAction.DECLINE_OFFER: ReturnChoice.REJECT,
@@ -94,7 +81,7 @@ _ACTION_CHOICE = {
 }
 _OFFER_ACTIONS = {CardAction.TAKE_REFUND, CardAction.TAKE_CREDITS, CardAction.DECLINE_OFFER}
 _ACTIONS_BY_STAGE: dict[ReturnStage | None, set[CardAction]] = {
-    None: {CardAction.CHOOSE_ORDER},  # nothing pending: only picking one of the listed orders
+    None: {CardAction.CHOOSE_ORDER},
     ReturnStage.CHECK: {CardAction.CONFIRM_ORDER, CardAction.KEEP_ORDER},
     ReturnStage.OFFER: _OFFER_ACTIONS,
     ReturnStage.FINAL_OFFER: _OFFER_ACTIONS,
@@ -102,24 +89,23 @@ _ACTIONS_BY_STAGE: dict[ReturnStage | None, set[CardAction]] = {
 }
 
 
-def _from_action(
+def _reading_from_click(
     state: AgentState, orders: list[OrderDetails], stage: ReturnStage | None
 ) -> ReturnReading:
-    """The reading a click stands for, from rules alone (no model)."""
     action = state["action"]
     if action not in _ACTIONS_BY_STAGE[stage]:
         return ReturnReading(choice=ReturnChoice.UNCLEAR, order_id=None)
     order_id = state.get("action_order_id") if action is CardAction.CHOOSE_ORDER else None
     if order_id not in {o.order_id for o in orders}:
         order_id = None
-    return ReturnReading(choice=_ACTION_CHOICE[action], order_id=order_id)
+    return ReturnReading(choice=_CHOICE_BY_ACTION[action], order_id=order_id)
 
 
 async def _reading(
     state: AgentState, orders: list[OrderDetails], situation: str, stage: ReturnStage | None
 ) -> ReturnReading:
     if state.get("action") is not None:
-        return _from_action(state, orders, stage)
+        return _reading_from_click(state, orders, stage)
     return await _read(state, orders, situation)
 
 
@@ -147,9 +133,6 @@ async def _cancel_or_explain(source, ids: dict, order: OrderDetails) -> ReturnRe
     return ReturnResult(outcome=ReturnOutcome.RETURN_LATER, order=order)
 
 
-# Everything this step says is fixed text, written here from the facts it just produced: no
-# model, no order number, and no mention of cancelling in an offer (the cards carry the options and
-# the buttons). So what the customer reads is exactly what happened.
 def reply_for(result: ReturnResult) -> str:
     gift = " Your free gift is on its way too." if result.receipt and result.receipt.gift else ""
     match result.outcome:
@@ -184,9 +167,7 @@ def reply_for(result: ReturnResult) -> str:
     return ""
 
 
-# Replies that end a return with a "no". The customer pushing back right after one gets a person,
-# not the same question and the same "no" again.
-_DEAD_ENDS = frozenset(
+_REPLIES_THAT_SAY_NO = frozenset(
     reply_for(ReturnResult(outcome=outcome))
     for outcome in (
         ReturnOutcome.RETURN_LATER,
@@ -197,11 +178,6 @@ _DEAD_ENDS = frozenset(
 
 
 def _escalate(orders: list[OrderDetails]) -> dict:
-    """No reply here: `human_escalation` escalates and the writer tells the customer. An order on
-    its way goes along when the dead end can only have been about orders on their way (nothing the
-    customer could still cancel): it decides whether a person is needed right now (see
-    `app.business.escalation`). Any doubt leaves it out, so the customer gets a person rather than
-    a wrong "not urgent"."""
     on_its_way = [o for o in orders if o.status is OrderStatus.IN_DELIVERY]
     unambiguous = bool(on_its_way) and not any(return_options(o).can_cancel for o in orders)
     return {
@@ -225,15 +201,14 @@ async def _continue(
     stage = pending.stage
     if choice is ReturnChoice.REJECT:
         if stage is ReturnStage.OFFER and offer is not None:
-            # Declined once: one more try, with a gift. Declined again, it goes ahead.
             return (
                 PendingReturn(order_id=order.order_id, stage=ReturnStage.FINAL_OFFER),
                 ReturnResult(outcome=ReturnOutcome.FINAL_OFFER, order=order, offer=offer),
             )
         return None, await _cancel_or_explain(source, ids, order)
     in_offer = stage in (ReturnStage.OFFER, ReturnStage.FINAL_OFFER)
-    if in_offer and choice in _TAKEN:
-        retention_choice, outcome = _TAKEN[choice]
+    if in_offer and choice in _RETENTION_BY_CHOICE:
+        retention_choice, outcome = _RETENTION_BY_CHOICE[choice]
         receipt = await source.keep_order_with_retention(
             order_id=order.order_id,
             choice=retention_choice,
@@ -243,7 +218,6 @@ async def _continue(
         if receipt is None:
             return None, ReturnResult(outcome=ReturnOutcome.NOT_AVAILABLE, order=order)
         return None, ReturnResult(outcome=outcome, order=order, receipt=receipt)
-    # Not understood (or an offer answer to a plain confirmation): ask again, same place.
     again_outcome = {
         ReturnStage.OFFER: ReturnOutcome.OFFER,
         ReturnStage.FINAL_OFFER: ReturnOutcome.FINAL_OFFER,
@@ -255,13 +229,12 @@ async def _continue(
 def _answer(
     pending: PendingReturn | None, result: ReturnResult, reading: ReturnReading | None = None
 ) -> dict:
-    """The state update, with the reply: no model words what this step says."""
     return {
         "pending_return": pending,
         "return_result": result,
         "messages": [AIMessage(content=reply_for(result))],
-        "intent": Intent.ORDER_RETURN,  # a click skips the classifier; the summary still says what it was
-        "return_reading": reading.choice if reading else None,  # for the record of this turn
+        "intent": Intent.ORDER_RETURN,
+        "return_reading": reading.choice if reading else None,
     }
 
 
@@ -275,14 +248,13 @@ async def order_return_node(state: AgentState) -> dict:
     by_id = {o.order_id: o for o in orders}
     pending = state.get("pending_return")
 
-    # Written, not clicked (an old button is not pushing back), straight after a "no": a person,
-    # unless they now name an order (that one is a new request, handled below with this reading).
     after_no = None
-    if (
+    written_right_after_a_no = (
         pending is None
         and state.get("action") is None
-        and last_reply_in(state["messages"], _DEAD_ENDS)
-    ):
+        and last_reply_in(state["messages"], _REPLIES_THAT_SAY_NO)
+    )
+    if written_right_after_a_no:
         actionable = [o for o in orders if _actionable(o)]
         if not actionable:
             return _escalate(orders)
@@ -300,14 +272,14 @@ async def order_return_node(state: AgentState) -> dict:
         if named is not None and named.order_id != order.order_id and _actionable(named):
             return _answer(
                 *_start(named), reading=reading
-            )  # they named another order: that one is meant
+            )
         if reading.choice is ReturnChoice.KEEP:
             return _answer(
                 None, ReturnResult(outcome=ReturnOutcome.KEPT_AS_IS, order=order), reading
             )
         if reading.choice is ReturnChoice.REJECT:
             return _answer(*_start(order), reading=reading)
-        return _answer(*_check(order), reading=reading)  # not understood: ask again, same place
+        return _answer(*_ask_if_this_is_the_order(order), reading=reading)
 
     if pending is not None and pending.order_id in by_id:
         order = by_id[pending.order_id]
@@ -331,7 +303,7 @@ async def order_return_node(state: AgentState) -> dict:
     if order is None:
         result = ReturnResult(outcome=ReturnOutcome.CHOOSE_ORDER, candidates=candidates)
         return _answer(None, result, reading)
-    # Only when the customer named it is it taken as meant; a single order is still asked about.
-    if reading is None:
-        return _answer(*_check(order))
+    customer_named_it = reading is not None
+    if not customer_named_it:
+        return _answer(*_ask_if_this_is_the_order(order))
     return _answer(*_start(order), reading=reading)

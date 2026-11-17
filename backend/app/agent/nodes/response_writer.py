@@ -14,13 +14,6 @@ from app.schemas.orders import (
 )
 from app.schemas.tools import EscalationReceipt, PlanSummary
 
-# The intents where response_writer binds the knowledge-base tool. Billing is
-# included because general billing questions (payment methods, cancellation,
-# proration) are answered by the KB's billing documents, and without the tool
-# the model has nothing to ground them on and invents answers. The tool is
-# read-only, so account facts still come only from get_customer_context.
-# Refund, upgrade and escalation stay grounded only in what their own nodes
-# put in state.
 _RAG_ELIGIBLE_INTENTS = {
     Intent.PRODUCT_QUESTION,
     Intent.PRICING_QUESTION,
@@ -28,17 +21,11 @@ _RAG_ELIGIBLE_INTENTS = {
     Intent.BILLING_QUESTION,
 }
 
-# These two reach response_writer with nothing gathered by earlier nodes, so
-# a first reply that doesn't search can only be ungrounded or empty. The eval
-# suite caught qwen2.5 doing both about half the time on a direct probe
-# (empty message, or "let me search" with no tool call). Billing and pricing
-# are left out: they arrive with the customer context or the plan catalog.
 _SEARCH_REQUIRED_INTENTS = {
     Intent.PRODUCT_QUESTION,
     Intent.TECHNICAL_SUPPORT,
 }
-# Appended to the system prompt for the single retry, the portable equivalent
-# of `tool_choice="required"`, which Ollama does not support.
+_NEVER_SHOWN_TO_CUSTOMERS = {"customer_id", "email"}
 _SEARCH_REQUIRED_REMINDER = (
     "You have not searched the knowledge base in this turn and the context has no "
     "MewFlow facts. Call the search tool now instead of replying."
@@ -46,15 +33,10 @@ _SEARCH_REQUIRED_REMINDER = (
 
 
 def _build_context_blob(state: AgentState) -> str:
-    """Serializes whatever earlier nodes gathered into text the LLM can ground
-    on — only the fields a given run actually populated are included, so the
-    prompt doesn't dangle empty sections for paths that never touched them."""
     sections: list[str] = []
 
     if customer_context := state.get("customer_context"):
-        # Internal ids and contact details are never shown to a customer, so they are
-        # kept out of the prompt: what the model never sees it cannot repeat.
-        account = customer_context.model_dump_json(indent=2, exclude={"customer_id", "email"})
+        account = customer_context.model_dump_json(indent=2, exclude=_NEVER_SHOWN_TO_CUSTOMERS)
         sections.append(f"Customer account:\n{account}")
 
     if eligibility_result := state.get("eligibility_result"):
@@ -99,9 +81,6 @@ def _format_escalation(receipt: EscalationReceipt) -> str:
 
 
 def _format_plan_catalog(plans: list[PlanSummary]) -> str:
-    """Prices pre-formatted in dollars: converting cents is arithmetic, and
-    arithmetic is not left to the model."""
-
     def limit(value: int | None) -> str:
         return "unlimited" if value is None else str(value)
 
@@ -132,7 +111,6 @@ def _status_text(status: OrderStatus) -> str:
 
 
 def _format_order(order: OrderDetails) -> str:
-    """The amount in dollars, like the plan catalog: converting cents is not left to the model."""
     line = (
         f"- {order.item_name or order.plan_slug.capitalize() + ' plan'} order: "
         f"${order.amount_cents / 100:,.2f} {order.currency}, status {_status_text(order.status)}, "
@@ -155,8 +133,6 @@ def response_writer_node(state: AgentState) -> dict:
 
     llm = get_chat_model()
     if state.get("intent") in _RAG_ELIGIBLE_INTENTS:
-        # bind_tools must come before with_retry: RunnableRetry (what
-        # with_retry returns) has no bind_tools method of its own.
         llm = llm.bind_tools([make_search_knowledge_base_tool(state["customer_id"])])
     llm = llm.with_retry(stop_after_attempt=3)
 

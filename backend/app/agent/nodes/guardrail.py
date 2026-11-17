@@ -1,13 +1,3 @@
-"""Runs after `response_writer`, before the graph ends.
-
-The deterministic output checks (`app/guardrails/output_checks.py`) run
-against the AI message `response_writer` just produced. A BLOCK violation
-replaces that message with a safe fallback — the customer never sees the
-unverified claim — and every violation (BLOCK or FLAG) lands on
-`guardrail_flags` so Stage 9's evaluation suite can measure how often each
-one actually fires, not just whether the final answer looked fine.
-"""
-
 import logging
 
 from langchain_core.messages import AIMessage
@@ -21,15 +11,11 @@ from app.schemas.orders import OrderStatus, ReturnOutcome
 
 logger = logging.getLogger(__name__)
 
-# Deliberately promises nothing: with no ticket, saying a human will follow
-# up would be the same kind of unbacked claim the output checks exist to block.
 FALLBACK_MESSAGE = (
     "I can't confirm that information right now. If you'd like, ask to talk to "
     "a person and I'll connect you with our support team."
 )
 
-# When `human_escalation` did open an escalation, the blocked reply was the one
-# place the customer would have learned that; the fallback must keep it.
 _FALLBACK_WITH_ESCALATION_MESSAGE = (
     "I can't confirm that information right now, but I've passed this to our support team "
     "(follow-up number {reference}) and a person will follow up with you."
@@ -43,9 +29,6 @@ def _fallback_message(state: AgentState) -> str:
 
 
 def _with_follow_up_number(state: AgentState, text: str) -> str | None:
-    """The customer must leave with their number, and a small model leaves it out sometimes (seen
-    live). If the escalation has one and the reply never says it, a fixed sentence is added;
-    returns None when nothing needs adding."""
     receipt = state.get("escalation_receipt")
     if receipt is None or receipt.reference in text:
         return None
@@ -53,12 +36,8 @@ def _with_follow_up_number(state: AgentState, text: str) -> str | None:
 
 
 def _confirmed_return_actions(state: AgentState) -> dict[str, bool]:
-    """What the return step really did this turn, or what an order already says: the only things
-    a reply may state as done."""
     result = state.get("return_result")
     outcome = result.outcome if result else None
-    # What an order already says counts only when the customer is being told about their orders
-    # (a status question), so an old refund cannot back a made-up new one in another answer.
     listed = (
         [o for o in [state.get("order_details"), *(state.get("customer_orders") or [])] if o]
         if state.get("intent") == Intent.ORDER_STATUS
@@ -114,9 +93,6 @@ def guardrail_node(state: AgentState) -> dict:
 
     blocked = any(v.severity == GuardrailSeverity.BLOCK for v in violations)
     if blocked:
-        # Replacing (not appending): reusing the same message id makes
-        # `add_messages` overwrite the blocked content in place, so the
-        # unverified claim never sits in conversation history either.
         update["messages"] = [AIMessage(content=_fallback_message(state), id=response_message.id)]
     elif (with_number := _with_follow_up_number(state, response_text)) is not None:
         update["messages"] = [AIMessage(content=with_number, id=response_message.id)]

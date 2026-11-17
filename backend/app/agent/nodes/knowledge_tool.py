@@ -1,14 +1,3 @@
-"""Executes whatever `search_knowledge_base_tool` calls `response_writer`'s
-LLM requested, and feeds the results back as `ToolMessage`s — the other half
-of the LLM↔tool loop `route_after_response_writer` drives.
-
-Arguments come from the model, so they can be invalid (e.g. a missing
-`query`). That is the model's mistake, not a system failure: it is
-returned to the model as an error `ToolMessage` it can correct on the next
-round (still bounded by `_MAX_TOOL_CALL_ROUNDS`), instead of crashing the
-whole turn. Anything else the tool raises (database, embeddings) is a real
-failure and propagates."""
-
 from langchain_core.messages import ToolMessage
 from pydantic import ValidationError
 
@@ -18,8 +7,6 @@ from app.agent.state import AgentState
 
 def _run_tool_call(tool, call: dict) -> ToolMessage:
     try:
-        # Invoked with the whole tool call (not just its args) so the tool
-        # returns a ToolMessage that keeps its artifact (the cited sources).
         return tool.invoke({**call, "type": "tool_call"})
     except ValidationError as exc:
         errors = "; ".join(
