@@ -1,53 +1,28 @@
-"""Typed contract for the deterministic output checks in `app/guardrails/`.
-
-A guardrail check doesn't call an LLM, so it isn't wired through
-`app/agent/prompts/` like the other nodes — it inspects what `response_writer`
-already produced against the state that's supposed to ground it.
-"""
-
 from enum import StrEnum
 
 from pydantic import BaseModel
 
 from app.schemas.agent import Intent
+from app.schemas.model_facing import described_to_the_model
 
 
 class GuardrailSeverity(StrEnum):
-    """BLOCK: the claim is falsifiable from state alone, so the response gets
-    replaced outright — we're certain it's wrong, not just suspicious. FLAG: the
-    signal is a heuristic that can false-positive on legitimate text, so it's
-    only recorded for observability/evaluation, never used to rewrite a real
-    answer."""
-
     BLOCK = "block"
     FLAG = "flag"
 
 
 class OutputCheckContext(BaseModel):
-    """What the output checks need to know about the turn, and nothing more.
-
-    `guardrail_node` builds it from the graph state, so the checks depend on
-    this contract instead of on the agent package (whose nodes call them)."""
-
     intent: Intent | None = None
     ticket_created: bool = False
-    # The follow-up number this conversation really has (opened this turn or still open), the only
-    # one a reply may quote.
     escalation_reference: str | None = None
     checkout_created: bool = False
     tool_call_rounds: int = 0
-    # An order was really read this turn (the order_status step found one).
     order_found: bool = False
-    # What the return flow really did this turn: only these let a reply say it happened.
     order_cancelled: bool = False
     refund_recorded: bool = False
     credits_added: bool = False
-    # The reply is presenting an offer or asking for a confirmation: only claims that it is
-    # already done are false then, "will be refunded" is the offer itself.
     offering: bool = False
-    # UUIDs the reply may legitimately show (the ticket id the customer is told).
     allowed_uuids: list[str] = []
-    # Instructions that must never appear verbatim in a reply.
     protected_prompt: str = ""
 
 
@@ -57,11 +32,12 @@ class GuardrailViolation(BaseModel):
     message: str
 
 
+@described_to_the_model(
+    "What `safety_judge_node` asks for — a focused second opinion, called\n"
+    "only when `intent_router`'s own `safety_confidence` came back low. Unlike\n"
+    "`IntentClassification`, this has no category to get right; it exists\n"
+    "purely to decide whether the conversation should continue."
+)
 class SafetyJudgment(BaseModel):
-    """What `safety_judge_node` asks for — a focused second opinion, called
-    only when `intent_router`'s own `safety_confidence` came back low. Unlike
-    `IntentClassification`, this has no category to get right; it exists
-    purely to decide whether the conversation should continue."""
-
     is_safe: bool
     reasoning: str

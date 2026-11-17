@@ -1,20 +1,15 @@
-"""Typed contracts shared between the agent graph (`app/agent/`) and the
-evaluation suite (`backend/evaluation/`).
-
-`Intent` lives here rather than inside `app/agent/` because it isn't just an
-internal routing detail: the evaluation suite (Stage 9) imports it too, to
-score intent-classification accuracy against the labeled dataset.
-"""
-
 from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.model_facing import described_to_the_model
 
+
+@described_to_the_model(
+    "What `intent_router` classifies an incoming message as, driving which\n"
+    "branch of the graph runs next."
+)
 class Intent(StrEnum):
-    """What `intent_router` classifies an incoming message as, driving which
-    branch of the graph runs next."""
-
     PRODUCT_QUESTION = "product_question"
     PRICING_QUESTION = "pricing_question"
     BILLING_QUESTION = "billing_question"
@@ -48,27 +43,27 @@ class IntentClassification(BaseModel):
     @field_validator("confidence", "safety_confidence", mode="before")
     @classmethod
     def _percentage_to_fraction(cls, value: object) -> object:
-        # The model sometimes answers on a 0-100 scale ("confidence": 100). That is
-        # unambiguous, so read it as a percentage instead of failing the turn.
         if isinstance(value, int | float) and 1 < value <= 100:
             return value / 100
         return value
 
 
+@described_to_the_model(
+    "What a customer's message means for an order they want to reject or return."
+)
 class ReturnChoice(StrEnum):
-    """What a customer's message means for an order they want to reject or return."""
-
-    REJECT = "reject"  # wants to reject, cancel or return it (or confirms they do)
-    REFUND = "refund"  # takes the offer of part of the price back to the card
-    CREDITS = "credits"  # takes the offer of credit
-    KEEP = "keep"  # changed their mind: keeps the order as it is, without the offer
+    REJECT = "reject"
+    REFUND = "refund"
+    CREDITS = "credits"
+    KEEP = "keep"
     UNCLEAR = "unclear"
 
 
+@described_to_the_model(
+    "What `order_return` asks the LLM to read from the conversation: only which order the\n"
+    "customer means and which of these they said. Everything that follows is decided by rules."
+)
 class ReturnReading(BaseModel):
-    """What `order_return` asks the LLM to read from the conversation: only which order the
-    customer means and which of these they said. Everything that follows is decided by rules."""
-
     order_id: str | None = Field(
         default=None,
         description="The order id the customer means, copied from the list, or null if unsure.",
