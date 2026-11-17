@@ -1,6 +1,3 @@
-"""The one decision `order_return` leaves to the model: what the customer's message means.
-What happens next (the offer, the numbers, the cancellation) is decided by rules."""
-
 ORDER_RETURN_READING_PROMPT = """You read what a customer means about an order they want to reject or return.
 
 Orders the customer can reject or return (use an order_id exactly as written here):

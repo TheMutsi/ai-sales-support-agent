@@ -32,6 +32,16 @@ The agent is a LangGraph `StateGraph` over an explicit `AgentState` `TypedDict`
 - **Loops are bounded in code.** The `response_writer` ↔ `knowledge_tool` loop stops
   after `_MAX_TOOL_CALL_ROUNDS` (2), a value a test can pin, instead of relying only
   on LangGraph's recursion limit.
+- **Node names are a `StrEnum` (`Node`)**, so a typo is an import-time error, and the routing
+  functions return `Literal` types of those names, so LangGraph checks every edge at compile time
+  and `draw_mermaid()` shows them all. `build_graph()` is a function so tests can compile a fresh
+  graph with their own checkpointer.
+- **A button click skips the classifier.** `route_start` sends an action straight to the step that
+  owns it, but only for a verified customer who may act on their own orders; any other click takes
+  the ordinary path. While a return is pending, a bare "yes" (filed as `small_talk`) or an
+  `order_return` message continues it; anything else goes its own way.
+- **A missing list of scopes means none**, never all of them, so forgetting to set it locks the
+  visitor out instead of opening the account.
 
 ## Consequences
 

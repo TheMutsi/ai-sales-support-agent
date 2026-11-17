@@ -10,40 +10,42 @@ from app.auth.scopes import Scope
 from app.schemas.agent import Intent
 from app.schemas.orders import ReturnOutcome
 
-# Below this, intent_router's own safety_confidence (scored in the same call
-# as intent, so it's free) isn't enough on its own — route to safety_judge
-# for a dedicated second opinion instead of dispatching on a guess.
-# Calibrated on the evaluation dev set (qwen2.5:7b-instruct), not guessed: the
-# router scores almost every message 0.9 or 1.0, so 0.7 sent only 4 of 6
-# regex-evading attempts to the judge; 0.95 sent all 6, and 2 of 44 legitimate
-# messages (the judge then allowed both). One sample with clustered scores,
-# so re-check it with `run_eval`'s threshold sweep after any model change.
 _SAFETY_CONFIDENCE_THRESHOLD = 0.95
 
-# How many LLM↔tool round trips `response_writer` can take in one turn before
-# `route_after_response_writer` forces it to `guardrail` regardless of
-# whether the model still wants to call the tool — a deliberate, testable cap
-# instead of relying only on LangGraph's generic recursion limit.
 _MAX_TOOL_CALL_ROUNDS = 2
 
-# What the classifier may call a bare answer to an offer or a question about a return ("yes",
-# "the first one"). Anything else, a cancelled subscription or a request for a person included,
-# goes its own way and must not complete a return.
 _RETURN_FOLLOW_UPS = frozenset({Intent.ORDER_RETURN, Intent.SMALL_TALK})
 
 
+_ANSWERED_BY_THE_WRITER_INTENTS = frozenset(
+    {Intent.PRODUCT_QUESTION, Intent.TECHNICAL_SUPPORT, Intent.SMALL_TALK}
+)
+_ACCOUNT_CONTEXT_INTENTS = frozenset(
+    {Intent.UPGRADE_REQUEST, Intent.BILLING_QUESTION, Intent.REFUND_REQUEST}
+)
+
+
+def _granted_scopes(state: AgentState) -> set[str]:
+    return set(state.get("scopes") or [])
+
+
+def _may_act_on_own_orders(state: AgentState, scopes: set[str]) -> bool:
+    return bool(state.get("customer_id")) and Scope.REFUND_REQUEST in scopes
+
+
+def _continues_pending_return(state: AgentState, scopes: set[str]) -> bool:
+    return (
+        state.get("pending_return") is not None
+        and _may_act_on_own_orders(state, scopes)
+        and state["intent"] in _RETURN_FOLLOW_UPS
+    )
+
+
 def route_start(state: AgentState) -> Literal[Node.INPUT_GUARDRAIL, Node.ORDER_RETURN]:
-    """A button click goes straight to the step that owns it: no input filter, no classifier, no
-    model, because there is no free text to read. Buttons only exist for a verified customer's
-    returns, so a click without that scope is not trusted: it takes the ordinary path."""
-    scopes = set(state.get("scopes") or [])
-    if (
-        state.get("action") is not None
-        and state.get("customer_id")
-        and Scope.REFUND_REQUEST in scopes
-    ):
-        return Node.ORDER_RETURN
-    return Node.INPUT_GUARDRAIL
+    is_trusted_click = state.get("action") is not None and _may_act_on_own_orders(
+        state, _granted_scopes(state)
+    )
+    return Node.ORDER_RETURN if is_trusted_click else Node.INPUT_GUARDRAIL
 
 
 def route_after_input_guardrail(state: AgentState) -> Literal["__end__", Node.INTENT_ROUTER]:
@@ -64,11 +66,6 @@ def route_after_intent(
     Node.REQUEST_IDENTITY,
     Node.SAFETY_JUDGE,
 ]:
-    # `unsupported` always gets the second look, whatever the score: it is the
-    # residual class misuse lands in when it isn't a recognizable support
-    # request, and its route opens a support ticket, a side effect. The eval
-    # dev set caught phishing and other-customer-data requests scored 0.95-1.0,
-    # classified unsupported, that safety_judge blocks in isolation.
     if (
         state["safety_confidence"] < _SAFETY_CONFIDENCE_THRESHOLD
         or state["intent"] == Intent.UNSUPPORTED
@@ -107,60 +104,33 @@ def _dispatch_by_intent(
     Node.HUMAN_ESCALATION,
     Node.REQUEST_IDENTITY,
 ]:
-    # A missing list means "no scopes", never "all of them": forgetting to set it must
-    # lock the visitor out, not open the account.
-    scopes = set(state.get("scopes") or [])
-    # Someone in the middle of a return answers the assistant's offer or question: a bare "yes"
-    # is filed as small talk, so while one is pending (it lapses after a few minutes, see
-    # `PENDING_RETURN_TTL`) that continues it. A different request goes its own way.
-    if (
-        state.get("pending_return") is not None
-        and state.get("customer_id")
-        and Scope.REFUND_REQUEST in scopes
-        and state["intent"] in _RETURN_FOLLOW_UPS
-    ):
+    scopes = _granted_scopes(state)
+    if _continues_pending_return(state, scopes):
         return Node.ORDER_RETURN
     if state["intent"] == Intent.UNSUPPORTED:
-        # A ticket needs a customer. Without one the message is simply answered.
         return Node.HUMAN_ESCALATION if Scope.TICKET_CREATE in scopes else Node.RESPONSE_WRITER
     if REQUIRED_SCOPE[state["intent"]] not in scopes:
         return Node.REQUEST_IDENTITY
     if state["intent"] == Intent.HUMAN_ESCALATION and not asked_for_case(
         state.get("messages") or []
     ):
-        # The first request for a person gets one question about the case; asking again opens the ticket.
         return Node.ASK_CASE
     if state["intent"] == Intent.ORDER_RETURN:
-        # Rejecting an order acts on a customer's own orders, so a session without one cannot.
         return Node.ORDER_RETURN if state.get("customer_id") else Node.REQUEST_IDENTITY
     if state["intent"] == Intent.ORDER_STATUS:
-        # A session that proved one order reads that order, whatever the message says. A verified
-        # customer's session names none, so all of their own orders are read (a customer proved
-        # by the shop or by a code, never one taken from the message) and they say which one.
         if state.get("order_id"):
             return Node.GET_ORDER_STATUS
         return Node.GET_CUSTOMER_ORDERS if state.get("customer_id") else Node.REQUEST_IDENTITY
-    if state["intent"] in {Intent.UPGRADE_REQUEST, Intent.BILLING_QUESTION, Intent.REFUND_REQUEST}:
+    if state["intent"] in _ACCOUNT_CONTEXT_INTENTS:
         return Node.GET_CUSTOMER_CONTEXT
     if state["intent"] == Intent.PRICING_QUESTION:
-        # Prices live only in the plans table, so they are loaded
-        # deterministically before the answer; the KB tool stays bound for
-        # pricing policy (discounts, quotes) the catalog doesn't cover.
         return Node.GET_PLAN_CATALOG
-    if state["intent"] in {Intent.PRODUCT_QUESTION, Intent.TECHNICAL_SUPPORT, Intent.SMALL_TALK}:
-        # No deterministic prefetch here (that was `retrieve_knowledge`,
-        # removed): for these three intents `response_writer` binds the
-        # knowledge-base search as a real tool call and the LLM decides
-        # whether/how to use it, instead of the graph always fetching first.
-        # small_talk (thanks, greetings) also lands here but gets no tool: it
-        # needs a short reply, not a ticket.
+    if state["intent"] in _ANSWERED_BY_THE_WRITER_INTENTS:
         return Node.RESPONSE_WRITER
-    return Node.HUMAN_ESCALATION  # human_escalation
+    return Node.HUMAN_ESCALATION
 
 
 def route_after_order_return(state: AgentState) -> Literal[Node.HUMAN_ESCALATION, "__end__"]:
-    """A customer who pushed back on a "no" is handed to a person; every other outcome has already
-    written its own reply."""
     result = state.get("return_result")
     return Node.HUMAN_ESCALATION if result and result.outcome is ReturnOutcome.ESCALATED else END
 
@@ -168,10 +138,6 @@ def route_after_order_return(state: AgentState) -> Literal[Node.HUMAN_ESCALATION
 def route_after_response_writer(
     state: AgentState,
 ) -> Literal[Node.KNOWLEDGE_TOOL, Node.GUARDRAIL]:
-    """`response_writer` only has a tool bound for the RAG-eligible intents
-    (see `_RAG_ELIGIBLE_INTENTS`), so `tool_calls` is only non-empty there —
-    every other intent's response has nothing to check here and goes
-    straight to `guardrail`, same as before this node could loop."""
     last_message = state["messages"][-1]
     tool_calls = getattr(last_message, "tool_calls", None)
     if tool_calls and state.get("tool_call_rounds", 0) < _MAX_TOOL_CALL_ROUNDS:
@@ -186,4 +152,4 @@ def route_after_customer_context(
         return Node.BUSINESS_RULES
     if state["intent"] == Intent.BILLING_QUESTION:
         return Node.RESPONSE_WRITER
-    return Node.HUMAN_ESCALATION  # refund_request — no refund tool exists, so it always escalates
+    return Node.HUMAN_ESCALATION

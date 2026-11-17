@@ -34,6 +34,11 @@ did.
   weekdays); empty means always open. A closing time earlier than the opening one is a night shift
   that ends the next morning, counted on the weekday it started. A malformed one (including one that
   opens and closes at once) is logged and taken as always open.
+- **Insisting is read from the conversation, not counted** (`app/agent/pushback.py`). The first
+  request for a person gets one fixed question about the case (`CASE_QUESTION`); asking again
+  within the last 8 messages escalates. After a fixed "no" from the rules, pushing back on the very
+  next turn escalates instead of explaining again. Fixed texts are matched exactly, so editing one
+  only restarts the count for conversations already under way.
 - **One open escalation per conversation.** A customer who insists is shown the same number again
   (`TurnStart.open_escalation`). An open offline one becomes live, with the same number, once someone
   can join; a live one stays as it is. A resolved one is replaced by the new request and moves to
