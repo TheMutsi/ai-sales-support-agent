@@ -29,8 +29,9 @@ flowchart LR
 - The server holds each conversation's messages in Postgres; a request carries only
   the new message, and every turn runs the graph from an empty state, started from
   the stored history ([ADR-0013](adr/0013-server-held-conversation-history.md)).
-- One Postgres holds plans, customers, subscriptions, tickets and the embedded
-  knowledge base ([ADR-0005](adr/0005-postgres-pgvector-for-rag.md)).
+- One Postgres holds plans, customers, subscriptions, tickets and each tenant's embedded,
+  versioned knowledge base ([ADR-0005](adr/0005-postgres-pgvector-for-rag.md),
+  [ADR-0022](adr/0022-per-tenant-knowledge-base-document-map-whole-documents-and-hybrid-search.md)).
 - The model provider is configuration, not code
   ([ADR-0004](adr/0004-provider-agnostic-llm-and-embeddings.md)).
 
@@ -67,7 +68,7 @@ flowchart TD
   pc --> rw
   os --> rw
   he --> rw
-  rw -- "tool call, rounds < 2" --> kt[knowledge_tool<br/><i>KB search</i>]
+  rw -- "tool call, rounds < 2" --> kt[knowledge_tool<br/><i>KB search or open_documents</i>]
   kt --> rw
   rw --> gr[guardrail<br/><i>output checks</i>]
   gr --> stop
@@ -86,9 +87,12 @@ Reading it:
   `get_order_status` from the one order the session proved (never from the message), and
   refunds have no tool and always reach a human
   ([ADR-0002](adr/0002-deterministic-business-rules-layer.md)).
-- **Knowledge-base search is the only action the model chooses**, on the
-  KB-answerable intents (billing included), at most two rounds per turn
-  ([ADR-0006](adr/0006-llm-driven-knowledge-base-search.md)).
+- **Reading the knowledge base is the only action the model chooses**, on the
+  KB-answerable intents (billing included), at most two rounds per turn: it searches
+  (hybrid, whole sections) or opens whole documents it picks from a per-tenant document map
+  placed after the instructions in the prompt
+  ([ADR-0006](adr/0006-llm-driven-knowledge-base-search.md),
+  [ADR-0022](adr/0022-per-tenant-knowledge-base-document-map-whole-documents-and-hybrid-search.md)).
 - **A button is not read by a model.** A click is a typed action (`input.type = "action"`), checked
   against the cards the last reply offered and applied by `order_return` from a table of the
   actions valid in each stage; it skips the input filter and the classifier
@@ -110,7 +114,7 @@ Reading it:
 | `app/guardrails` | Input pattern checks, output claim checks | `schemas` |
 | `app/tools` | Typed, framework-agnostic operations the agent calls | `business`, `rag`, `db`, `schemas` |
 | `app/business` | Pure eligibility, pricing and upsell rules | `db` (models only), `schemas` |
-| `app/rag` | Load, chunk, embed, ingest; similarity search | `core`, `db`, `schemas` |
+| `app/rag` | Load, chunk, embed, ingest; versioned documents, hybrid search, the document map, token estimates | `core`, `db`, `schemas` |
 | `app/db` | SQLAlchemy models, session, seed | `core` |
 | `app/core` | Settings, model and embedding factories, tracing setup | nothing in `app` |
 | `app/schemas` | Pydantic contracts shared across layers | nothing in `app` |

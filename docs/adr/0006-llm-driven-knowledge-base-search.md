@@ -1,6 +1,6 @@
 # ADR-0006: Knowledge-base search is the one tool the LLM calls itself
 
-- **Status:** Accepted
+- **Status:** Accepted; its title no longer holds ("the one tool"), see [ADR-0022](0022-per-tenant-knowledge-base-document-map-whole-documents-and-hybrid-search.md)
 - **Introduced in:** PR #27; `doc_type` filter removed in PR #42; search retry in PR #49
 
 ## Context
@@ -24,6 +24,12 @@ public product documentation.
   it guessing the category wrong (SSO under `integrations`, API limits under
   `billing`), and the filter then excluded the one document holding the answer.
   Unfiltered, the right chunk ranked first for every one of those queries.
+- **`open_documents_tool` follows the same pattern (ADR-0022).** The model supplies only
+  `document_ids`; the tenant and the customer (whose plan scopes the documents) are closed over
+  from graph state when the tool is built, so it cannot open another tenant's or plan's
+  document. It is a second tool the model chooses, next to search, so search is no longer the
+  only one; the search results are now whole `##` sections found by hybrid search, no longer
+  single chunks.
 - **The model reads only the text.** The sources travel as the `ToolMessage` artifact, one
   citation per document however many of its chunks matched. The tool's description is
   `SEARCH_KNOWLEDGE_BASE_DESCRIPTION`, passed explicitly, not taken from a docstring.

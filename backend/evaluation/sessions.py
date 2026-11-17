@@ -21,7 +21,7 @@ from app.auth.conversations import create_anonymous, resolve_for_login, resolve_
 from app.auth.scopes import IdentityLevel
 from app.auth.session import issue_session_token
 from app.core.config import get_settings
-from app.db.models import Customer, DocumentChunk, Message, Order, Tenant
+from app.db.models import Customer, Document, DocumentChunk, Message, Order, Tenant
 from app.db.seed import DEV_TENANT_API_KEY
 from app.db.session import SessionLocal
 
@@ -40,6 +40,16 @@ def require_knowledge_base(db: Session) -> None:
             "the knowledge base is empty: run `python -m app.rag.ingestion` before an evaluation "
             "(the integration tests clear it)"
         )
+
+
+def sectioned_document_sources(db: Session) -> frozenset[str]:
+    rows = db.execute(
+        select(Document.source)
+        .join(DocumentChunk, DocumentChunk.document_version_id == Document.published_version_id)
+        .where(DocumentChunk.chunk_metadata["section_title"].as_string().is_not(None))
+        .distinct()
+    ).scalars()
+    return frozenset(rows)
 
 
 @dataclass(frozen=True)

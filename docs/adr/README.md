@@ -17,8 +17,8 @@ links back to it.
 | [0002](0002-deterministic-business-rules-layer.md) | Business facts come from a deterministic rules layer, never from the LLM | Accepted |
 | [0003](0003-layering-and-dependency-direction.md) | Layering and dependency direction between packages | Accepted |
 | [0004](0004-provider-agnostic-llm-and-embeddings.md) | Provider-agnostic chat models and embeddings behind factories | Accepted |
-| [0005](0005-postgres-pgvector-for-rag.md) | Postgres + pgvector as the only datastore, with per-doc-type chunking | Accepted |
-| [0006](0006-llm-driven-knowledge-base-search.md) | Knowledge-base search is the one tool the LLM calls itself | Accepted |
+| [0005](0005-postgres-pgvector-for-rag.md) | Postgres + pgvector as the only datastore, with per-doc-type chunking | Accepted (parts superseded by 0022) |
+| [0006](0006-llm-driven-knowledge-base-search.md) | Knowledge-base search is the one tool the LLM calls itself | Accepted (parts superseded by 0022) |
 | [0007](0007-input-safety-cascade.md) | Input safety is a three-tier cascade | Accepted |
 | [0008](0008-deterministic-output-guardrails.md) | Output guardrails are deterministic checks against state | Accepted |
 | [0009](0009-stateless-chat-api.md) | The chat API is stateless; the client resends the conversation | Superseded by 0013 |
@@ -33,6 +33,8 @@ links back to it.
 | [0018](0018-rejecting-an-order-is-decided-by-rules-the-model-only-reads.md) | Rejecting an order is decided by rules; the model only reads what the customer means | Accepted |
 | [0019](0019-buttons-are-typed-actions-decided-by-rules.md) | A button is a typed action decided by rules; only written text goes to the model | Accepted |
 | [0020](0020-return-events-for-outcome-analysis.md) | Every turn of a return is recorded in its own table, apart from the messages | Accepted |
+| [0021](0021-live-or-offline-escalation-without-tickets.md) | An escalation is live or offline, decided by rules, and kept on the conversation | Accepted |
+| [0022](0022-per-tenant-knowledge-base-document-map-whole-documents-and-hybrid-search.md) | Per-tenant knowledge base: document map, whole documents and hybrid search | Accepted |
 
 For the system and agent-graph diagrams, see [`docs/architecture.md`](../architecture.md).
 

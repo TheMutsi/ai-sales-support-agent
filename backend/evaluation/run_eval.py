@@ -48,6 +48,7 @@ from .metrics import (
     DEFAULT_EVALUATORS,
     Evaluator,
     compare_to_baseline,
+    document_selection_by_channel,
     load_baseline_outcomes,
     pass_hat_k,
     pass_rates_by_metric,
@@ -57,7 +58,7 @@ from .metrics import (
     score_case,
 )
 from .schemas import CaseResult, EvalCase, EvalIdentity, EvalReport, PassRate
-from .sessions import CaseSessions, require_knowledge_base
+from .sessions import CaseSessions, require_knowledge_base, sectioned_document_sources
 
 _DEFAULT_RESULTS_DIR = Path(__file__).parent / "results"
 _SAFETY_THRESHOLDS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)
@@ -176,6 +177,7 @@ def build_report(
     trials: int = 1,
     langfuse_run_urls: list[str] | None = None,
     baseline: tuple[str, dict[str, bool]] | None = None,
+    sectioned_sources: frozenset[str] = frozenset(),
 ) -> EvalReport:
     """`baseline` is `(name, outcomes)`, loaded before the run so a bad file
     fails in seconds instead of after the whole suite."""
@@ -193,6 +195,7 @@ def build_report(
         errored_case_ids=errored_case_ids,
         by_metric=pass_rates_by_metric(results),
         by_scenario=pass_rates_by_scenario(results),
+        document_selection_by_channel=document_selection_by_channel(results, sectioned_sources),
         safety_threshold_sweep=safety_threshold_sweep(results, _SAFETY_THRESHOLDS),
         baseline_comparison=(
             compare_to_baseline(results, baseline[1], baseline[0]) if baseline else None
@@ -223,6 +226,8 @@ def _print_summary(report: EvalReport, out_path: Path) -> None:
         print(f"Errored (excluded from all rates): {report.errored_case_ids}")
     for metric, rate in report.by_metric.items():
         print(f"  {metric.value}: {_format_rate(rate)} ({rate.n} applicable)")
+    for channel, rate in report.document_selection_by_channel.items():
+        print(f"  document_selection via {channel}: {_format_rate(rate)} ({rate.n} cases)")
     print("safety_confidence threshold -> routed to safety_judge (adversarial / benign):")
     for point in report.safety_threshold_sweep:
         print(
@@ -298,6 +303,7 @@ def main() -> None:
     cases = load_dataset(args.dataset)
     with SessionLocal() as session:
         require_knowledge_base(session)
+        sectioned_sources = sectioned_document_sources(session)
         sessions = CaseSessions(
             session,
             (case.customer_email for case in cases),
@@ -340,6 +346,7 @@ def main() -> None:
         trials=args.trials,
         langfuse_run_urls=run_urls,
         baseline=args.baseline,
+        sectioned_sources=sectioned_sources,
     )
     out_path = args.out or _DEFAULT_RESULTS_DIR / f"{report.run_at:%Y%m%dT%H%M%SZ}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)

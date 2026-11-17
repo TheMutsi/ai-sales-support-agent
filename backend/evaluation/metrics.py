@@ -19,6 +19,8 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
+from app.schemas.rag import SourceReference
+
 from .schemas import (
     BaselineComparison,
     CaseResult,
@@ -137,6 +139,67 @@ def evaluate_hallucination_substring(case: EvalCase, turn: ChatTurn) -> MetricRe
     )
 
 
+def retrieval_channel(
+    sources: Sequence[SourceReference], sectioned_sources: frozenset[str]
+) -> str:
+    if not sources:
+        return "none"
+    opened = any(s.section is None and s.source in sectioned_sources for s in sources)
+    searched = any(s.section is not None for s in sources)
+    if opened and searched:
+        return "both"
+    if opened:
+        return "open_documents"
+    if searched:
+        return "search_knowledge_base"
+    return "undetermined"
+
+
+def evaluate_document_selection(case: EvalCase, turn: ChatTurn) -> MetricResult | None:
+    if not case.expected_sources:
+        return None
+    cited = {source.source for source in turn.summary.sources}
+    missing = [source for source in case.expected_sources if source not in cited]
+    return MetricResult(
+        metric=EvalMetric.DOCUMENT_SELECTION,
+        passed=not missing,
+        detail=f"cited={sorted(cited)} missing={missing}",
+    )
+
+
+def document_selection_by_channel(
+    results: Iterable[CaseResult], sectioned_sources: frozenset[str]
+) -> dict[str, PassRate]:
+    outcomes: defaultdict[str, list[bool]] = defaultdict(list)
+    for result in results:
+        channel = (
+            "identity_required"
+            if result.summary.identity_required
+            else retrieval_channel(result.summary.sources, sectioned_sources)
+        )
+        for metric_result in result.metrics:
+            if metric_result.metric is EvalMetric.DOCUMENT_SELECTION:
+                outcomes[channel].append(metric_result.passed)
+    return {channel: _pass_rate(values) for channel, values in sorted(outcomes.items())}
+
+
+def first_relevant_rank(ranked_sources: Sequence[str], expected_sources: Sequence[str]) -> int | None:
+    for position, source in enumerate(ranked_sources, start=1):
+        if source in expected_sources:
+            return position
+    return None
+
+
+def recall_at_k(ranked_sources: Sequence[str], expected_sources: Sequence[str], k: int) -> float:
+    found = {source for source in ranked_sources[:k] if source in expected_sources}
+    return len(found) / len(set(expected_sources))
+
+
+def reciprocal_rank(ranked_sources: Sequence[str], expected_sources: Sequence[str]) -> float:
+    rank = first_relevant_rank(ranked_sources, expected_sources)
+    return 1 / rank if rank else 0.0
+
+
 DEFAULT_EVALUATORS: tuple[Evaluator, ...] = (
     evaluate_intent_accuracy,
     evaluate_input_blocked,
@@ -145,6 +208,7 @@ DEFAULT_EVALUATORS: tuple[Evaluator, ...] = (
     evaluate_upgrade_eligibility,
     evaluate_answer_correctness,
     evaluate_hallucination_substring,
+    evaluate_document_selection,
 )
 
 
