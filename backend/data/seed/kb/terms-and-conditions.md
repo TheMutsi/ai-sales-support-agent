@@ -1,5 +1,6 @@
 ---
 title: "MewFlow Terms & Conditions"
+when_to_use: "Questions about the contract terms: acceptable use, liability, termination and service levels."
 doc_type: policy
 product_area: legal
 plan_scope: null

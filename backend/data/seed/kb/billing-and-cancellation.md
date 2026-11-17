@@ -1,5 +1,6 @@
 ---
 title: "MewFlow Billing, Cancellation, and Refund Policy"
+when_to_use: "Questions about payments, invoices, plan changes, cancelling a subscription and refunds."
 doc_type: billing
 product_area: billing
 plan_scope: null

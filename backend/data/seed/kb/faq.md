@@ -1,5 +1,6 @@
 ---
 title: "MewFlow Frequently Asked Questions"
+when_to_use: "Quick answers to common questions about getting started, accounts and everyday use of MewFlow."
 doc_type: faq
 product_area: general
 plan_scope: null

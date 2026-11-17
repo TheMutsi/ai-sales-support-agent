@@ -52,3 +52,4 @@ class AgentState(TypedDict):
     guardrail_flags: Annotated[list[str], add]
 
     tool_call_rounds: int
+    knowledge_plan_slug: str | None

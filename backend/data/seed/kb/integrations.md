@@ -1,5 +1,6 @@
 ---
 title: "MewFlow Integrations"
+when_to_use: "Which tools MewFlow connects to and how the integrations and the API are used."
 doc_type: integrations
 product_area: product
 plan_scope: null

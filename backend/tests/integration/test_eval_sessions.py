@@ -4,11 +4,11 @@ from app.auth.scopes import IdentityLevel
 from app.auth.session import verify_session_token
 from app.chat.turns import list_messages
 from app.core.config import get_settings
-from app.db.models import Conversation, Customer, Document, DocumentChunk, Order, Tenant
+from app.db.models import Conversation, Customer, Order, Tenant
 from app.db.seed import DEV_TENANT_API_KEY
 from evaluation.schemas import EvalCase, EvalIdentity, EvalScenario
 from evaluation.sessions import CaseSessions, require_knowledge_base
-from tests.integration.conftest import customer_by_email
+from tests.integration.conftest import add_published_document, customer_by_email
 
 EMAIL = "ava.chen@northlightstudio.com"
 
@@ -162,10 +162,7 @@ def test_a_run_refuses_to_start_against_an_empty_knowledge_base(rag_db):
     with pytest.raises(ValueError, match="ingestion"):
         require_knowledge_base(rag_db)
 
-    document = Document(title="t", doc_type="faq", source="x.md", content="c")
-    document.chunks.append(DocumentChunk(chunk_index=0, content="c", embedding=[0.0] * 768))
-    rag_db.add(document)
-    rag_db.commit()
+    add_published_document(rag_db, source="x.md", chunks=[("c", [0.0] * 768)])
 
     require_knowledge_base(rag_db)
 

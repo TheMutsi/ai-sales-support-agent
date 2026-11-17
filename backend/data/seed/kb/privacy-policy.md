@@ -1,5 +1,6 @@
 ---
 title: "MewFlow Privacy Policy"
+when_to_use: "Questions about what personal data MewFlow collects, how long it is kept and the customer's privacy rights."
 doc_type: policy
 product_area: legal
 plan_scope: null

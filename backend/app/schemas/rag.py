@@ -15,6 +15,7 @@ class DocType(StrEnum):
 
 class SourceDocument(BaseModel):
     title: str
+    when_to_use: str
     doc_type: DocType
     product_area: str | None = None
     plan_scope: str | None = None
@@ -38,9 +39,13 @@ class RetrievedChunk(BaseModel):
     document_title: str
     source: str
     metadata: dict = Field(default_factory=dict)
+    section: str | None = None
+    version: int | None = None
 
 
 class SourceReference(BaseModel):
     title: str
     doc_type: DocType
     source: str
+    section: str | None = None
+    version: int | None = None

@@ -5,6 +5,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     CheckConstraint,
+    Computed,
     DateTime,
     ForeignKey,
     Index,
@@ -12,7 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
@@ -316,35 +317,72 @@ class OrderAdjustment(Base):
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "source", name="uq_documents_tenant_source"),
+        CheckConstraint("origin IN ('seed', 'admin')", name="ck_documents_origin"),
+    )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
     title: Mapped[str]
+    when_to_use: Mapped[str] = mapped_column(Text, default="", server_default="")
     doc_type: Mapped[str]
     product_area: Mapped[str | None]
     plan_scope: Mapped[str | None]
     version: Mapped[str] = mapped_column(default="1.0")
-    source: Mapped[str] = mapped_column(unique=True)
-    content: Mapped[str] = mapped_column(Text)
+    source: Mapped[str]
+    origin: Mapped[str] = mapped_column(default="admin", server_default="admin")
+    published_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("document_versions.id", ondelete="SET NULL", use_alter=True, name="fk_documents_published_version")
+    )
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
+    versions: Mapped[list["DocumentVersion"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan", foreign_keys="DocumentVersion.document_id"
+    )
+
+
+class DocumentVersion(Base):
+    __tablename__ = "document_versions"
+    __table_args__ = (
+        UniqueConstraint("document_id", "version"),
+        CheckConstraint("status IN ('draft', 'published', 'archived')", name="ck_document_versions_status"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int]
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(default="draft")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_by: Mapped[str | None]
+
+    document: Mapped["Document"] = relationship(back_populates="versions", foreign_keys=[document_id])
     chunks: Mapped[list["DocumentChunk"]] = relationship(
-        back_populates="document", cascade="all, delete-orphan"
+        back_populates="document_version", cascade="all, delete-orphan"
     )
 
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
-    __table_args__ = (UniqueConstraint("document_id", "chunk_index"),)
+    __table_args__ = (
+        UniqueConstraint("document_version_id", "chunk_index"),
+        Index("ix_document_chunks_content_tsv", "content_tsv", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    document_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("document_versions.id", ondelete="CASCADE"))
     chunk_index: Mapped[int]
     content: Mapped[str] = mapped_column(Text)
+    content_tsv: Mapped[str | None] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('simple', content)", persisted=True)
+    )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
     chunk_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    document: Mapped["Document"] = relationship(back_populates="chunks")
+    document_version: Mapped["DocumentVersion"] = relationship(back_populates="chunks")
 
 
 class AgentPresence(Base):

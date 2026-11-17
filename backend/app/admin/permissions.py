@@ -9,6 +9,8 @@ class Permission(StrEnum):
     CONVERSATIONS_READ = "conversations:read"
     ESCALATIONS_READ = "escalations:read"
     ESCALATIONS_REPLY = "escalations:reply"
+    KB_READ = "kb:read"
+    KB_WRITE = "kb:write"
 
 
 class Role(StrEnum):
@@ -24,10 +26,11 @@ _VIEWER = frozenset(
         Permission.CONFIG_READ,
         Permission.CONVERSATIONS_READ,
         Permission.ESCALATIONS_READ,
+        Permission.KB_READ,
     }
 )
 _AGENT = _VIEWER | {Permission.ESCALATIONS_REPLY}
-_ADMIN = _AGENT | {Permission.CONFIG_WRITE}
+_ADMIN = _AGENT | {Permission.CONFIG_WRITE, Permission.KB_WRITE}
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     Role.VIEWER: _VIEWER,
