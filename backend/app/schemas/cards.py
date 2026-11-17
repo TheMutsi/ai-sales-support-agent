@@ -48,4 +48,33 @@ class DividerCard(BaseModel):
     label: str = ""
 
 
-Card = Annotated[ActionCard | ProductCard | DividerCard, Field(discriminator="type")]
+class RecommendationTemplate(StrEnum):
+    PRODUCT_CARD = "product_card"
+
+
+class RecommendationCard(BaseModel):
+    type: Literal["recommendation"] = "recommendation"
+    id: str
+    template: RecommendationTemplate
+    title: str
+    description: str | None = None
+    image: CardImage
+    rating: float | None = Field(default=None, ge=0, le=5)
+    url: str | None = None
+    price: str | None = None
+    compare_price: str | None = None
+    offer_label: str | None = None
+    why: str | None = None
+
+
+Card = Annotated[
+    ActionCard | ProductCard | DividerCard | RecommendationCard, Field(discriminator="type")
+]
+
+
+def is_a_card_still_readable(card: object) -> bool:
+    if not isinstance(card, dict):
+        return True
+    if card.get("type") == "recommendation":
+        return card.get("template") in {template.value for template in RecommendationTemplate}
+    return card.get("type") in {"action", "product", "divider"}

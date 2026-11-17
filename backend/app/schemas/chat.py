@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.business.escalation import EscalationRoute
 from app.schemas.agent import Intent
-from app.schemas.cards import Card, CardAction
+from app.schemas.cards import Card, CardAction, is_a_card_still_readable
 from app.schemas.rag import SourceReference
 from app.schemas.tools import CheckoutSession
 
@@ -32,8 +32,7 @@ class StoredMessage(BaseModel):
     def _no_cards_is_an_empty_list(cls, value: object) -> object:
         if value is None:
             return []
-        still_known_types = {"action", "product", "divider"}
-        return [c for c in value if not isinstance(c, dict) or c.get("type") in still_known_types]
+        return [c for c in value if is_a_card_still_readable(c)]
 
 
 class MessageList(BaseModel):

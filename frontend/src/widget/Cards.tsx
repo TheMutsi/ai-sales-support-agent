@@ -9,11 +9,69 @@ interface Handlers {
   onZoom: (images: CardImage[]) => void;
 }
 
+type RecommendationCard = Extract<Card, { type: "recommendation" }>;
+type CardItem = Exclude<Card, RecommendationCard> | RecommendationCard[];
+
+function groupRecommendations(cards: Card[]): CardItem[] {
+  return cards.reduce<CardItem[]>((items, card) => {
+    const last = items[items.length - 1];
+    if (card.type !== "recommendation") return [...items, card];
+    if (Array.isArray(last)) return [...items.slice(0, -1), [...last, card]];
+    return [...items, [card]];
+  }, []);
+}
+
+function Stars({ rating }: { rating: number }) {
+  const full = Math.round(rating);
+  return (
+    <span className="mew-stars" role="img" aria-label={`${rating} out of 5`}>
+      {"★".repeat(full)}
+      {"☆".repeat(5 - full)}
+    </span>
+  );
+}
+
+function RecommendationView({ card }: { card: RecommendationCard }) {
+  const body = (
+    <>
+      {card.image.url && <img src={card.image.url} alt={card.image.alt} loading="lazy" />}
+      {card.offer_label && <span className="mew-card-badge">{card.offer_label}</span>}
+      <strong>{card.title}</strong>
+      {card.rating != null && <Stars rating={card.rating} />}
+      {(card.price || card.compare_price) && (
+        <span className="mew-price-row">
+          {card.compare_price && <s className="mew-compare">{card.compare_price}</s>}
+          {card.price && <span className="mew-price">{card.price}</span>}
+        </span>
+      )}
+      {card.description && <small>{card.description}</small>}
+    </>
+  );
+  return (
+    <div className="mew-card mew-recommendation">
+      {card.url ? (
+        <a href={card.url} target="_blank" rel="noopener noreferrer">
+          {body}
+        </a>
+      ) : (
+        body
+      )}
+      {card.why && <span className="mew-why">{card.why}</span>}
+    </div>
+  );
+}
+
 export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active: boolean } & Handlers) {
   return (
     <div className="mew-cards">
-      {cards.map((card) =>
-        card.type === "action" ? (
+      {groupRecommendations(cards).map((card) =>
+        Array.isArray(card) ? (
+          <div key={card[0].id} className="mew-carousel">
+            {card.map((item) => (
+              <RecommendationView key={item.id} card={item} />
+            ))}
+          </div>
+        ) : card.type === "action" ? (
           <button
             key={card.id}
             type="button"
@@ -31,7 +89,7 @@ export function Cards({ cards, active, onPick, onZoom }: { cards: Card[]; active
         ) : card.type === "divider" ? (
           <div key={card.id} className="mew-divider" role="separator">
             <span />
-            {card.label && <b>{card.label}</b>}
+            {card.label && <b className={card.label.length > 1 ? "mew-divider-title" : undefined}>{card.label}</b>}
             <span />
           </div>
         ) : (

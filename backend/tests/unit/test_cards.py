@@ -145,3 +145,33 @@ def test_an_order_for_an_item_shows_its_name_and_its_pictures_stacked():
     assert card.image.url == "https://cdn.test/front.jpg"
     assert [i.url for i in card.more_images] == ["https://cdn.test/back.jpg"]
     assert cards_for({"customer_orders": [_order()]})[0].more_images == []
+
+
+def test_a_recommendation_card_formats_its_prices_from_cents():
+    from app.cards import recommendation_card
+
+    card = recommendation_card(
+        item_id="serum", title="Serum", image_url="/a.svg", price_cents=1999, compare_price_cents=2599,
+        rating=4.5, url="https://shop.test/serum", offer_label="Pack of 2", why="Goes with your cleanser",
+    )
+
+    assert (card.type, card.template.value) == ("recommendation", "product_card")
+    assert (card.price, card.compare_price, card.rating) == ("$19.99", "$25.99", 4.5)
+    assert card.image.alt == "Serum"
+
+
+def test_a_recommendation_with_a_template_that_no_longer_exists_is_dropped_on_read():
+    from app.schemas.chat import StoredMessage
+
+    image = {"url": "/a.svg", "alt": "a"}
+    message = StoredMessage.model_validate(
+        {
+            "seq": 1, "role": "assistant", "kind": "text", "content": "x", "created_at": "2026-10-19T00:00:00Z",
+            "cards": [
+                {"type": "recommendation", "id": "old", "template": "hero_banner", "title": "t", "image": image},
+                {"type": "recommendation", "id": "ok", "template": "product_card", "title": "t", "image": image},
+            ],
+        }
+    )
+
+    assert [c.id for c in message.cards] == ["ok"]

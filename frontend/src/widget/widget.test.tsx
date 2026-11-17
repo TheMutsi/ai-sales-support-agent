@@ -502,6 +502,33 @@ describe("cards", () => {
     expect(container.querySelector(".mew-divider b")?.textContent).toBe("+");
   });
 
+  it("shows a recommended product with price, struck price, stars, why and a link, in a group under a heading", async () => {
+    const { Cards } = await import("./Cards");
+    const recommendation = {
+      type: "recommendation" as const, id: "r1", template: "product_card" as const, title: "Serum", rating: 4,
+      price: "$19.99", compare_price: "$25.99", offer_label: "Pack of 2", why: "Goes with your cleanser",
+      url: "https://shop.test/serum", image: { url: "https://cdn.test/serum.jpg", alt: "Serum" },
+    };
+    mount(
+      <Cards
+        cards={[{ type: "divider", id: "d", label: "Others also took" }, recommendation, { ...recommendation, id: "r2", url: null }]}
+        active
+        onPick={() => {}}
+        onZoom={() => {}}
+      />,
+    );
+
+    expect(container.querySelector(".mew-divider-title")?.textContent).toBe("Others also took");
+    expect(container.querySelectorAll(".mew-carousel .mew-recommendation")).toHaveLength(2);
+    const first = container.querySelector(".mew-recommendation")!;
+    expect(first.querySelector(".mew-price")?.textContent).toBe("$19.99");
+    expect(first.querySelector("s.mew-compare")?.textContent).toBe("$25.99");
+    expect(first.querySelector(".mew-stars")?.textContent).toBe("★★★★☆");
+    expect(first.querySelector(".mew-why")?.textContent).toBe("Goes with your cleanser");
+    expect(first.querySelector("a")?.getAttribute("href")).toBe("https://shop.test/serum");
+    expect(container.querySelectorAll(".mew-recommendation a")).toHaveLength(1);
+  });
+
   it("stacks a second picture behind the first, shows a struck price, and lets the large view switch pictures", async () => {
     const { Cards, Lightbox } = await import("./Cards");
     const gift = {

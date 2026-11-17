@@ -37,7 +37,9 @@ export function createApi(baseUrl: string, apiKey: string, fetchFn: typeof fetch
             image: { ...card.image, url: safeUrl(card.image.url) },
             more_images: card.more_images?.map((image) => ({ ...image, url: safeUrl(image.url) })),
           }
-        : card,
+        : card.type === "recommendation"
+          ? { ...card, image: { ...card.image, url: safeUrl(card.image.url) }, url: card.url ? safeUrl(card.url) : null }
+          : card,
     );
 
   async function request(path: string, init: { method?: "GET" | "POST"; body?: unknown; token?: string; signal?: AbortSignal } = {}) {
