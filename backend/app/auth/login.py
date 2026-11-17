@@ -1,27 +1,3 @@
-"""Starting conversations and exchanging a shop's signed token for a session.
-
-Kept separate from the routers so the decision logic is plain Python over a DB
-session. Failures raise `LoginError` with a stable code and HTTP status:
-
-- `invalid_token` (401) covers an unknown API key *and* a bad signature alike, so
-  the *response* doesn't say which API keys exist. Response timing still differs
-  (an unknown key skips the secrets lookup), so the per-IP rate limit on these endpoints
-  (`app.api.rate_limit`) is the real defence against probing.
-- `token_expired` (401) is its own code: the widget can fix it by asking the
-  shop's server for a fresh token.
-- `customer_not_found` (403) means the token was genuine but the shop's
-  customer isn't known to us. We never create customers from a login, so a
-  valid signature alone can't mint one.
-
-A shop's token isn't single-use: it can be replayed until it expires (at most
-an hour, see `MAX_TOKEN_LIFETIME_SECONDS`), and each replay mints a fresh session.
-Enforcing one-time use would need a `jti` claim and a store of spent ones.
-
-Every session belongs to a conversation. Starting one is anonymous; logging in
-continues the conversation the caller presents (if it's usable) and attaches the
-customer to it, or starts an identified one.
-"""
-
 import hmac
 import uuid
 from collections.abc import Callable
@@ -118,7 +94,7 @@ def login_with_store_token(
         raise failed(exc.code, exc.code, 401) from None
 
     customer = (
-        db.query(Customer).filter_by(tenant_id=tenant.id, external_id=claims.sub).one_or_none()
+        db.query(Customer).filter_by(tenant_id=tenant.id, external_id=claims.customer_external_id).one_or_none()
     )
     if customer is None:
         raise failed("customer_not_found", "customer_not_found", 403)
@@ -150,9 +126,6 @@ def send_otp(
     key: str,
     conversation_id: uuid.UUID | None = None,
 ) -> None:
-    """Sends a code if the email is a customer's. Returns nothing in every case, an unknown
-    API key included, so the response never says what exists. What happened goes to the audit
-    record only."""
     tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
     if tenant is None:
         return
@@ -207,7 +180,6 @@ def login_with_otp(
 
 
 def find_tenant_id(db: Session, api_key: str) -> uuid.UUID | None:
-    """The tenant an API key belongs to, so the shop's orders can be asked for *its* order."""
     tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
     return tenant.id if tenant else None
 
@@ -223,19 +195,9 @@ def login_with_order(
     session_key: str,
     session_ttl: timedelta,
 ) -> SessionResponse:
-    """The visitor gave an email and an order id; `order` is what the shop's orders answered
-    for that id (None if there is none). The email must be the order's: that comparison is
-    ours, so it holds whoever provides the orders. Every failure is the same 401 (an unknown
-    key, an unknown order, another shop's order, someone else's email), so the response never
-    says which orders exist. The per-IP rate limit is the defence against probing.
-
-    The session names the order and nothing else: the customer behind it is not attached, so
-    an order id, which leaks easily, can never open the account."""
     tenant = db.query(Tenant).filter_by(api_key=api_key).one_or_none()
-    # The hash is of what the visitor typed, in the failure and the success branch alike: the shop
-    # may spell the id its own way, and one order must not get two hashes.
     reason = (
-        "unknown_key"  # (never written: with no tenant there is nothing to attribute it to)
+        "unknown_key"
         if tenant is None
         else "order_not_found"
         if order is None
@@ -268,5 +230,4 @@ def login_with_order(
 
 
 def _same_email(given: str, expected: str) -> bool:
-    """Case-insensitive, and in constant time: the comparison does not leak how much matched."""
     return hmac.compare_digest(given.strip().casefold().encode(), expected.strip().casefold().encode())

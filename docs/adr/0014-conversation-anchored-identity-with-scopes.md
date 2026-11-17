@@ -92,6 +92,47 @@ by `conversation_id`. Writing a row never decides a login: if it fails, the atte
 and the failure is logged. The caller's session on the code request ties that row to its
 conversation. The `security_events` log line now carries the masked email too.
 
+### Hardening, in the code's own terms
+
+- **Store tokens** (`app/auth/store_token.py`): `HS256` is fixed by us, never read from the
+  header (`alg: none`). `exp` and `sub` are required, `exp` at most an hour away plus a 30 second
+  clock-skew leeway. `kid` picks the secret during a rotation; without one, the only active secret
+  is used, and with several the token is rejected as ambiguous. The header is attacker-controlled,
+  so an unhashable `kid` is refused before the lookup. Callers get a stable code, never the
+  library's message, which would tell a prober which check failed. Tokens can be replayed until
+  they expire (a `jti` store would stop that).
+- **Login answers do not say what exists.** `invalid_token` covers an unknown API key and a bad
+  signature alike, `token_expired` is its own code because the widget can fix it, and
+  `customer_not_found` (403) means a genuine token for a customer we do not know: logins never
+  create customers. Timing still differs, so the per-IP rate limit is the real defence against
+  probing.
+- **Sessions** fix the algorithm too, and which identity they name follows from the level: a
+  customer for `store_login` and `otp_login`, one order for `order_lookup`, nothing for
+  `anonymous`. A claim the level does not take is rejected, not ignored, so an order id can never
+  double as a customer.
+- **Scopes that act on a customer** can never be granted to a level that proves none, even by a
+  tenant override, because the steps behind them would fail. Unknown scope names in an override
+  are dropped at request time (a typo must not widen access) and refused when saved from the back
+  office.
+- **Conversations under a lock.** Attaching a customer locks the conversation row and re-reads it
+  under the lock, so two simultaneous logins cannot both take the same anonymous conversation; a
+  presented id is used only if it exists in the same tenant. An order lookup never attaches a
+  customer, so a later one-time code can still claim the conversation.
+- **One-time codes.** A new code replaces any open one. Guesses lock the challenge row, so parallel
+  guesses are counted one at a time and a correct code is consumed once. Two customers whose
+  emails differ only by case get no code, rather than a guess at who should. The SMTP sender
+  refuses to log in over an unencrypted connection, decrypts the password only when sending, and
+  a tenant with no mail server outside local environments fails to send rather than logging codes.
+- **The audit never decides a login.** A failed write is logged and the attempt carries on, since
+  an outage of the audit store must not lock customers out; with no tenant (an unknown API key)
+  nothing is written. Emails are masked (`a***@n***.com`) and hashed with a key and a `kind`, so an
+  email and an order id never collide, and the order id hashed is the one the visitor typed, so one
+  order never gets two hashes. The comparison of the order's email is case-insensitive and in
+  constant time. Logs carry the masked address; the security event keeps what a reviewer needs.
+  `audit.record` commits the caller's session and rolls it back if the write fails, so a caller
+  commits whatever it needs before recording.
+- A tenant's secret is 32 bytes from the OS CSPRNG, shown to the shop once; the API key is public.
+
 ## Consequences
 
 - The agent never decides access, and a forgotten setting fails closed.

@@ -1,13 +1,3 @@
-"""The session we issue in exchange for a shop's login token.
-
-The shop's token is short-lived and only used for the login exchange (nothing
-stops it being replayed within its lifetime); this is the longer-lived
-credential the chat actually carries, so the shop is only asked for a fresh
-token when the session runs out (about once a day), not on every message.
-It records who the visitor is and *how* they were identified (`lvl`), because
-the scopes that follow depend on the route.
-"""
-
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -38,16 +28,14 @@ def issue_session_token(
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
-    if customer_id is not None:  # an anonymous session has no customer
+    if customer_id is not None:
         claims["cid"] = str(customer_id)
-    if order_id is not None:  # an order lookup names one order, never a customer
+    if order_id is not None:
         claims["oid"] = order_id
     return jwt.encode(claims, signing_key, algorithm="HS256"), expires_at
 
 
 class SessionError(Exception):
-    """`session_expired` is renewable (log in again); `invalid_session` is not."""
-
     def __init__(self, code: Literal["session_expired", "invalid_session"]):
         super().__init__(code)
         self.code = code
@@ -57,14 +45,12 @@ class SessionError(Exception):
 class SessionClaims:
     tenant_id: uuid.UUID
     conversation_id: uuid.UUID
-    customer_id: uuid.UUID | None  # set exactly for the levels that identify a customer
+    customer_id: uuid.UUID | None
     level: IdentityLevel
-    order_id: str | None = None  # set exactly for `order_lookup`
+    order_id: str | None = None
 
 
 def verify_session_token(token: str, signing_key: str) -> SessionClaims:
-    """Checks a session we issued. The algorithm is fixed here, never read from
-    the token, so `alg: none` can't skip the signature."""
     try:
         claims = jwt.decode(
             token,
@@ -73,10 +59,6 @@ def verify_session_token(token: str, signing_key: str) -> SessionClaims:
             options={"require": ["exp", "tid", "conv", "lvl"]},
         )
         level = IdentityLevel(claims["lvl"])
-        # Which identity a session names follows from its level: a customer for the levels that
-        # prove who the customer is, one order for the weak order lookup, nothing for anonymous.
-        # An order id must never double as a customer, so a claim the level does not take is
-        # rejected, not ignored.
         names_customer = level in (IdentityLevel.STORE_LOGIN, IdentityLevel.OTP_LOGIN)
         names_order = level is IdentityLevel.ORDER_LOOKUP
         if ("cid" in claims) != names_customer or ("oid" in claims) != names_order:

@@ -18,7 +18,7 @@ def _token(claims: dict | None = None, *, secret: str = SECRET, headers: dict | 
 def test_valid_token_returns_the_subject():
     claims = verify_store_token(_token(), {"k1": SECRET})
 
-    assert claims.sub == "cust-42"
+    assert claims.customer_external_id == "cust-42"
 
 
 def test_wrong_secret_is_rejected_as_invalid():
@@ -77,8 +77,8 @@ def test_kid_selects_the_matching_secret_during_a_rotation():
     old, new = "o" * 32, "n" * 32
     keys = {"old": old, "new": new}
 
-    assert verify_store_token(_token(secret=new, headers={"kid": "new"}), keys).sub == "cust-42"
-    assert verify_store_token(_token(secret=old, headers={"kid": "old"}), keys).sub == "cust-42"
+    assert verify_store_token(_token(secret=new, headers={"kid": "new"}), keys).customer_external_id == "cust-42"
+    assert verify_store_token(_token(secret=old, headers={"kid": "old"}), keys).customer_external_id == "cust-42"
 
 
 def test_unknown_kid_is_rejected():
@@ -106,7 +106,7 @@ def test_non_string_kid_is_rejected_not_a_server_error(kid):
 
 
 def test_missing_kid_uses_the_only_active_secret():
-    assert verify_store_token(_token(), {"k1": SECRET}).sub == "cust-42"
+    assert verify_store_token(_token(), {"k1": SECRET}).customer_external_id == "cust-42"
 
 
 def test_missing_kid_is_ambiguous_with_several_active_secrets():
