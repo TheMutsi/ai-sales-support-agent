@@ -3,6 +3,7 @@ import { ApiError, listTenants, type AdminSession, type TenantOption } from "./a
 import { ConfigPage } from "./ConfigPage";
 import { ConversationsPage } from "./ConversationsPage";
 import { EscalationsPage } from "./EscalationsPage";
+import { KnowledgePage } from "./KnowledgePage";
 import { LoginPage } from "./LoginPage";
 import { loadSession, saveSession } from "./session";
 
@@ -17,7 +18,7 @@ export function App() {
       return false;
     }
   });
-  const [page, setPage] = useState<"config" | "conversations" | "escalations">("config");
+  const [page, setPage] = useState<"config" | "conversations" | "escalations" | "knowledge">("config");
 
   const toggleSidebar = () =>
     setCollapsed((now) => {
@@ -58,6 +59,7 @@ export function App() {
   }
 
   const items = [
+    { id: "knowledge" as const, label: "Knowledge base", icon: "📚", allowed: session.permissions.includes("kb:read") },
     { id: "config" as const, label: "Configuration", icon: "⚙", allowed: true },
     { id: "conversations" as const, label: "Conversations", icon: "💬", allowed: session.permissions.includes("conversations:read") },
     { id: "escalations" as const, label: "Escalations", icon: "🎧", allowed: session.permissions.includes("escalations:read") },
@@ -124,6 +126,8 @@ export function App() {
             <ConfigPage key={tenantId} session={session} tenantId={tenantId} onExpired={leave} />
           ) : page === "conversations" ? (
             <ConversationsPage key={tenantId} session={session} tenantId={tenantId} onExpired={leave} />
+          ) : page === "knowledge" ? (
+            <KnowledgePage key={tenantId} session={session} tenantId={tenantId} onExpired={leave} />
           ) : (
             <EscalationsPage key={tenantId} session={session} tenantId={tenantId} onExpired={leave} />
           )
