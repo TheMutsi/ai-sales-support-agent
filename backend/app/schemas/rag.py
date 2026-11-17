@@ -39,10 +39,13 @@ class RetrievedChunk(BaseModel):
     document_title: str
     source: str
     metadata: dict = Field(default_factory=dict)
+    section: str | None = None
+    version: int | None = None
 
 
 class SourceReference(BaseModel):
     title: str
     doc_type: DocType
     source: str
-
+    section: str | None = None
+    version: int | None = None

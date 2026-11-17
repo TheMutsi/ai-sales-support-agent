@@ -23,7 +23,7 @@ class _FakeTool:
 def test_runs_each_requested_call_and_appends_tool_messages(monkeypatch):
     fake_tool = _FakeTool("MewFlow Pro costs $49/month.")
     monkeypatch.setattr(
-        knowledge_tool_module, "make_search_knowledge_base_tool", lambda customer_id: fake_tool
+        knowledge_tool_module, "make_search_knowledge_base_tool", lambda tenant_id, plan_slug: fake_tool
     )
 
     ai_message = AIMessage(
@@ -32,7 +32,7 @@ def test_runs_each_requested_call_and_appends_tool_messages(monkeypatch):
             {"name": "search_knowledge_base_tool", "args": {"query": "pricing"}, "id": "c1"}
         ],
     )
-    state = {"customer_id": str(uuid.uuid4()), "messages": [ai_message]}
+    state = {"customer_id": str(uuid.uuid4()), "knowledge_plan_slug": None, "tenant_id": str(uuid.uuid4()), "messages": [ai_message]}
 
     result = knowledge_tool_module.knowledge_tool_node(state)
 
@@ -47,12 +47,12 @@ def test_runs_each_requested_call_and_appends_tool_messages(monkeypatch):
 def test_increments_the_round_counter_from_its_current_value(monkeypatch):
     fake_tool = _FakeTool("result")
     monkeypatch.setattr(
-        knowledge_tool_module, "make_search_knowledge_base_tool", lambda customer_id: fake_tool
+        knowledge_tool_module, "make_search_knowledge_base_tool", lambda tenant_id, plan_slug: fake_tool
     )
     ai_message = AIMessage(
         content="", tool_calls=[{"name": "search_knowledge_base_tool", "args": {}, "id": "c1"}]
     )
-    state = {"customer_id": str(uuid.uuid4()), "messages": [ai_message], "tool_call_rounds": 1}
+    state = {"customer_id": str(uuid.uuid4()), "knowledge_plan_slug": None, "tenant_id": str(uuid.uuid4()), "messages": [ai_message], "tool_call_rounds": 1}
 
     result = knowledge_tool_module.knowledge_tool_node(state)
 
@@ -79,7 +79,7 @@ def test_invalid_arguments_become_an_error_tool_message_instead_of_raising(monke
             }
         ],
     )
-    state = {"customer_id": str(uuid.uuid4()), "messages": [ai_message]}
+    state = {"customer_id": str(uuid.uuid4()), "knowledge_plan_slug": None, "tenant_id": str(uuid.uuid4()), "messages": [ai_message]}
 
     result = knowledge_tool_module.knowledge_tool_node(state)
 
@@ -96,21 +96,33 @@ def test_other_tool_failures_still_propagate(monkeypatch):
             raise ConnectionError("database unavailable")
 
     monkeypatch.setattr(
-        knowledge_tool_module, "make_search_knowledge_base_tool", lambda customer_id: _BrokenTool()
+        knowledge_tool_module, "make_search_knowledge_base_tool", lambda tenant_id, plan_slug: _BrokenTool()
     )
     ai_message = AIMessage(
         content="", tool_calls=[{"name": "search_knowledge_base_tool", "args": {}, "id": "c1"}]
     )
-    state = {"customer_id": str(uuid.uuid4()), "messages": [ai_message]}
+    state = {"customer_id": str(uuid.uuid4()), "knowledge_plan_slug": None, "tenant_id": str(uuid.uuid4()), "messages": [ai_message]}
 
     with pytest.raises(ConnectionError):
         knowledge_tool_module.knowledge_tool_node(state)
 
 
+def test_an_unknown_tool_name_becomes_an_error_message(monkeypatch):
+    ai_message = AIMessage(
+        content="", tool_calls=[{"name": "delete_everything", "args": {}, "id": "c1"}]
+    )
+    state = {"customer_id": None, "knowledge_plan_slug": None, "tenant_id": str(uuid.uuid4()), "messages": [ai_message]}
+
+    result = knowledge_tool_module.knowledge_tool_node(state)
+
+    assert result["messages"][0].status == "error"
+    assert result["tool_call_rounds"] == 1
+
+
 def test_keeps_the_tool_artifact_on_the_message(monkeypatch):
     fake_tool = _FakeTool("text", artifact=["a-source"])
     monkeypatch.setattr(
-        knowledge_tool_module, "make_search_knowledge_base_tool", lambda customer_id: fake_tool
+        knowledge_tool_module, "make_search_knowledge_base_tool", lambda tenant_id, plan_slug: fake_tool
     )
     ai_message = AIMessage(
         content="",
@@ -118,7 +130,7 @@ def test_keeps_the_tool_artifact_on_the_message(monkeypatch):
     )
 
     result = knowledge_tool_module.knowledge_tool_node(
-        {"customer_id": str(uuid.uuid4()), "messages": [ai_message]}
+        {"customer_id": str(uuid.uuid4()), "knowledge_plan_slug": None, "tenant_id": str(uuid.uuid4()), "messages": [ai_message]}
     )
 
     assert result["messages"][0].artifact == ["a-source"]

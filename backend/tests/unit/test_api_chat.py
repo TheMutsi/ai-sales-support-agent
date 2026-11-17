@@ -412,7 +412,7 @@ async def test_done_event_lists_the_sources_the_knowledge_base_search_returned()
     events = await _collect(chat_module.stream_chat_turn(graph, _session(), _request(), _Store()))
 
     assert events[-1]["data"]["sources"] == [
-        {"title": "Refund policy", "doc_type": "policy", "source": "policy/refunds.md"}
+        {"title": "Refund policy", "doc_type": "policy", "source": "policy/refunds.md", "section": None, "version": None}
     ]
 
 

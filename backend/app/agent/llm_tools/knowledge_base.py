@@ -14,15 +14,19 @@ SEARCH_KNOWLEDGE_BASE_DESCRIPTION = (
 )
 
 
-def make_search_knowledge_base_tool(customer_id: uuid.UUID | None):
+def make_search_knowledge_base_tool(tenant_id: uuid.UUID, plan_slug: str | None):
     @tool(response_format="content_and_artifact", description=SEARCH_KNOWLEDGE_BASE_DESCRIPTION)
     def search_knowledge_base_tool(query: str) -> tuple[str, list[SourceReference]]:
-        chunks = search_knowledge_base(customer_id, query)
+        chunks = search_knowledge_base(query, tenant_id=tenant_id, plan_slug=plan_slug)
         if not chunks:
             return "No relevant knowledge base results found.", []
         one_citation_per_document = {
             chunk.document_id: SourceReference(
-                title=chunk.document_title, doc_type=chunk.doc_type, source=chunk.source
+                title=chunk.document_title,
+                doc_type=chunk.doc_type,
+                source=chunk.source,
+                section=chunk.section,
+                version=chunk.version,
             )
             for chunk in chunks
         }
