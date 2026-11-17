@@ -2,14 +2,23 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.db.models import Customer, Order, Plan, Subscription, Tenant, TenantSecret
+from app.db.models import (
+    Customer,
+    Order,
+    Plan,
+    Subscription,
+    Tenant,
+    TenantSecret,
+)
 from app.db.seed import DEV_TENANT_API_KEY, DEV_TENANT_KID, DEV_TENANT_SECRET, seed
 from app.db.session import SessionLocal
+from tests.integration.conftest import wipe_recommendation_catalog
 
 
 @pytest.fixture
 def db() -> Session:
     session = SessionLocal()
+    wipe_recommendation_catalog(session)
     session.query(Order).delete()
     session.query(Subscription).delete()
     session.query(Customer).delete()

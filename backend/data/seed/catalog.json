@@ -1,0 +1,255 @@
+{
+  "types": [
+    {
+      "key": "product",
+      "name": "Product",
+      "card_template": "product_card",
+      "field_schema": {
+        "size_ml": "number",
+        "skin_type": "string"
+      }
+    },
+    {
+      "key": "article",
+      "name": "Article",
+      "card_template": "product_card",
+      "field_schema": {
+        "reading_minutes": "number"
+      }
+    }
+  ],
+  "tags": [
+    {
+      "slug": "cleanser",
+      "description": "Removes dirt, oil and makeup from the skin"
+    },
+    {
+      "slug": "moisturizer",
+      "description": "Keeps the skin hydrated"
+    },
+    {
+      "slug": "sun-protection",
+      "description": "Protects the skin from UV rays"
+    },
+    {
+      "slug": "anti-aging",
+      "description": "Reduces the look of fine lines and loss of firmness"
+    },
+    {
+      "slug": "sensitive-skin",
+      "description": "Gentle enough for sensitive or reactive skin"
+    },
+    {
+      "slug": "morning-routine",
+      "description": "Used in the morning part of a routine"
+    }
+  ],
+  "items": [
+    {
+      "external_id": "cleanser-gentle",
+      "type": "product",
+      "title": "Gentle Foaming Cleanser",
+      "short_desc": "Daily face wash that cleans without drying.",
+      "long_desc": "A soft foaming cleanser with no fragrance, made for daily use on every skin type.",
+      "price_cents": 1800,
+      "rating": 4.6,
+      "image_url": "https://example.test/images/cleanser-gentle.jpg",
+      "url": "https://example.test/products/cleanser-gentle",
+      "extra": {
+        "size_ml": 150,
+        "skin_type": "all"
+      },
+      "tags": [
+        {
+          "slug": "cleanser",
+          "weight": 1.0,
+          "why": "It is a face wash",
+          "pinned": true
+        },
+        {
+          "slug": "sensitive-skin",
+          "weight": 0.7,
+          "why": "Fragrance free and soft"
+        },
+        {
+          "slug": "moisturizer",
+          "weight": 0.6,
+          "why": "A cream follows cleansing",
+          "is_complement": true
+        }
+      ],
+      "offers": [
+        {
+          "kind": "pack",
+          "label": "Pack of 2",
+          "quantity": 2,
+          "price_cents": 3200,
+          "compare_at_cents": 3600
+        }
+      ]
+    },
+    {
+      "external_id": "moisturizer-daily",
+      "type": "product",
+      "title": "Daily Hydrating Moisturizer",
+      "short_desc": "Light cream that hydrates for 24 hours.",
+      "long_desc": "A light cream with hyaluronic acid and ceramides that hydrates the skin through the day.",
+      "price_cents": 2800,
+      "rating": 4.8,
+      "image_url": "https://example.test/images/moisturizer-daily.jpg",
+      "url": "https://example.test/products/moisturizer-daily",
+      "extra": {
+        "size_ml": 50,
+        "skin_type": "all"
+      },
+      "tags": [
+        {
+          "slug": "moisturizer",
+          "weight": 1.0,
+          "why": "It is a face cream",
+          "pinned": true
+        },
+        {
+          "slug": "morning-routine",
+          "weight": 0.6,
+          "why": "Light enough to wear under sun protection"
+        },
+        {
+          "slug": "sun-protection",
+          "weight": 0.8,
+          "why": "Sun protection goes on top of it in the morning",
+          "is_complement": true
+        }
+      ],
+      "offers": [
+        {
+          "kind": "discount",
+          "label": "First order, 10% off",
+          "quantity": 1,
+          "price_cents": 2520,
+          "compare_at_cents": 2800
+        }
+      ],
+      "product_id": "moisturizer-daily",
+      "pack_size": 1
+    },
+    {
+      "external_id": "moisturizer-daily-3pack",
+      "type": "product",
+      "title": "Daily Hydrating Moisturizer, pack of 3",
+      "short_desc": "Three light creams that hydrate for 24 hours.",
+      "long_desc": "A light cream with hyaluronic acid and ceramides that hydrates the skin through the day.",
+      "price_cents": 7500,
+      "rating": 4.8,
+      "image_url": "https://example.test/images/moisturizer-daily.jpg",
+      "url": "https://example.test/products/moisturizer-daily",
+      "extra": {
+        "size_ml": 50,
+        "skin_type": "all"
+      },
+      "tags": [
+        {
+          "slug": "moisturizer",
+          "weight": 1.0,
+          "why": "It is a face cream",
+          "pinned": true
+        },
+        {
+          "slug": "morning-routine",
+          "weight": 0.6,
+          "why": "Light enough to wear under sun protection"
+        },
+        {
+          "slug": "sun-protection",
+          "weight": 0.8,
+          "why": "Sun protection goes on top of it in the morning",
+          "is_complement": true
+        }
+      ],
+      "offers": [],
+      "product_id": "moisturizer-daily",
+      "pack_size": 3
+    },
+    {
+      "external_id": "sunscreen-spf50",
+      "type": "product",
+      "title": "Invisible Sunscreen SPF 50",
+      "short_desc": "Broad spectrum sun protection with no white cast.",
+      "long_desc": "A fluid sunscreen with broad spectrum SPF 50 that leaves no white cast and sits well under makeup.",
+      "price_cents": 2400,
+      "rating": 4.7,
+      "image_url": "https://example.test/images/sunscreen-spf50.jpg",
+      "url": "https://example.test/products/sunscreen-spf50",
+      "extra": {
+        "size_ml": 50,
+        "skin_type": "all"
+      },
+      "tags": [
+        {
+          "slug": "sun-protection",
+          "weight": 1.0,
+          "why": "SPF 50",
+          "pinned": true
+        },
+        {
+          "slug": "morning-routine",
+          "weight": 0.9,
+          "why": "Applied last in the morning"
+        }
+      ],
+      "offers": []
+    },
+    {
+      "external_id": "serum-retinol",
+      "type": "product",
+      "title": "Night Retinol Serum",
+      "short_desc": "Evening serum for fine lines and uneven texture.",
+      "long_desc": "A 0.3 percent retinol serum for the evening that helps smooth fine lines. Not for use in the morning.",
+      "price_cents": 3900,
+      "rating": 4.4,
+      "image_url": "https://example.test/images/serum-retinol.jpg",
+      "url": "https://example.test/products/serum-retinol",
+      "extra": {
+        "size_ml": 30,
+        "skin_type": "normal"
+      },
+      "tags": [
+        {
+          "slug": "anti-aging",
+          "weight": 1.0,
+          "why": "Retinol targets fine lines",
+          "pinned": true
+        }
+      ],
+      "offers": [
+        {
+          "kind": "bundle",
+          "label": "Serum and moisturizer",
+          "quantity": 1,
+          "price_cents": 6200,
+          "compare_at_cents": 6700
+        }
+      ]
+    },
+    {
+      "external_id": "article-routine-basics",
+      "type": "article",
+      "title": "A three step routine for beginners",
+      "short_desc": "Cleanse, moisturize and protect, in that order.",
+      "long_desc": "How to build a simple morning and evening routine with three products, and what to add later.",
+      "price_cents": 0,
+      "url": "https://example.test/articles/routine-basics",
+      "extra": {
+        "reading_minutes": 4
+      },
+      "tags": [
+        {
+          "slug": "morning-routine",
+          "weight": 0.5,
+          "why": "Explains the morning order"
+        }
+      ],
+      "offers": []
+    }
+  ]
+}
