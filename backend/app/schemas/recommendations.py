@@ -34,3 +34,13 @@ class BackfillResult(BaseModel):
     checked: int = 0
     tagged: list[str] = Field(default_factory=list)
     failed: list[str] = Field(default_factory=list)
+
+
+class TagSelection(BaseModel):
+    slugs: list[str] = Field(default_factory=list, max_length=10)
+
+
+class SearchHit(BaseModel):
+    item_id: str
+    score: float
+    source: str

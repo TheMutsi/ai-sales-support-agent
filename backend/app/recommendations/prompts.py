@@ -37,3 +37,14 @@ def render_backfill_prompt(slug: str, description: str, title: str, short_desc: 
         f"Tag: {slug}\nTag description: {description}\n\n"
         f"Item title: {title}\nShort description: {short_desc}\nLong description: {long_desc}"
     )
+
+
+SEARCH_SYSTEM_PROMPT = """You map a shopper's request to the tags of an online shop's registry.
+
+Return between one and five slugs, copied exactly from the registry, that best describe what the shopper
+needs. Return an empty list when nothing in the registry fits. Never invent a slug."""
+
+
+def render_search_prompt(query: str, registry: dict[str, str]) -> str:
+    registry_lines = "\n".join(f"- {slug}: {description}" for slug, description in sorted(registry.items()))
+    return f"Shopper request: {query}\n\nTag registry:\n{registry_lines}"
