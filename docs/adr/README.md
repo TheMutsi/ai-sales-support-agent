@@ -35,6 +35,9 @@ links back to it.
 | [0020](0020-return-events-for-outcome-analysis.md) | Every turn of a return is recorded in its own table, apart from the messages | Accepted |
 | [0021](0021-live-or-offline-escalation-without-tickets.md) | An escalation is live or offline, decided by rules, and kept on the conversation | Accepted |
 | [0022](0022-per-tenant-knowledge-base-document-map-whole-documents-and-hybrid-search.md) | Per-tenant knowledge base: document map, whole documents and hybrid search | Accepted |
+| [0023](0023-recommendable-items-are-generic-per-tenant-types-with-card-templates-and-offers.md) | Recommendable items are generic: per-tenant types with card templates and offers | Accepted |
+| [0024](0024-auto-generated-tag-registry-with-embedding-fallback.md) | Auto-generated tag registry with embedding fallback | Accepted |
+| [0025](0025-upsell-and-cross-sell-are-decided-by-rules-not-the-model.md) | Upsell and cross-sell are decided by rules, not the model | Accepted |
 
 For the system and agent-graph diagrams, see [`docs/architecture.md`](../architecture.md).
 
