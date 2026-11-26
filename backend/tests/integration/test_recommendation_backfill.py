@@ -130,7 +130,7 @@ def test_existing_tags_of_the_checked_items_are_untouched(shop):
     backfill_tag(db, tenant_id, tag_id, llm=_FakeLLM(_applies_when("calms")), embeddings=_FakeEmbeddings())
 
     near = db.query(RecommendationTag).filter_by(tenant_id=tenant_id, slug="soothing").one()
-    assert _tagged(db, near.id) == {"holds-near-tag"}
+    assert _tagged(db, near.id) == {"holds-near-tag", "archived"}
 
 
 def test_running_it_twice_does_not_duplicate_links(shop):
