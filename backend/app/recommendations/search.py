@@ -13,6 +13,7 @@ from app.business.tag_search import fuse_rankings, is_weak, validate_selection
 from app.core.embeddings import get_embeddings
 from app.core.llm import get_chat_model
 from app.db.models import ItemTag, RecommendationItem, RecommendationTag
+from app.rag.retriever import DEFAULT_MIN_SIMILARITY
 from app.recommendations.prompts import SEARCH_SYSTEM_PROMPT, render_search_prompt
 from app.schemas.recommendations import SearchHit, TagSelection
 
@@ -71,18 +72,19 @@ def _text_ranking(session: Session, tenant_id: uuid.UUID, query: str) -> list[st
     return [str(item_id) for item_id in rows]
 
 
-def _vector_ranking(session: Session, tenant_id: uuid.UUID, vector: list[float]) -> list[str]:
-    rows = session.scalars(
-        select(RecommendationItem.id)
+def _vector_ranking(session: Session, tenant_id: uuid.UUID, vector: list[float]) -> list[tuple[str, float]]:
+    distance = RecommendationItem.embedding.cosine_distance(vector)
+    rows = session.execute(
+        select(RecommendationItem.id, distance)
         .where(
             RecommendationItem.tenant_id == tenant_id,
             RecommendationItem.status == "active",
             RecommendationItem.embedding.is_not(None),
         )
-        .order_by(RecommendationItem.embedding.cosine_distance(vector), RecommendationItem.id)
+        .order_by(distance, RecommendationItem.id)
         .limit(CANDIDATES_PER_RANKING)
     )
-    return [str(item_id) for item_id in rows]
+    return [(str(item_id), 1 - value) for item_id, value in rows]
 
 
 def hybrid_search(
@@ -90,8 +92,15 @@ def hybrid_search(
 ) -> list[SearchHit]:
     by_vector = _vector_ranking(session, tenant_id, embeddings.embed_query(query))
     by_text = _text_ranking(session, tenant_id, query)
-    fused = fuse_rankings([by_vector, by_text])
-    return [SearchHit(item_id=item_id, score=score, source="text") for item_id, score in fused[:limit]]
+    matched_words = set(by_text)
+    similarity = dict(by_vector)
+    fused = fuse_rankings([[item_id for item_id, _ in by_vector], by_text])
+    relevant = [
+        (item_id, score)
+        for item_id, score in fused
+        if item_id in matched_words or similarity.get(item_id, 0.0) >= DEFAULT_MIN_SIMILARITY
+    ]
+    return [SearchHit(item_id=item_id, score=score, source="hybrid") for item_id, score in relevant[:limit]]
 
 
 def search_items(

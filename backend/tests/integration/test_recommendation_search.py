@@ -19,8 +19,11 @@ def _vector(*leading: float) -> list[float]:
 
 
 class _FakeEmbeddings:
+    def __init__(self, by_text: dict[str, list[float]] | None = None):
+        self._by_text = by_text or {}
+
     def embed_query(self, text: str) -> list[float]:
-        return _vector(0.0, 1.0)
+        return self._by_text.get(text, _vector(0.0, 1.0))
 
 
 class _FakeStructured:
@@ -133,7 +136,7 @@ def test_invented_slugs_are_ignored_and_the_text_search_takes_over(shop):
     hits = search_items(db, tenant_id, "lavender soap", llm=_llm("made-up"), embeddings=_FakeEmbeddings())
 
     assert hits[0].item_id == ids["plain"]
-    assert hits[0].source == "text"
+    assert hits[0].source == "hybrid"
 
 
 def test_a_weak_tag_match_falls_back_to_the_text_search(shop):
@@ -142,7 +145,7 @@ def test_a_weak_tag_match_falls_back_to_the_text_search(shop):
     hits = search_items(db, tenant_id, "lavender soap", llm=_llm("vegan"), embeddings=_FakeEmbeddings())
 
     assert hits[0].item_id == ids["plain"]
-    assert hits[0].source == "text"
+    assert hits[0].source == "hybrid"
 
 
 def test_a_failing_model_falls_back_to_the_text_search(shop):
@@ -153,7 +156,7 @@ def test_a_failing_model_falls_back_to_the_text_search(shop):
     )
 
     assert hits[0].item_id == ids["plain"]
-    assert hits[0].source == "text"
+    assert hits[0].source == "hybrid"
 
 
 def test_other_tenants_items_are_never_returned(shop):
@@ -163,5 +166,14 @@ def test_other_tenants_items_are_never_returned(shop):
     db.commit()
 
     hits = search_items(db, other.id, "firming", llm=_llm("firming"), embeddings=_FakeEmbeddings())
+
+    assert hits == []
+
+
+def test_the_fallback_returns_nothing_when_no_item_is_close_or_matches_the_words(shop):
+    db, tenant_id, _ = shop
+    embeddings = _FakeEmbeddings({"asdf qwer": _vector(0.0, 0.0, 1.0)})
+
+    hits = search_items(db, tenant_id, "asdf qwer", llm=_llm(), embeddings=embeddings)
 
     assert hits == []
