@@ -177,7 +177,7 @@ def test_a_failing_model_marks_the_item_failed_and_changes_no_tags(shop):
     result = enrich_item(db, tenant_id, item_id, llm=llm, embeddings=_FakeEmbeddings())
 
     assert result.status == "failed"
-    assert "model is down" in result.error
+    assert "model is down" not in result.error
     assert db.get(RecommendationItem, item_id).enrichment_status == "failed"
     assert _tags_of(db, item_id) == {}
 
@@ -192,3 +192,45 @@ def test_an_item_of_another_tenant_cannot_be_enriched(shop):
     result = enrich_item(db, other.id, item_id, llm=llm, embeddings=_FakeEmbeddings())
 
     assert result.status == "failed"
+    db.expire_all()
+    assert db.get(RecommendationItem, item_id).enrichment_status == "pending"
+
+
+def test_a_slug_with_no_usable_characters_is_skipped_and_the_rest_kept(shop):
+    db, tenant_id, item_id = shop
+    llm = _FakeLLM(
+        ItemEnrichment(tags=[TagAssignment(slug="!!!", weight=0.5), TagAssignment(slug="firming", weight=0.9)])
+    )
+
+    result = enrich_item(db, tenant_id, item_id, llm=llm, embeddings=_FakeEmbeddings())
+
+    assert result.status == "ready"
+    assert list(_tags_of(db, item_id)) == ["firming"]
+
+
+def test_a_repeated_tag_keeps_the_higher_weight(shop):
+    db, tenant_id, item_id = shop
+    llm = _FakeLLM(
+        ItemEnrichment(
+            tags=[TagAssignment(slug="firming", weight=0.3, why="weak"), TagAssignment(slug="firming", weight=0.9, why="strong")]
+        )
+    )
+
+    enrich_item(db, tenant_id, item_id, llm=llm, embeddings=_FakeEmbeddings())
+
+    link = _tags_of(db, item_id)["firming"]
+    assert link.weight == 0.9 and link.why == "strong"
+
+
+def test_a_tag_that_is_both_a_property_and_a_complement_stays_a_property(shop):
+    db, tenant_id, item_id = shop
+    llm = _FakeLLM(
+        ItemEnrichment(
+            tags=[TagAssignment(slug="firming", weight=0.9)],
+            complement_tags=[TagAssignment(slug="firming", weight=0.4)],
+        )
+    )
+
+    enrich_item(db, tenant_id, item_id, llm=llm, embeddings=_FakeEmbeddings())
+
+    assert _tags_of(db, item_id)["firming"].is_complement is False
