@@ -23,3 +23,17 @@ def render_item_prompt(title: str, short_desc: str, long_desc: str, registry: di
         f"Long description: {long_desc}\n\n"
         f"Tag registry:\n{registry_lines or '(empty)'}"
     )
+
+
+BACKFILL_SYSTEM_PROMPT = """You decide whether ONE tag applies to ONE item of an online shop.
+
+Answer applies=true only when the item description states or clearly implies the need or property the tag
+describes. Never invent claims. When it applies, give a weight between 0 and 1 (how central the tag is for
+the item) and one short sentence in why. When it does not apply, answer applies=false."""
+
+
+def render_backfill_prompt(slug: str, description: str, title: str, short_desc: str, long_desc: str) -> str:
+    return (
+        f"Tag: {slug}\nTag description: {description}\n\n"
+        f"Item title: {title}\nShort description: {short_desc}\nLong description: {long_desc}"
+    )
