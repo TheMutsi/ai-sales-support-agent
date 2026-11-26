@@ -38,14 +38,10 @@ def _neighbour_tag_ids(session: Session, tag: RecommendationTag) -> list[uuid.UU
 
 
 def candidate_item_ids(session: Session, tag: RecommendationTag) -> list[uuid.UUID]:
-    holding = set(
-        session.scalars(
-            select(ItemTag.item_id).where(
-                ItemTag.tenant_id == tag.tenant_id, ItemTag.tag_id.in_(_neighbour_tag_ids(session, tag))
-            )
-        )
+    holding = select(ItemTag.item_id).where(
+        ItemTag.tenant_id == tag.tenant_id, ItemTag.tag_id.in_(_neighbour_tag_ids(session, tag))
     )
-    nearest = session.scalars(
+    nearest = (
         select(RecommendationItem.id)
         .where(
             RecommendationItem.tenant_id == tag.tenant_id,
@@ -54,10 +50,21 @@ def candidate_item_ids(session: Session, tag: RecommendationTag) -> list[uuid.UU
         )
         .order_by(RecommendationItem.embedding.cosine_distance(tag.embedding), RecommendationItem.id)
         .limit(NEAREST_ITEMS)
-    ).all()
-    already = set(session.scalars(select(ItemTag.item_id).where(ItemTag.tag_id == tag.id)))
-    ordered = sorted(holding | set(nearest), key=str)
-    return [item_id for item_id in ordered if item_id not in already][:MAX_CANDIDATES]
+    )
+    already = select(ItemTag.item_id).where(ItemTag.tag_id == tag.id)
+    return list(
+        session.scalars(
+            select(RecommendationItem.id)
+            .where(
+                RecommendationItem.tenant_id == tag.tenant_id,
+                RecommendationItem.status == "active",
+                RecommendationItem.id.in_(holding.union(nearest)),
+                RecommendationItem.id.not_in(already),
+            )
+            .order_by(RecommendationItem.embedding.cosine_distance(tag.embedding).nulls_last(), RecommendationItem.id)
+            .limit(MAX_CANDIDATES)
+        )
+    )
 
 
 def backfill_tag(

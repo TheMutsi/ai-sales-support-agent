@@ -88,7 +88,7 @@ def shop(tenant_wipe):
         add_item("holds-near-tag", "calms redness", _vector(0.0, 1.0), near_tag)
         add_item("close-by-embedding", "calms and heals", _vector(0.95, 0.05))
         add_item("unrelated", "plain soap", _vector(0.0, 0.0, 0.0, 1.0), far_tag)
-        add_item("archived", "calms everything", _vector(1.0), status="archived")
+        add_item("archived", "calms everything", _vector(1.0), near_tag, status="archived")
         db.commit()
         yield db, tenant.id, new_tag.id
 
@@ -154,3 +154,14 @@ def test_a_failing_item_is_reported_and_the_others_continue(shop):
 
     assert result.failed == ["holds-near-tag"]
     assert "close-by-embedding" in result.tagged
+
+
+def test_candidates_are_the_closest_items_when_there_are_more_than_the_cap(shop, monkeypatch):
+    from app.recommendations import backfill
+
+    db, tenant_id, tag_id = shop
+    monkeypatch.setattr(backfill, "MAX_CANDIDATES", 1)
+
+    result = backfill_tag(db, tenant_id, tag_id, llm=_FakeLLM(_applies_when("calms")), embeddings=_FakeEmbeddings())
+
+    assert result.tagged == ["close-by-embedding"]
